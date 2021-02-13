@@ -1,0 +1,3 @@
+[submodule "unstable_baselines/logger"]
+	path = unstable_baselines/logger
+	url = https://github.com/Ending2015a/CardLogger.git
