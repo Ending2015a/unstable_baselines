@@ -177,24 +177,41 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 
-
-# Stable baselines - Monitor
 class Monitor(gym.Wrapper):
     EXT = "monitor.csv"
 
     def __init__(self, env, path=None, prefix=None):
+        '''
+        Filename
+            {path}/{prefix}.{EXT}
+        path: directory
+        prefix: filename prefix
+            e.g. path='/foo/bar', prefix=1   => /foo/bar/1.monitor.csv
+
+        CSV format
+            # {t_start: timestamp, env_id: env id}
+            r, l, t
+        r: total episodic rewards
+        l: episode length
+        t: running time (time - t_start)
+        '''
         super(Monitor, self).__init__(env=env)
         self.t_start = time.time()
 
         # setup csv file
         self.filename = self.make_filename(path, prefix)
+        self.header = json.dumps({"t_start": self.t_start, 'env_id': env.spec and env.spec.id})
+
+        # write header
         self.file_handler = open(self.filename, "wt")
-        self.file_handler.write('#%s\n' % json.dumps({"t_start": self.t_start, 'env_id': env.spec and env.spec.id}))
+        self.file_handler.write('#{}\n'.format(self.header))
+        
+        # create csv writer
         self.writer = csv.DictWriter(self.file_handler, fieldnames=('r', 'l', 't')) # rewards/length/time
         self.writer.writeheader()
         self.file_handler.flush()
 
-        # init
+        # initialize
         self.rewards = None
         self.need_reset = None
         self.episode_rewards = []
@@ -208,6 +225,10 @@ class Monitor(gym.Wrapper):
         if prefix is None:
             filename = cls.EXT
         else:
+            # convert prefix to str
+            if not isinstance(prefix, str):
+                prefix = str(prefix)
+            
             filename = prefix + '.' + cls.EXT
 
         # create directories
@@ -215,7 +236,7 @@ class Monitor(gym.Wrapper):
             os.makedirs(path, exist_ok=True)
             filename = os.path.join(path, filename)
         
-        LOG.info('Monitor: ' + filename)
+        LOG.info('Save monitor file: ' + filename)
         return filename
 
     def reset(self, **kwargs):
@@ -234,7 +255,7 @@ class Monitor(gym.Wrapper):
         observation, reward, done, info = self.env.step(action)
         self.rewards.append(reward)
 
-        # if the episode ended
+        # episode ended
         if done:
             self.need_reset = True
             ep_rew = sum(self.rewards)
@@ -274,6 +295,7 @@ class Monitor(gym.Wrapper):
 
 # === Vec Env ===
 
+# Stable baselines - VecEnv
 def _worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
     env = env_fn_wrapper.env_fn()
@@ -334,7 +356,7 @@ class SubprocVecEnv():
         self.remotes = None
         self.work_remotes = None
         self.processes = []
-        self.num_envs = len(env_fns)
+        self.n_envs = len(env_fns)
         # create subprocesses
         self.setup_subprocesses(env_fns, start_method)
 
@@ -488,7 +510,7 @@ class VecFrameStack():
         high = np.repeat(wrapped_obs_space.high, self.n_stack, axis=-1)
         self.stackedobs = np.zeros((venv.num_envs,) + low.shape, low.dtype)
         observation_space = gym.spaces.Box(low=low, high=high, dtype=venv.observation_space.dtype)
-        self.num_envs = venv.num_envs
+        self.n_envs = venv.n_envs
         self.action_space = venv.action_space
         self.observation_space = observation_space
         self.class_attributes = dict(inspect.getmembers(self.__class__))
