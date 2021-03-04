@@ -497,6 +497,10 @@ class VideoRecorder(object):
         if hasattr(env.unwrapped, '_render_height'):
             env.unwrapped._render_height = height
 
+        # Create directory
+        self._ensure_path_exists(self.path)
+        self._ensure_path_exists(self.meta_path)
+        
         # Write metadata
         self.metadata['content_type'] = 'video/mp4'
         self.write_metadata()
@@ -562,6 +566,14 @@ class VideoRecorder(object):
         with open(self.meta_path, 'wt') as f:
             json.dump(self.metadata, f, indent=4)
 
+    def _ensure_path_exists(self, path):
+        if not path:
+            raise RuntimeError('Receive empty path: {}'.format(path))
+            
+        path = os.path.dirname(path)
+        if path:
+            os.makedirs(path, exist_ok=True)
+        
 
     def _get_frame_shape(self, frame):
         if len(frame.shape) != 3:
@@ -697,7 +709,6 @@ class Monitor(gym.Wrapper):
                                             env_id=self.env_id)
 
     def step(self, action):
-        LOG.info('step {}'.format(self.total_steps))
         self._before_step()
         observation, reward, done, info = self.env.step(action)
         return self._after_step(observation, reward, done, info)
@@ -752,8 +763,6 @@ class Monitor(gym.Wrapper):
         # make video/metadata path
         video_path = self._make_path(self.directory, self.video_prefix, self.video_ext)
         meta_path = self._make_path(self.directory, self.video_prefix, self.meta_ext)
-        self._ensure_path_exists(video_path)
-        self._ensure_path_exists(meta_path)
         # close video recorder and copy tempfile to `filename`
         self._close_and_save_video_recorder(video_path, meta_path)
         
@@ -773,6 +782,9 @@ class Monitor(gym.Wrapper):
                          total_steps=self.total_steps)
 
     def _ensure_path_exists(self, path):
+        if not path:
+            raise RuntimeError('Receive empty path: {}'.format(path))
+            
         path = os.path.dirname(path)
         if path:
             os.makedirs(path, exist_ok=True)
@@ -806,6 +818,9 @@ class Monitor(gym.Wrapper):
 
         self.video_recorder.metadata['monitor'] = monitor_metadata
         self.video_recorder.write_metadata()
+        
+        self._ensure_path_exists(meta_path)
+        self._ensure_path_exists(video_path)
 
         # copy tempfile to specified location
         # save metadata
