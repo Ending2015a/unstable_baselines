@@ -209,7 +209,8 @@ class WarpFrame(gym.ObservationWrapper):
 #   will output Stable baselines style csv records
 class StatsRecorder(object):
     EXT='monitor.csv'
-    def __init__(self, directory=None, prefix=None, env_id=None):
+    #TODO: fix ext
+    def __init__(self, directory=None, prefix=None, ext='monitor.csv', env_id=None):
         '''
         Filename
             {directory}/{prefix}.{EXT}
@@ -241,13 +242,14 @@ class StatsRecorder(object):
         self.file_handler.flush()
 
         # initialize
+        self._closed = False
         self.rewards = None
         self.need_reset = None
         self.episode_rewards = []
         self.episode_lengths = []
         self.episode_times = []
         self.total_steps = 0
-        self._closed = False
+        
 
     @property
     def closed(self):
@@ -445,8 +447,8 @@ class VideoEncoder(object):
         self.proc = None
 
 
-# Rewrite gym.wrappers.monitoring.video_recorder.VideoRecoder
-class VideoRecoder(object):
+# Rewrite gym.wrappers.monitoring.video_recorder.VideoRecorder
+class VideoRecorder(object):
     def __init__(self, env, path, meta_path, metadata=None, width=None, height=None, fps=None, enabled=True):
         '''
         env: environment
@@ -478,10 +480,10 @@ class VideoRecoder(object):
         self.fps        = self.fps if self.fps else fps
         self.output_fps = self.fps if self.fps else output_fps
 
-        self._async = env.metadadta.get('semantics.async')
+        self._async = env.metadata.get('semantics.async')
         modes       = env.metadata.get('render.modes', [])
 
-        if 'rbg_array' not in modes:
+        if 'rgb_array' not in modes:
             LOG.info('Disabling video recorder because {} not supports video mode "rgb_array"'.format(env))
             self.enabled = False
             return
@@ -558,7 +560,7 @@ class VideoRecoder(object):
             return
         
         with open(self.meta_path, 'wt') as f:
-            json.dump(self.metadata, f)
+            json.dump(self.metadata, f, indent=4)
 
 
     def _get_frame_shape(self, frame):
@@ -582,7 +584,7 @@ class VideoRecoder(object):
         if not self.encoder:
             frame_shape = self._get_frame_shape(frame)
             video_shape = self._get_video_shape(frame)
-            self.encoder = VideoEncoder(self.filename, frame_shape, video_shape, self.fps, self.output_fps)
+            self.encoder = VideoEncoder(self.path, frame_shape, video_shape, self.fps, self.output_fps)
 
             self.metadata['encoder_version'] = self.encoder.version_info
             self.metadata['video_info'] = self.encoder.video_info
@@ -603,7 +605,7 @@ class VideoRecoder(object):
 
 def capped_cubic_video_schedule(episode):
     if episode < 1000:
-        return int(round(episode_id ** (1. / 3))) ** 3 == episode
+        return int(round(episode ** (1. / 3))) ** 3 == episode
     else:
         return episode % 1000 == 0
 
@@ -695,6 +697,7 @@ class Monitor(gym.Wrapper):
                                             env_id=self.env_id)
 
     def step(self, action):
+        LOG.info('step {}'.format(self.total_steps))
         self._before_step()
         observation, reward, done, info = self.env.step(action)
         return self._after_step(observation, reward, done, info)
@@ -702,7 +705,7 @@ class Monitor(gym.Wrapper):
     def reset(self, **kwargs):
         self._before_reset()
         observation = self.env.reset(**kwargs)
-        self._after_reset(observation)
+        self._after_reset()
         return observation
 
     def close(self):
@@ -747,9 +750,13 @@ class Monitor(gym.Wrapper):
             return
 
         # make video/metadata path
-        video_path, meta_path = self._make_video_meta_path()
+        video_path = self._make_path(self.directory, self.video_prefix, self.video_ext)
+        meta_path = self._make_path(self.directory, self.video_prefix, self.meta_ext)
+        self._ensure_path_exists(video_path)
+        self._ensure_path_exists(meta_path)
         # close video recorder and copy tempfile to `filename`
         self._close_and_save_video_recorder(video_path, meta_path)
+        
 
         self.stats_recorder.after_reset()
         # increase episode number
@@ -757,42 +764,30 @@ class Monitor(gym.Wrapper):
         self.episode += 1 
 
         # create new video recorder for new episode
-        directory = os.path.dirname(video_path)
-        self._new_video_recorder(directory)
+        temp_path = self._make_path(self.directory, self.video_prefix, 'ep{episode}.')
+        self._new_video_recorder(temp_path)
 
     def _make_ext(self, ext):
         return ext.format(episode=self.episode,
-                        start_steps=self.start_steps,
-                        total_steps=self.total_steps)
+                         start_steps=self.start_steps,
+                         total_steps=self.total_steps)
 
-    def _make_video_meta_path(self):
+    def _ensure_path_exists(self, path):
+        path = os.path.dirname(path)
+        if path:
+            os.makedirs(path, exist_ok=True)
 
-        video_ext  = self._make_ext(self.video_ext)
-        meta_ext   = self._make_ext(self.meta_ext)
+    def _make_path(self, base_path, prefix, ext):
+        ext = self._make_ext(ext)
+        path = ext
 
-        base_path  = self.directory
-        video_path = video_ext
-        meta_path  = meta_ext
-
-        if self.video_prefix:
-            if os.path.basename(self.video_prefix):
+        if prefix:
+            if os.path.basename(prefix):
                 # {prefix}.{ext}
-                video_path = self.video_prefix + '.' + video_ext
-                meta_path  = self.video_prefix + '.' + meta_ext
+                path = prefix + '.' + ext
 
-        video_path = os.path.join(base_path, video_path)
-        meta_path  = os.path.join(base_path, meta_path)
-
-        # create directories
-        video_dir = os.path.dirname(video_path)
-        if video_dir:
-            os.makedirs(video_dir, exist_ok=True)
-
-        meta_dir = os.path.dirname(meta_path)
-        if meta_dir:
-            os.makedirs(meta_dir, exist_ok=True)
-
-        return video_path, meta_path
+        path = os.path.join(base_path, path)
+        return path
 
     def _close_and_save_video_recorder(self, video_path, meta_path):
         if not self.video_recorder or not self.video_recorder.enabled:
@@ -830,15 +825,18 @@ class Monitor(gym.Wrapper):
             else:
                 LOG.error('Failed to save video, missing tempfile, for more info: {}'.format(meta_path))
 
-    def _new_video_recorder(self, directory):
+    def _new_video_recorder(self, path):
 
-        enabled = self.video_enabled()
+        enabled = self._video_enabled()
+
+        directory = os.path.dirname(path)
+        prefix = os.path.basename(path)
 
         if enabled:
             # generate random filename
-            with tempfile.NamedTemporaryFile(dir=directory, suffix='.mp4', delete=False) as f:
+            with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.mp4', delete=False) as f:
                 video_path = f.name
-            with tempfile.NamedTemporaryFile(dir=directory, suffix='.json', delete=False) as f:
+            with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.json', delete=False) as f:
                 meta_path  = f.name
         else:
             video_path = None
@@ -1015,114 +1013,6 @@ class FrameStack(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         self.frames.append(obs)
         return np.concatenate(self.frames, axis=2), reward, done, info
-
-class PyBulletVideoWriter(gym.Wrapper):
-    '''
-    Save video from pybullet_envs
-    '''
-    def __init__(self, env, filename='{env_id}_ep_{episode:06d}_{steps}.mp4', width=320, height=240, fps=60, **kwargs):
-        '''
-        env: environment
-        filename: video filename
-        width: video width
-        height: video height
-        fps: video framerate
-        '''
-        super().__init__(env=env)
-
-        self.filename = filename
-        self.width = width
-        self.height = height
-        self.fps = fps
-
-        env.env._render_width = self.width
-        env.env._render_height = self.height
-
-        self._env_id = env.unwrapped.spec.id
-        self._episode = 0
-        self._steps = 0
-        self._filename = None
-        self._tmp_filename = None
-        self._command = None
-        self._proc = None
-
-
-    def step(self, action):
-
-        if self.proc is None:
-            raise RuntimeError('Tried to step environment that needs reset')
-
-        data = self.step(action)
-
-        frame = self.env.render('rgb_array')
-        self.proc.stdin.write(frame.tobytes())
-        
-        return data
-
-    def reset(self, **kwargs):
-        
-        # close the existing video writer
-        self._close_writer()
-
-        filename = self._make_filename()
-
-
-        # open a new video writer
-        self._open_writer()
-
-        # reset env
-        data = self.reset(**kwargs)
-        
-        frame = env.render('rgb_array')
-
-        return 
-
-    def close(self, **kwargs):
-        self._close_writer()
-
-        self.env.close()
-
-    def _make_tempfile(self):
-
-
-    def _make_filename(self, filename):
-
-    def _write_frame(self, frame):
-
-        if self.proc is None:
-            raise RuntimeError('FFmpeg process not opened')
-        
-
-    def _open_writer(self):
-        self.command = [
-            'ffmpeg',
-            '-y',                       # overwrite files without asking
-            '-f', 'rawvideo',           # input format
-            '-vcodec', 'rawvideo',      # input codec
-            '-s', '{}x{}'.format(self.width, self.height), # set video size
-            '-pix_fmt', 'rgb24',        # set pixel format (bgr24 for cv2 image)
-            '-r', str(self.fps), # framerate
-            '-i', '-',                  # input from stdin
-            '-an',                      # disable audio stream
-            '-vcodec', 'mpeg4',         # video codec
-            '-b:v', '5000k',            # video bitrate
-            self.filename,
-        ]
-
-        self.proc = subprocess.Popen(self.command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    def _close_writer(self):
-        
-        if self.proc is not None:
-            self.proc.stdin.close()
-            self.proc.stderr.close()
-            self.proc.wait()
-
-        self.proc = None
-        self.command = None
-
-    def __del__(self):
-        self._close_writer()
 
 
 # === Vec Env ===
