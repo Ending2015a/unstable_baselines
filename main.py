@@ -60,8 +60,11 @@ from unstable_baselines.utils import set_global_seeds
 
 # create logger
 logger.Config.use(level='DEBUG', colored=True, reset=False)
-LOG = logger.getLogger()
+LOG = logger.getLogger('PPO')
 
+__all__ = [
+    'PPO'
+]
 
 # === Buffers ===
 class GaeBuffer():
@@ -93,12 +96,12 @@ class GaeBuffer():
         '''
         Add samples, (np.array)
         
-        obs: observations, shape: [n_envs, observation size]
-        action: actions, shape: [n_envs, 1]
-        reward: reward, shape: [n_envs]
-        done: done, shape: [n_envs]
-        value: value, shape: [n_envs]
-        log_prob: log pi, shape: [n_envs]
+        obs: observations, shape: (n_envs, obs size)
+        action: actions, shape: (n_envs, 1)
+        reward: reward, shape: (n_envs)
+        done: done, shape: (n_envs)
+        value: value, shape: (n_envs)
+        log_prob: log pi, shape: (n_envs)
         '''
         
 
@@ -107,12 +110,12 @@ class GaeBuffer():
         if len(log_prob.shape) == 0:
             log_prob = log_prob.reshape(-1, 1)
 
-        LOG.debug('observation shape: {}'.format(np.asarray(obs).shape))
-        LOG.debug('action shape: {}'.format(np.asarray(action).shape))
-        LOG.debug('reward shape: {}'.format(np.asarray(reward).shape))
-        LOG.debug('done shape: {}'.format(np.asarray(done).shape))
-        LOG.debug('value shape: {}'.format(value.flatten().shape))
-        LOG.debug('log probs shape: {}'.format(log_prob.shape))
+        #LOG.debug('observation shape: {}'.format(np.asarray(obs).shape))
+        #LOG.debug('action shape: {}'.format(np.asarray(action).shape))
+        #LOG.debug('reward shape: {}'.format(np.asarray(reward).shape))
+        #LOG.debug('done shape: {}'.format(np.asarray(done).shape))
+        #LOG.debug('value shape: {}'.format(value.flatten().shape))
+        #LOG.debug('log probs shape: {}'.format(log_prob.shape))
 
         self.observations.append(np.asarray(obs).copy())
         self.actions.append(np.asarray(action).copy())
@@ -224,6 +227,10 @@ class NatureCnn(tf.keras.Model):
 
     @tf.function
     def call(self, inputs, training=False):
+        # expand 3d to 4d
+        if tf.rank(inputs) == 3:
+            inputs = tf.expand_dims(inputs, axis=0)
+        
         x = inputs
         for layer in self._layers:
             x = layer(x)
@@ -340,15 +347,11 @@ class PPO(tf.keras.Model):
                             ent_coef:      float = 0.01, 
                             vf_coef:       float = 0.5, 
                             max_grad_norm: float = 0.5,
-                            target_kl:     float = None, 
-                            tensorboard_log: str = None,
+                            target_kl:     float = None,
                             verbose:         int = 0, 
-                            seed:            int = 0):
+                            **kwargs):
         super().__init__()
         self.env = env
-        self.observation_space = env.observation_space
-        self.action_space      = env.action_space
-        self.n_envs            = env.n_envs
         
         self.learning_rate   = learning_rate
         self.batch_size      = batch_size
@@ -362,27 +365,37 @@ class PPO(tf.keras.Model):
         self.vf_coef         = vf_coef
         self.max_grad_norm   = max_grad_norm
         self.target_kl       = target_kl
-        self.tensorboard_log = tensorboard_log
         self.verbose         = verbose  # 0=no, 1=training log, 2=eval log
-        self.seed            = seed
 
         self.num_timesteps = 0
         self.buffer        = None
         self.tb_writer     = None
 
+        if self.env is not None:
+            self.setup_model(self.env)
+    
+    def setup_model(self, env):
+
+        assert env is not None, 'Env is None'
+
+        self.env               = env
+        self.observation_space = env.observation_space
+        self.action_space      = env.action_space
+        self.n_envs            = env.n_envs
+
         # --- setup model ---
-        self.buffer     = GaeBuffer(gae_lambda=gae_lambda, gamma=gamma)
+        self.buffer     = GaeBuffer(gae_lambda=self.gae_lambda, gamma=self.gamma)
         self.net        = NatureCnn()
         self.policy_net = PolicyNet(self.action_space)
         self.value_net  = ValueNet()
-        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=learning_rate, epsilon=1e-5, clipnorm=self.max_grad_norm)
+        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, epsilon=1e-5, clipnorm=self.max_grad_norm)
 
         # construct networks
         inputs  = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
         outputs = self.net(inputs)
         self.policy_net(outputs)
         self.value_net(outputs)
-    
+
     @tf.function
     def _forward(self, inputs, training=False):
         # preprocess inputs
@@ -400,8 +413,7 @@ class PPO(tf.keras.Model):
 
         return logits, values
 
-    @tf.function
-    def call(self, inputs, verbose=False):
+    def call(self, inputs, deterministic=True, verbose=False):
         '''
         Predict actions
 
@@ -409,8 +421,12 @@ class PPO(tf.keras.Model):
         '''
         # forward
         logits, values = self._forward(inputs)
-        distrib   = Categorical(logits)
-        actions   = distrib.sample()
+        
+        if deterministic:
+            return tf.math.argmax(logits, axis=-1)
+        
+        distrib = Categorical(logits)
+        actions = distrib.sample()
         log_probs = distrib.log_prob(actions)
 
         if verbose:
@@ -431,7 +447,7 @@ class PPO(tf.keras.Model):
 
         for _ in range(steps):
             
-            actions, values, log_probs = self.call(obs, verbose=True)
+            actions, values, log_probs = self(obs, deterministic=False, verbose=True)
 
             actions   = actions.numpy()
             values    = values.numpy()
@@ -563,15 +579,14 @@ class PPO(tf.keras.Model):
 
         eps_rews = []
         eps_steps = []
-        for episodes in range(n_eval_episodes):
+        for episode in range(n_episodes):
             obs = env.reset()
             total_rews = 0
 
             for steps in range(max_steps):
-                obs = obs[np.newaxis, :] # (1, obs shape)
                 # predict action
-                acts = self.call(obs)
-                acts = acts.numpy().item()
+                acts = self.predict(obs)
+                acts = acts.item()
                 # step environment
                 obs, rew, done, info = env.step(acts)
                 total_rews += rew
@@ -581,8 +596,8 @@ class PPO(tf.keras.Model):
             if self.verbose > 1:
                 LOG.set_header('Eval {}/{}'.format(episode+1, n_episodes))
                 LOG.add_line()
-                LOG.add_row('Steps', step+1)
                 LOG.add_row('Rewards', total_rews)
+                LOG.add_row('Steps', steps+1)
                 LOG.add_line()
                 LOG.flush('INFO')
         
@@ -597,16 +612,16 @@ class PPO(tf.keras.Model):
                     log_interval:    bool = 1,
                     eval_env              = None, 
                     eval_interval:    int = 1, 
-                    n_eval_episodes:  int = 5, 
+                    eval_episodes:    int = 5, 
                     eval_max_steps:   int = 10000,
-                    tb_log_name:      str = "PPO", 
+                    tb_logdir:        str = None, 
                     reset_timesteps: bool = False):
         
         assert self.env is not None, 'Please set env before training'
 
         # create tensorboard writer
-        if self.tensorboard_log is not None:
-            self.tb_writer = tf.summary.create_file_writer(os.path.join(self.tensorboard_log, tb_log_name))
+        if tb_logdir is not None:
+            self.tb_writer = tf.summary.create_file_writer(tb_logdir)
 
         # initialize
         obs        = None
@@ -643,7 +658,7 @@ class PPO(tf.keras.Model):
                     tf.summary.scalar('approx_kl',          kl,       step=self.num_timesteps)
                     tf.summary.scalar('entropy',            ent,      step=self.num_timesteps)
                     tf.summary.scalar('policy_loss',        pi_loss,  step=self.num_timesteps)
-                    tf.summary.scalar('value_loss',         v_loss,   step=self.num_timesteps)
+                    tf.summary.scalar('value_loss',         vf_loss,  step=self.num_timesteps)
                     tf.summary.scalar('entropy_loss',       ent_loss, step=self.num_timesteps)
                     tf.summary.scalar('explained_variance', exp_var,  step=self.num_timesteps)
                 
@@ -680,7 +695,7 @@ class PPO(tf.keras.Model):
                     LOG.add_row('Approx KL',      kl,       fmt='{}: {:.6f}')
                     LOG.add_row('Entropy',        ent,      fmt='{}: {:.6f}')
                     LOG.add_row('Policy loss',    pi_loss,  fmt='{}: {:.6f}')
-                    LOG.add_row('Value loss',     v_loss,   fmt='{}: {:.6f}')
+                    LOG.add_row('Value loss',     vf_loss,   fmt='{}: {:.6f}')
                     LOG.add_row('Entropy loss',   ent_loss, fmt='{}: {:.6f}')
                     LOG.add_row('Explained var',  exp_var,  fmt='{}: {:.6f}')
                 
@@ -689,19 +704,21 @@ class PPO(tf.keras.Model):
 
             # evaluate PPO
             if eval_env is not None and episode % eval_interval == 0:
-                eps_rews, eps_steps = self.eval(env=eval_env, n_episodes=n_eval_episodes, max_steps=eval_max_steps)
+                eps_rews, eps_steps = self.eval(env=eval_env, n_episodes=eval_episodes, max_steps=eval_max_steps)
                 
-                max_idx = np.argmax(eps_rews)
-                max_rews = eps_rews[max_idx]
-                max_steps = eps_steps[max_idx]
-                mean_rews = np.mean(eps_rews)
+                max_idx    = np.argmax(eps_rews)
+                max_rews   = eps_rews[max_idx]
+                max_steps  = eps_steps[max_idx]
+                mean_rews  = np.mean(eps_rews)
+                std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
 
-                if self.tf_writer is not None:
+                if self.tb_writer is not None:
                     with self.tb_writer.as_default():
-                        tf.summary.scalar('max_rewards',  max_rews)
-                        tf.summary.scalar('mean_rewards', mean_rews)
-                        tf.summary.scalar('mean_length',   mean_steps)
+                        tf.summary.scalar('max_rewards',  max_rews,   step=self.num_timesteps)
+                        tf.summary.scalar('mean_rewards', mean_rews,  step=self.num_timesteps)
+                        tf.summary.scalar('std_rewards',  std_rews,   step=self.num_timesteps)
+                        tf.summary.scalar('mean_length',  mean_steps, step=self.num_timesteps)
 
                     self.tb_writer.flush()
 
@@ -711,46 +728,44 @@ class PPO(tf.keras.Model):
                 LOG.add_row('  Length',     max_steps)
                 LOG.add_line()
                 LOG.add_row('Mean rewards', mean_rews)
+                LOG.add_row('Std rewards',  std_rews, fmt='{}: {:.6f}')
                 LOG.add_row('Mean length',  mean_steps)
                 LOG.add_line()
                 LOG.flush('INFO')
 
         return self
 
-    def set_env(self, env):
-        assert env.observation_space == self.observation_space, 'Observation space does not match'
-        assert env.action_space == self.action_space, 'Action space does not match'
+    def export(self, path):
+        '''
+        Export model
 
-        self.env = env
-        self.n_envs = env.n_envs
+        Call `tf.keras.models.load_model(path)` to load model. (predict only)
+        '''
+        super().save(path)
 
-    # def save(self, path):
-    #     self.save
 
-    # @classmethod
-    # def load(self, path):
-    #     pass
 
-if __name__ == '__main__':
+def parse_args():
 
     parser = argparse.ArgumentParser(description='Proximal Policy Optimization')
-    parser.add_argument('--logdir',           type=str, default='log/',                   help='Log directory')
-    parser.add_argument('--logging',          type=str, default='{env_id}/ppo/train.log', help='Log filename')
-    parser.add_argument('--monitor_dir',      type=str, default='{env_id}/ppo/monitor',   help='Monitor log')
-    parser.add_argument('--tb_log_name',      type=str, default='{env_id}/ppo',           help='Tensorboard log name')
-    parser.add_argument('--env_id',           type=str, default='BreakoutNoFrameskip-v0', help='Environment ID')
+    parser.add_argument('--logdir',           type=str, default='log/{env_id}/ppo/{rank}',help='Root dir             (args: {env_id}, {rank})')
+    parser.add_argument('--logging',          type=str, default='train.log',              help='Log path             (args: {env_id}, {rank})')
+    parser.add_argument('--monitor_dir',      type=str, default='monitor',                help='Monitor dir          (args: {env_id}, {rank})')
+    parser.add_argument('--tb_logdir',        type=str, default='',                       help='Tensorboard log name (args: {env_id}, {rank})')
+    parser.add_argument('--model_dir',        type=str, default='model',                  help='Model export path    (args: {env_id}, {rank})')
+    parser.add_argument('--env_id',           type=str, default='BeamRiderNoFrameskip-v0',help='Environment ID')
     parser.add_argument('--num_envs',         type=int, default=4,      help='Number of environments')
-    parser.add_argument('--num_episodes',     type=int, default=5000,   help='Number of training episodes')
+    parser.add_argument('--num_episodes',     type=int, default=10000,  help='Number of training episodes (not environment episodes)')
     parser.add_argument('--num_steps',        type=int, default=256,    help='Number of timesteps per episode (interact with envs)')
     parser.add_argument('--num_epochs',       type=int, default=10,     help='Number of epochs per episode (perform gradient update)')
-    parser.add_argument('--batch_size',       type=int, default=64,     help='Batch size')
-    parser.add_argument('--verbose',          type=int, default=1,      help='Print more training message, 0=no more, 1=train log, 2=eval log')
+    parser.add_argument('--batch_size',       type=int, default=64,     help='Training batch size')
+    parser.add_argument('--verbose',          type=int, default=1,      help='Print more message, 0=less, 1=more train log, 2=more eval log')
     parser.add_argument('--rank',             type=int, default=0,      help='Optional arguments for parallel training')
     parser.add_argument('--seed',             type=int, default=0,      help='Random seed')
-    parser.add_argument('--log_interval',     type=int, default=1,      help='Logging interval')
-    parser.add_argument('--eval_interval',    type=int, default=5,      help='Evaluation interval')
-    parser.add_argument('--n_eval_episodes', type=int, default=5,      help='Number of episodes each evaluation')
-    parser.add_argument('--eval_max_steps',   type=int, default=10000,  help='Maximum timesteps in each episode when evaluating')
+    parser.add_argument('--log_interval',     type=int, default=1,      help='Logging interval (episodes)')
+    parser.add_argument('--eval_interval',    type=int, default=1000,   help='Evaluation interval (episodes)')
+    parser.add_argument('--eval_episodes',    type=int, default=5,      help='Number of episodes each evaluation')
+    parser.add_argument('--eval_max_steps',   type=int, default=3000,   help='Maximum timesteps in each evaluation episode')
     parser.add_argument('--eval_seed',        type=int, default=0,      help='Environment seed for evaluation')
     parser.add_argument('--lr',               type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma',            type=float, default=0.99, help='Gamma decay rate')
@@ -763,20 +778,25 @@ if __name__ == '__main__':
     parser.add_argument('--target_kl',        type=float, default=None, help='Target kl (early stop)')
 
     a = parser.parse_args()
-    a.logging     = a.logging.format(env_id=a.env_id, rank=a.rank)
-    a.monitor_dir = a.monitor_dir.format(env_id=a.env_id, rank=a.rank)
-    a.tb_log_name = a.tb_log_name.format(env_id=a.env_id, rank=a.rank)
 
-    # === create logging path ===
-    logging_path = os.path.join(a.logdir, a.logging)
-    monitor_path = os.path.join(a.logdir, a.monitor_dir)
-    tb_path = os.path.join(a.logdir, a.tb_log_name)
+    a.logdir      = a.logdir.format(env_id=a.env_id, rank=a.rank)
+    a.logging     = os.path.join(a.logdir, a.logging).format(env_id=a.env_id, rank=a.rank)
+    a.monitor_dir = os.path.join(a.logdir, a.monitor_dir).format(env_id=a.env_id, rank=a.rank)
+    a.tb_logdir   = os.path.join(a.logdir, a.tb_logdir).format(env_id=a.env_id, rank=a.rank)
+    a.model_dir   = os.path.join(a.logdir, a.model_dir).format(env_id=a.env_id, rank=a.rank)
 
-    # === re-create logger ===
-    logger.Config.Use(filename=logging_path, level='DEBUG', colored=True, reset=True)
+    return a
+
+
+if __name__ == '__main__':
+
+    a = parse_args()
+
+    # === Reset logger ===
+    logger.Config.use(filename=a.logging, level='DEBUG', colored=True, reset=True)
     LOG = logger.getLogger()
 
-    # === print welcome message ===
+    # === Print welcome message ===
     LOG.add_row('')
     LOG.add_rows('PPO', fmt='{:@f:ANSI_Shadow}', align='center')
     LOG.add_line()
@@ -784,49 +804,51 @@ if __name__ == '__main__':
     LOG.flush('INFO')
     time.sleep(1)
 
-    # === print arguments ===
-    LOG.set_header('ARGUMENTS')
-    LOG.add_row('Log dir', a.logdir)
-    LOG.add_row('Logging path', logging_path)
-    LOG.add_row('Monitor path', monitor_path)
-    LOG.add_row('Tensorboard path', tb_path)
-    LOG.add_row('Env ID', a.env_id)
-    LOG.add_row('Seed', a.seed)
-    LOG.add_row('Eval seed', a.eval_seed)
+    # === Print arguments ===
+    LOG.set_header('Arguments')
+    LOG.add_row('Log dir',          a.logdir)
+    LOG.add_row('Logging path',     a.logging)
+    LOG.add_row('Monitor path',     a.monitor_dir)
+    LOG.add_row('Tensorboard path', a.tb_logdir)
+    LOG.add_row('Model path',       a.model_dir)
+    LOG.add_row('Env ID',           a.env_id)
+    LOG.add_row('Seed',             a.seed)
+    LOG.add_row('Eval seed',        a.eval_seed)
     LOG.add_line()
-    LOG.add_row('Num of envs', a.num_envs)
+    LOG.add_row('Num of envs',           a.num_envs)
     LOG.add_row('Num of steps/episode ', a.num_steps)
     LOG.add_row('Num of epochs/episode', a.num_epochs)
-    LOG.add_row('Num of episodes', a.num_episodes)
-    LOG.add_row('Log interval', a.log_interval)
-    LOG.add_row('Eval interval', a.eval_interval)
-    LOG.add_row('Eval episodes', a.n_eval_episodes)
-    LOG.add_row('Eval max steps', a.eval_max_steps)
-    LOG.add_row('Batch size', a.batch_size)
-    LOG.add_row('Verbose', a.verbose)
+    LOG.add_row('Num of episodes',       a.num_episodes)
+    LOG.add_row('Log interval',          a.log_interval)
+    LOG.add_row('Eval interval',         a.eval_interval)
+    LOG.add_row('Eval episodes',         a.eval_episodes)
+    LOG.add_row('Eval max steps',        a.eval_max_steps)
+    LOG.add_row('Batch size',            a.batch_size)
+    LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
-    LOG.add_row('Learning rate', a.lr)
-    LOG.add_row('Gamma', a.gamma)
-    LOG.add_row('Lambda', a.gae_lambda)
-    LOG.add_row('Clip range', a.clip_range)
-    LOG.add_row('Value clip range', a.clip_range_vf)
-    LOG.add_row('Entropy coef', a.ent_coef)
-    LOG.add_row('Value coef', a.vf_coef)
+    LOG.add_row('Learning rate',     a.lr)
+    LOG.add_row('Gamma',             a.gamma)
+    LOG.add_row('Lambda',            a.gae_lambda)
+    LOG.add_row('Clip range',        a.clip_range)
+    LOG.add_row('Value clip range',  a.clip_range_vf)
+    LOG.add_row('Entropy coef',      a.ent_coef)
+    LOG.add_row('Value coef',        a.vf_coef)
     LOG.add_row('Max gradient norm', a.max_grad_norm)
-    LOG.add_row('Target KL', a.target_kl)
-    LOG.add_row('Clip action space', (a.clip_actions is True))
+    LOG.add_row('Target KL',         a.target_kl)
     LOG.flush('WARNING')
 
     # === Make envs ===
     # make atari env
-    assert 'NoFrameskip' in env_id
+    assert 'NoFrameskip' in a.env_id
     def make_env(env_id, rank, log_path, seed=0):
         def _init():
             env = gym.make(env_id)
             env.seed(seed + rank)
             env = NoopResetEnv(env, noop_max=30)
             env = MaxAndSkipEnv(env, skip=4)
-            env = Monitor(env, path=log_path, prefix=str(rank))
+            env = Monitor(env, directory=log_path, prefix=str(rank),
+                        enable_video_recording=True, force=True,
+                        video_kwargs={'prefix':'video/train.{}'.format(rank)})
             env = EpisodicLifeEnv(env)
             env = WarpFrame(env)
             env = ClipRewardEnv(env)
@@ -835,14 +857,19 @@ if __name__ == '__main__':
         return _init
 
     # make env
-    env = SubprocVecEnv([make_env(a.env_id, i, monitor_path, seed=a.seed) for i in range(a.num_envs)])
+    env = SubprocVecEnv([make_env(a.env_id, i, a.monitor_dir, seed=a.seed) for i in range(a.num_envs)])
     env = VecFrameStack(env, 4)
 
     eval_env = gym.make(a.env_id)
     eval_env.seed(a.eval_seed)
     eval_env = NoopResetEnv(eval_env, noop_max=30)
     eval_env = MaxAndSkipEnv(eval_env, skip=4)
+    eval_env = Monitor(eval_env, directory=a.monitor_dir, prefix='eval',
+                       enable_video_recording=True, force=True,
+                       video_kwargs={'prefix':'video/eval',
+                                     'callback': lambda x: True})
     eval_env = WarpFrame(eval_env)
+    eval_env = FrameStack(eval_env, 4)
     
     LOG.debug('Action space: {}'.format(env.action_space))
     LOG.debug('Observation space: {}'.format(env.observation_space))
@@ -862,22 +889,71 @@ if __name__ == '__main__':
                          vf_coef         = a.vf_coef,
                          max_grad_norm   = a.max_grad_norm,
                          target_kl       = a.target_kl,
-                         tensorboard_log = a.logdir,
                          verbose         = a.verbose)
         
-        model.learn(a.num_steps * a.num_envs * a.num_episodes, 
-                    tb_log_name=a.tb_log_name, 
-                    log_interval=a.log_interval,
-                    eval_env=eval_env, 
-                    eval_interval=a.eval_interval, 
-                    n_eval_episodes=a.n_eval_episodes, 
-                    eval_max_steps=a.eval_max_steps)
-        LOG.info('Training done')
-
-        model.save('saved_mode/my_ppo')
+        # Total timesteps = num_steps * num_envs * num_episodes (default ~ 10M)
+        model.learn(a.num_steps *    a.num_envs * a.num_episodes, 
+                    tb_logdir      = a.tb_logdir, 
+                    log_interval   = a.log_interval,
+                    eval_env       = eval_env, 
+                    eval_interval  = a.eval_interval, 
+                    eval_episodes  = a.eval_episodes, 
+                    eval_max_steps = a.eval_max_steps)
         
-        model.load_model('saved_mode/my_ppo')
-        #model.eval(env=eval_env, n_episodes=a.n_eval_episodes, eval_max_steps=a.eval_max_steps)
+        LOG.info('DONE')
+
+        # Export model
+        model.export(a.model_dir)
+
+        # Load model
+        loaded_model = tf.keras.models.load_model(a.model_dir)
+
+        # Evaluation
+        eps_rews  = []
+        eps_steps = []
+        for episode in range(a.eval_episodes):
+            obs = eval_env.reset()
+            total_rews = 0
+
+            for steps in range(10000):
+                # predict action
+                acts = loaded_model.predict(obs)
+                acts = acts.item()
+                # step environment
+                obs, rew, done, info = eval_env.step(acts)
+                total_rews += rew
+                if done:
+                    break
+
+            # === Print episode result ===
+            LOG.set_header('Eval {}/{}'.format(episode+1, a.eval_episodes))
+            LOG.add_line()
+            LOG.add_row('Rewards', total_rews)
+            LOG.add_row('Steps', steps+1)
+            LOG.add_line()
+            LOG.flush('INFO')
+        
+            eps_rews.append(total_rews)
+            eps_steps.append(steps)
+
+        max_idx    = np.argmax(eps_rews)
+        max_rews   = eps_rews[max_idx]
+        max_steps  = eps_steps[max_idx]
+        mean_rews  = np.mean(eps_rews)
+        std_rews   = np.std(eps_rews)
+        mean_steps = np.mean(eps_steps)
+
+        # === Print evaluation results ===
+        LOG.set_header('Evaluate')
+        LOG.add_line()
+        LOG.add_row('Max rewards',  max_rews)
+        LOG.add_row('  Length',     max_steps)
+        LOG.add_line()
+        LOG.add_row('Mean rewards', mean_rews)
+        LOG.add_row('Std rewards',  std_rews, fmt='{}: {:.6f}')
+        LOG.add_row('Mean length',  mean_steps)
+        LOG.add_line()
+        LOG.flush('INFO')
 
     except:
         LOG.exception('Exception occurred')
