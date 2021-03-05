@@ -208,12 +208,11 @@ class WarpFrame(gym.ObservationWrapper):
 # Rewrite gym.wrappers.monitoring.StatsRecorder
 #   will output Stable baselines style csv records
 class StatsRecorder(object):
-    EXT='monitor.csv'
     #TODO: fix ext
     def __init__(self, directory=None, prefix=None, ext='monitor.csv', env_id=None):
         '''
         Filename
-            {directory}/{prefix}.{EXT}
+            {directory}/{prefix}.{ext}
         directory: directory
         prefix: filename prefix
             e.g. directory='/foo/bar', prefix=1   => /foo/bar/1.monitor.csv
@@ -229,8 +228,10 @@ class StatsRecorder(object):
         self.env_id = env_id
 
         # setup csv file
-        self.filename = self._make_filename(directory, prefix)
+        self.filename = self._make_path(directory, prefix, ext)
         self.header = json.dumps({"t_start": self.t_start, 'env_id': self.env_id})
+        self._ensure_path_exists(self.filename)
+        LOG.info('Writing monitor to: ' + self.filename)
 
         # write header
         self.file_handler = open(self.filename, "wt")
@@ -255,32 +256,26 @@ class StatsRecorder(object):
     def closed(self):
         return self._closed
 
-    @classmethod
-    def _make_filename(cls, directory, prefix):
-        # filename = {directory}/{prefix}.{EXT}
-
+    def _make_path(self, base_path, prefix, ext):
+        # path = {base_path}/{prefix}.{ext}
+        path = ext
         if prefix:
             if not isinstance(prefix, str):
                 prefix = str(prefix)
-            # {directory}/{prefix}
-            filename = os.path.join(directory, prefix)
+            
+            if os.path.basename(prefix):
+                path = prefix + '.' + ext
 
-            if os.path.basename(filename):
-                # if prefix is a valid filename
-                filename = filename + '.' + cls.EXT
-            else:
-                # if prefix is a directory '/'
-                filename = os.path.join(filename, cls.EXT)
-        else:
-            filename = os.path.join(directory, cls.EXT)
+        path = os.path.join(base_path, path)
 
-        # create directories
-        dirpath = os.path.dirname(filename)
-        if dirpath:
-            os.makedirs(dirpath, exist_ok=True)
+        return path
+
+    def _ensure_path_exists(self, path):
         
-        LOG.info('Writing monitor to: ' + filename)
-        return filename
+        base_path = os.path.dirname(path)
+        if base_path:
+            os.makedirs(base_path, exist_ok=True)
+
 
     def before_step(self):
 
@@ -848,6 +843,7 @@ class Monitor(gym.Wrapper):
         prefix = os.path.basename(path)
 
         if enabled:
+            self._ensure_path_exists(path)
             # generate random filename
             with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.mp4', delete=False) as f:
                 video_path = f.name
