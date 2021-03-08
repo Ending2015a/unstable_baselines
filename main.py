@@ -957,4 +957,10 @@ if __name__ == '__main__':
 
     except:
         LOG.exception('Exception occurred')
+    
+        env.close()
+        eval_env.close()
         exit(1)
+    
+    env.close()
+    eval_env.close()
