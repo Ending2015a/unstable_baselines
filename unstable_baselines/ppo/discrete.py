@@ -227,10 +227,6 @@ class NatureCnn(tf.keras.Model):
 
     @tf.function
     def call(self, inputs, training=False):
-        # expand 3d to 4d
-        if tf.rank(inputs) == 3:
-            inputs = tf.expand_dims(inputs, axis=0)
-        
         x = inputs
         for layer in self._layers:
             x = layer(x)
@@ -419,6 +415,7 @@ class PPO(tf.keras.Model):
 
         verbose: return additional info 
         '''
+
         # forward
         logits, values = self._forward(inputs)
         
@@ -585,7 +582,7 @@ class PPO(tf.keras.Model):
 
             for steps in range(max_steps):
                 # predict action
-                acts = self.predict(obs)
+                acts = self(np.expand_dims(obs, axis=0)).numpy()
                 acts = acts.item()
                 # step environment
                 obs, rew, done, info = env.step(acts)
@@ -917,7 +914,7 @@ if __name__ == '__main__':
 
             for steps in range(10000):
                 # predict action
-                acts = loaded_model.predict(obs)
+                acts = loaded_model.predict(np.expand_dims(obs, axis=0))
                 acts = acts.item()
                 # step environment
                 obs, rew, done, info = eval_env.step(acts)

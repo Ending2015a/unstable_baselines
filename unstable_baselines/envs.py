@@ -722,7 +722,7 @@ class Monitor(gym.Wrapper):
         
         self.stats_recorder.close()
         if self.video_recorder:
-            self._close_video_recorder()
+            self._close_and_save_video_recorder()
 
         self.enabled = False
 
@@ -755,11 +755,9 @@ class Monitor(gym.Wrapper):
         if not self.enabled:
             return
 
-        # make video/metadata path
-        video_path = self._make_path(self.directory, self.video_prefix, self.video_ext)
-        meta_path = self._make_path(self.directory, self.video_prefix, self.meta_ext)
+        
         # close video recorder and copy tempfile to `filename`
-        self._close_and_save_video_recorder(video_path, meta_path)
+        self._close_and_save_video_recorder()
         
 
         self.stats_recorder.after_reset()
@@ -796,11 +794,16 @@ class Monitor(gym.Wrapper):
         path = os.path.join(base_path, path)
         return path
 
-    def _close_and_save_video_recorder(self, video_path, meta_path):
+    def _close_and_save_video_recorder(self):
         if not self.video_recorder or not self.video_recorder.enabled:
             return
         
         self.video_recorder.close()
+
+
+        # make video/metadata path
+        video_path = self._make_path(self.directory, self.video_prefix, self.video_ext)
+        meta_path = self._make_path(self.directory, self.video_prefix, self.meta_ext)
 
         # update metadata
         monitor_metadata = {
