@@ -487,9 +487,9 @@ class VideoRecorder(object):
         self.broken  = False
 
         # pybullet_envs
-        if hasattr(env.unwrapped, '_render_width'):
+        if width is not None and hasattr(env.unwrapped, '_render_width'):
             env.unwrapped._render_width = width
-        if hasattr(env.unwrapped, '_render_height'):
+        if height is not None and hasattr(env.unwrapped, '_render_height'):
             env.unwrapped._render_height = height
 
         # Create directory

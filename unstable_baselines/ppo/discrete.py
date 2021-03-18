@@ -346,7 +346,7 @@ class PPO(tf.keras.Model):
                             target_kl:     float = None,
                             verbose:         int = 0, 
                             **kwargs):
-        super().__init__()
+        super().__init__(**kwargs)
         self.env = env
         
         self.learning_rate   = learning_rate
@@ -430,6 +430,27 @@ class PPO(tf.keras.Model):
             return actions, values, log_probs
         else:
             return actions
+
+    def predict(self, inputs, **kwargs):
+        '''
+        Predict
+
+        inputs: 3D or 4D (batch=1) image
+        '''
+
+        one_sample = (len(inputs.shape) == len(self.env.observation_space.shape))
+
+        if one_sample:
+            inputs = np.expand_dims(inputs, axis=0)
+
+        # predict
+        outputs = self(inputs, **kwargs).numpy()
+
+        if one_sample:
+            outputs = outputs.item()
+
+        # predict
+        return outputs
 
     def _run(self, steps, obs=None):
         '''
@@ -526,10 +547,10 @@ class PPO(tf.keras.Model):
         
         return loss, kl, entropy, pi_loss, vf_loss, ent_loss
 
-    def train(self, gradient_steps, batch_size=64):
+    def train(self, epochs, batch_size=64):
         assert self.buffer.ready_for_sampling, "Buffer is not ready for sampling, please call buffer.make() before sampling"
 
-        for gradient_step in range(gradient_steps):
+        for epoch in range(epochs):
             all_loss     = []
             all_kl       = []
             all_entropy  = []
@@ -552,7 +573,7 @@ class PPO(tf.keras.Model):
             m_kl = np.mean(np.hstack(np.array(all_kl)))
             # early stop
             if self.target_kl is not None and m_kl > 1.5 * self.target_kl:
-                LOG.warning('Early stopping at step {} due to reaching max kl: {:.2f}'.format(gradient_step, m_kl))
+                LOG.warning('Early stopping at epoch {} due to reaching max kl: {:.2f}'.format(epoch, m_kl))
                 break
 
         # calculate explained variance
@@ -582,8 +603,8 @@ class PPO(tf.keras.Model):
 
             for steps in range(max_steps):
                 # predict action
-                acts = self(np.expand_dims(obs, axis=0)).numpy()
-                acts = acts.item()
+                acts = self.predict(obs)
+
                 # step environment
                 obs, rew, done, info = env.step(acts)
                 total_rews += rew
@@ -606,7 +627,7 @@ class PPO(tf.keras.Model):
         
 
     def learn(self, total_timesteps:  int, 
-                    log_interval:    bool = 1,
+                    log_interval:     int = 1,
                     eval_env              = None, 
                     eval_interval:    int = 1, 
                     eval_episodes:    int = 5, 
@@ -692,7 +713,7 @@ class PPO(tf.keras.Model):
                     LOG.add_row('Approx KL',      kl,       fmt='{}: {:.6f}')
                     LOG.add_row('Entropy',        ent,      fmt='{}: {:.6f}')
                     LOG.add_row('Policy loss',    pi_loss,  fmt='{}: {:.6f}')
-                    LOG.add_row('Value loss',     vf_loss,   fmt='{}: {:.6f}')
+                    LOG.add_row('Value loss',     vf_loss,  fmt='{}: {:.6f}')
                     LOG.add_row('Entropy loss',   ent_loss, fmt='{}: {:.6f}')
                     LOG.add_row('Explained var',  exp_var,  fmt='{}: {:.6f}')
                 
@@ -739,8 +760,6 @@ class PPO(tf.keras.Model):
         Call `tf.keras.models.load_model(path)` to load model. (predict only)
         '''
         super().save(path)
-
-
 
 def parse_args():
 
