@@ -1,6 +1,6 @@
 # Twin Deplayed Deep Deterministic Policy Gradient (TD3)
 
-> [Fujimoto, S., van Hoof, H., and Meger, D. Addressing Function Approximation Error in Actor-Critic Methods. ICML 2018.](https://arxiv.org/abs/1802.09477)
+> [Fujimoto, S., van Hoof, H., and Meger, D. Addressing Function Approximation Error in Actor-Critic Methods. *ICML 2018*.](https://arxiv.org/abs/1802.09477)
 
 
 ## How to run
@@ -15,20 +15,17 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 * Total timesteps (Samples) = num_envs * num_steps * num_episodes (~1M in this case)
 
 
-## Results
+## PyBullet
 
-
-### PyBullet
-
-#### Video
+### Video
 
 > Best video
 
-#### Learning Curve
+### Learning Curve
 
 > Learning curve
 
-#### Hyperparameters
+### Hyperparameters
 | | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` |
 |-|-|-|-|-|-|
 | `HalfCheetahBulletEnv-v0` | 1 | 1000 | 1000 | 1000 | 100 |
