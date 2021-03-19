@@ -55,7 +55,10 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.envs import *
-from unstable_baselines.utils import set_global_seeds
+from unstable_baselines.base import SavableModel
+from unstable_baselines.utils import (set_global_seeds,
+                                      to_json_serializable,
+                                      from_json_serializable)
 
 
 # create logger
@@ -272,45 +275,47 @@ class ValueNet(tf.keras.Model):
 
 # Categorical probability (Discrete action)
 class Categorical(tf.Module):
-    def __init__(self, logits):
-        super().__init__()
-        self.logits = tf.convert_to_tensor(logits)
 
-    @tf.function
-    def _p_pi(self):
+    @staticmethod
+    def _p_pi(logits):
+        logits    = tf.convert_to_tensor(logits)
         # softmax (safe softmax)
-        pi_       = self.logits - tf.math.reduce_max(self.logits, axis=-1, keepdims=True)
+        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
         exp_pi_   = tf.exp(pi_)
         z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
         p_pi      = exp_pi_ / z_exp_pi_
         return p_pi
     
-    @tf.function
-    def _logp_pi(self):
+    @staticmethod
+    def _logp_pi(logits):
+        logits    = tf.convert_to_tensor(logits)
         # softmax (safe softmax)
-        pi_       = self.logits - tf.math.reduce_max(self.logits, axis=-1, keepdims=True)
+        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
         exp_pi_   = tf.exp(pi_)
         z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
         logp_pi   = pi_ - tf.math.log(z_exp_pi_)
         return logp_pi
 
-    @tf.function
-    def sample(self):
+    @staticmethod
+    def sample(logits):
+        logits  = tf.convert_to_tensor(logits)
         # gumbel reparameterization
-        e       = tf.random.uniform(tf.shape(self.logits)) # noise
-        it      = self.logits - tf.math.log(-tf.math.log(e))
+        e       = tf.random.uniform(tf.shape(logits)) # noise
+        it      = logits - tf.math.log(-tf.math.log(e))
         samples = tf.math.argmax(it, axis=-1)
         return samples
 
-    @tf.function
-    def log_prob(self, x):
+    @staticmethod
+    def log_prob(logits, x):
+        logits    = tf.convert_to_tensor(logits)
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
-                            labels=x, logits=self.logits)
+                            labels=x, logits=logits)
     
-    @tf.function
-    def entropy(self):
+    @staticmethod
+    def entropy(logits):
+        logits    = tf.convert_to_tensor(logits)
         # softmax (safe softmax)
-        pi_       = self.logits - tf.math.reduce_max(self.logits, axis=-1, keepdims=True)
+        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
         exp_pi_   = tf.exp(pi_)
         z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
         p_pi      = exp_pi_ / z_exp_pi_
@@ -319,16 +324,114 @@ class Categorical(tf.Module):
         ent_pi    = tf.math.reduce_sum(-p_pi * logp_pi, axis=-1)
         return ent_pi
 
-    @tf.function
-    def kl(self, target_logits):
+    @staticmethod
+    def kl(logits, target_logits):
+        logits        = tf.convert_to_tensor(logits)
         # softmax (safe softmax)
         logits_       = target_logits - tf.math.reduce_max(target_logits, axis=-1, keepdims=True)
         exp_logits_   = tf.exp(logits_)
         z_exp_logits_ = tf.math.reduce_sum(exp_logits_, axis=-1, keepdims=True)
         # kl divergence
-        log_qp        = self.logits_ - tf.math.log(z_exp_logits_) - self.pi_ + tf.math.log(self.z_exp_pi_)
+        log_qp        = logits - tf.math.log(z_exp_logits_) - self.pi_ + tf.math.log(self.z_exp_pi_)
         kl            = tf.math.reduce_sum(-self._p_pi() * log_qp, axis=-1)
         return kl
+
+
+class PPOAgent(SavableModel):
+    def __init__(self, observation_space, action_space, **kwargs):
+        super().__init__(**kwargs)
+
+        # --- Initialize ---
+        self.observation_space = None
+        self.action_space = None
+        self.net = None
+        self.policy_net = None
+        self.value_net = None
+
+        if observation_space is not None and action_space is not None:
+            self.setup_model(observation_space, action_space)
+
+    def setup_model(self, observation_space, action_space):
+
+        # check observation/action space
+        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
+        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
+
+        self.observation_space = observation_space
+        self.action_space      = action_space
+
+        # --- setup model ---
+        self.net        = NatureCnn()
+        self.policy_net = PolicyNet(self.action_space)
+        self.value_net  = ValueNet()
+
+        # construct networks
+        inputs  = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        outputs = self.net(inputs)
+        self.policy_net(outputs)
+        self.value_net(outputs)
+
+    @tf.function
+    def _forward(self, inputs, training=True):
+        # cast image inputs (uint8) to float32
+        inputs = tf.cast(inputs, dtype=tf.float32)
+        # normalize
+        inputs = (inputs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
+
+        # forward network
+        latent = self.net(inputs, training=training)
+        # forward policy net
+        logits = self.policy_net(latent, training=training)
+        # forward value net
+        values = self.value_net(latent, training=training)
+
+        return logits, values
+
+    def call(self, inputs, deterministic=False, training=True):
+        '''
+        Predict actions
+
+        deterministic: deterministic action
+        '''
+
+        # forward
+        logits, values = self._forward(inputs, training=training)
+        
+        if deterministic:
+            return tf.math.argmax(logits, axis=-1)
+        
+        actions   = Categorical.sample(logits)
+        log_probs = Categorical.log_prob(logits, actions)
+
+        return actions, values, log_probs
+
+    def predict(self, inputs, deterministic=True):
+        '''
+        Predict actions
+
+        inputs: observations, shape: (obs.shape) or (batch, obs.shape)
+        deterministic: deterministic action
+        '''
+        one_sample = (len(inputs.shape) == len(self.observation_space.shape))
+
+        if one_sample:
+            inputs = np.expand_dims(inputs, axis=0)
+
+        # predict
+        outputs = self(inputs, deterministic=deterministic, training=False).numpy()
+
+        if one_sample:
+            outputs = outputs.reshape((-1,)).item()
+
+        # predict
+        return outputs
+
+    def get_config(self):
+
+        config = {'observation_space': self.observation_space,
+                  'action_space': self.action_space}
+
+        return to_json_serializable(config)
 
 
 class PPO(tf.keras.Model):
@@ -347,6 +450,7 @@ class PPO(tf.keras.Model):
                             verbose:         int = 0, 
                             **kwargs):
         super().__init__(**kwargs)
+
         self.env = env
         
         self.learning_rate   = learning_rate
@@ -363,94 +467,67 @@ class PPO(tf.keras.Model):
         self.target_kl       = target_kl
         self.verbose         = verbose  # 0=no, 1=training log, 2=eval log
 
-        self.num_timesteps = 0
-        self.buffer        = None
-        self.tb_writer     = None
+        self.num_timesteps     = 0
+        self.buffer            = None
+        self.tb_writer         = None
+        self.observation_space = None
+        self.action_space      = None
+        self.n_envs            = None
 
-        if self.env is not None:
-            self.setup_model(self.env)
+        if env is not None:
+            self.set_env(env)
+            self.setup_model(env.observation_space, env.action_space)
     
-    def setup_model(self, env):
+    def setup_model(self, observation_space, action_space):
 
-        assert env is not None, 'Env is None'
+        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
+        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
 
-        self.env               = env
         self.observation_space = env.observation_space
         self.action_space      = env.action_space
-        self.n_envs            = env.n_envs
 
         # --- setup model ---
         self.buffer     = GaeBuffer(gae_lambda=self.gae_lambda, gamma=self.gamma)
-        self.net        = NatureCnn()
-        self.policy_net = PolicyNet(self.action_space)
-        self.value_net  = ValueNet()
+        self.agent      = PPOAgent(self.observation_space, self.action_space)
+        
         self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, epsilon=1e-5, clipnorm=self.max_grad_norm)
 
-        # construct networks
-        inputs  = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
-        outputs = self.net(inputs)
-        self.policy_net(outputs)
-        self.value_net(outputs)
+    def set_env(self, env):
+
+        if self.observation_space is not None:
+            assert env.observation_space == self.observation_space, 'Observation space mismatch, expect {}, got {}'.format(
+                                                                        self.observation_space, env.observation_space)
+
+        if self.action_space is not None:
+            assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
+                                                                self.action_space, env.action_space)
+        self.env = env
+        self.n_envs = env.n_envs
 
     @tf.function
-    def _forward(self, inputs, training=False):
-        # preprocess inputs
-        # cast image inputs (uint8) to float32
-        inputs = tf.cast(inputs, dtype=tf.float32)
-        # normalize
-        inputs = (inputs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
-
-        # forward network
-        latent = self.net(inputs, training=training)
-        # forward policy net
-        logits = self.policy_net(latent, training=training)
-        # forward value net
-        values = self.value_net(latent, training=training)
+    def _forward(self, input, training=True):
+        '''
+        Forward agent
 
         return logits, values
+        '''
+        return self.agent._forward(input, training=training)
+    
+    def call(self, inputs, deterministic=False, training=True):
+        '''
+        Forward 
 
-    def call(self, inputs, deterministic=True, verbose=False):
+        return actions, values, log_probs
+        '''
+        return self.agent(inputs, deterministic=deterministic, training=training)
+
+    def predict(self, inputs, deterministic=True):
         '''
         Predict actions
 
-        verbose: return additional info 
+        inputs: observations, shape: (obs.shape) or (batch, obs.shape)
         '''
-
-        # forward
-        logits, values = self._forward(inputs)
-        
-        if deterministic:
-            return tf.math.argmax(logits, axis=-1)
-        
-        distrib = Categorical(logits)
-        actions = distrib.sample()
-        log_probs = distrib.log_prob(actions)
-
-        if verbose:
-            return actions, values, log_probs
-        else:
-            return actions
-
-    def predict(self, inputs, **kwargs):
-        '''
-        Predict
-
-        inputs: 3D or 4D (batch=1) image
-        '''
-
-        one_sample = (len(inputs.shape) == len(self.env.observation_space.shape))
-
-        if one_sample:
-            inputs = np.expand_dims(inputs, axis=0)
-
-        # predict
-        outputs = self(inputs, **kwargs).numpy()
-
-        if one_sample:
-            outputs = outputs.item()
-
-        # predict
-        return outputs
+        return self.agent.predict(inputs, deterministic=deterministic)
 
     def _run(self, steps, obs=None):
         '''
@@ -465,7 +542,7 @@ class PPO(tf.keras.Model):
 
         for _ in range(steps):
             
-            actions, values, log_probs = self(obs, deterministic=False, verbose=True)
+            actions, values, log_probs = self(obs)
 
             actions   = actions.numpy()
             values    = values.numpy()
@@ -523,10 +600,9 @@ class PPO(tf.keras.Model):
 
             # forward
             logits, values = self._forward(obs, training=True)
-            distrib = Categorical(logits)
 
-            log_probs = distrib.log_prob(actions)
-            entropy   = distrib.entropy()
+            log_probs = Categorical.log_prob(logits, actions)
+            entropy   = Categorical.entropy(logits)
             kl        = 0.5 * tf.math.reduce_mean(tf.math.square(old_log_probs - log_probs))
 
             values    = tf.reshape(values, shape=[-1])
@@ -547,7 +623,10 @@ class PPO(tf.keras.Model):
         
         return loss, kl, entropy, pi_loss, vf_loss, ent_loss
 
-    def train(self, epochs, batch_size=64):
+    def train(self, epochs, batch_size):
+        '''
+        Train agent
+        '''
         assert self.buffer.ready_for_sampling, "Buffer is not ready for sampling, please call buffer.make() before sampling"
 
         for epoch in range(epochs):
@@ -620,7 +699,7 @@ class PPO(tf.keras.Model):
                 LOG.flush('INFO')
         
             eps_rews.append(total_rews)
-            eps_steps.append(steps)
+            eps_steps.append(steps+1)
 
         return eps_rews, eps_steps
 
@@ -648,7 +727,7 @@ class PPO(tf.keras.Model):
         time_start = time.time()
         time_spent = 0
         timesteps_per_episode = self.n_steps * self.n_envs
-        total_episode = int(float(total_timesteps) / float(timesteps_per_episode) + 0.5)
+        total_episode = int(float(total_timesteps - self.num_timesteps) / float(timesteps_per_episode) + 0.5)
 
         if reset_timesteps:
             self.num_timesteps = 0
@@ -753,13 +832,54 @@ class PPO(tf.keras.Model):
 
         return self
 
-    def export(self, path):
-        '''
-        Export model
+    def config(self):
 
-        Call `tf.keras.models.load_model(path)` to load model. (predict only)
-        '''
-        super().save(path)
+        init_config = {'learning_rate':   self.learning_rate,
+                        'batch_size':      self.batch_size,
+                        'n_epochs':        self.n_epochs,
+                        'n_steps':         self.n_steps,
+                        'gamma':           self.gamma,
+                        'gae_lambda':      self.gae_lambda,
+                        'clip_range':      self.clip_range,
+                        'clip_range_vf':   self.clip_range_vf,
+                        'ent_coef':        self.ent_coef,
+                        'vf_coef':         self.vf_coef,
+                        'max_grad_norm':   self.max_grad_norm,
+                        'target_kl':       self.target_kl,
+                        'verbose':         self.verbose}
+
+        setup_config = {'obervation_space': self.observation_space,
+                        'action_space': self.action_space}
+
+        state_config = {'num_timesteps': self.num_timesteps}
+
+        init_config  = to_json_serializable(init_config)
+        setup_config = to_json_serializable(setup_config)
+        state_config = to_json_serializable(state_config)
+
+        return {'init_config': init_config, 
+                'setup_config': setup_config,
+                'state_config': state_config}
+
+    @classmethod
+    def from_config(cls, config):
+
+        assert 'init_config' in config, 'Failed to load {} config, init_config not found'.format(cls.__name__)
+        assert 'setup_config' in config, 'Failed to load {} config, setup_config not found'.format(cls.__name__)
+        assert 'state_config' in config, 'Failed to load {} config, state_config not found'.format(cls.__name__)
+
+        init_config = from_json_serializable(config['init_config'])
+        setup_config = from_json_serializable(config['setup_config'])
+        state_config = from_json_serializable(config['state_config'])
+
+        # construct model
+        self = cls(env=None, **init_config)
+        self.setup_model(**setup_config)
+
+        for attr, v in state_config.items():
+            setattr(self, attr, v)
+
+        return self
 
 def parse_args():
 
@@ -918,11 +1038,23 @@ if __name__ == '__main__':
         
         LOG.info('DONE')
 
-        # Export model
-        model.export(a.model_dir)
+        # Save complete model (continue training)
+        model.save(a.model_dir)
+        loaded_model = PPO.load(a.model_dir)
 
-        # Load model
-        loaded_model = tf.keras.models.load_model(a.model_dir)
+        # set env to continue training
+        # loaded_model.set_env(env)
+        # loaded_model.learn(a.num_steps *    a.num_envs * a.num_episodes * 2,
+        #                     tb_logdir      = a.tb_logdir,
+        #                     log_interval   = a.log_interval,
+        #                     eval_env       =  eval_env, 
+        #                     eval_interval  = a.eval_interval, 
+        #                     eval_episodes  = a.eval_episodes, 
+        #                     eval_max_steps = a.eval_max_steps)
+
+        # Save agent only
+        # model.agent.save(a.model_dir)
+        # loaded_model = PPOAgent.load(a.model_dir)
 
         # Evaluation
         eps_rews  = []
@@ -933,8 +1065,7 @@ if __name__ == '__main__':
 
             for steps in range(10000):
                 # predict action
-                acts = loaded_model.predict(np.expand_dims(obs, axis=0))
-                acts = acts.item()
+                acts = loaded_model.predict(obs)
                 # step environment
                 obs, rew, done, info = eval_env.step(acts)
                 total_rews += rew

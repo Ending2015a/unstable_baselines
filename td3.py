@@ -273,6 +273,7 @@ class TD3Agent(SavableModel):
         self.critic_1([obs_inputs, act_inputs])
         self.critic_2([obs_inputs, act_inputs])
 
+    @tf.function
     def _forward(self, inputs):
         return self.actor(inputs)
 
@@ -355,12 +356,12 @@ class TD3(SavableModel):
         self.action_noise        = action_noise
         self.verbose             = verbose
 
-        self.num_timesteps = 0
-        self.buffer = None
-        self.tb_writer = None
+        self.num_timesteps     = 0
+        self.buffer            = None
+        self.tb_writer         = None
         self.observation_space = None
-        self.action_space = None
-        self.n_envs = 0
+        self.action_space      = None
+        self.n_envs            = 0
 
         if env is not None:
             self.set_env(env)
@@ -368,8 +369,8 @@ class TD3(SavableModel):
 
     def setup_model(self, observation_space, action_space):
 
-        assert isinstance(observation_space, gym.spaces.Box), 'The observation space must be gym.spaces.Box, got {}'.format(type(obs_space))
-        assert isinstance(action_space, gym.spaces.Box), 'The action space must be gym.spaces.Box, got {}'.format(type(act_space))
+        assert isinstance(observation_space, gym.spaces.Box), 'The observation space must be gym.spaces.Box, got {}'.format(type(observation_space))
+        assert isinstance(action_space, gym.spaces.Box), 'The action space must be gym.spaces.Box, got {}'.format(type(action_space))
 
         self.observation_space = observation_space
         self.action_space = action_space
@@ -390,11 +391,11 @@ class TD3(SavableModel):
     def set_env(self, env):
 
         if self.observation_space is not None:
-            assert env.observation_space == self.observation_space, 'Observation space not match, expect {}, got {}'.format(
+            assert env.observation_space == self.observation_space, 'Observation space mismatch, expect {}, got {}'.format(
                                                                         self.observation_space, env.observation_space)
 
         if self.action_space is not None:
-            assert env.action_space == self.action_space, 'Action space not match, expect {}, got {}'.format(
+            assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
                                                                 self.action_space, env.action_space)
         
         self.env = env
@@ -598,7 +599,7 @@ class TD3(SavableModel):
                 LOG.flush('INFO')
         
             eps_rews.append(total_rews)
-            eps_steps.append(steps)
+            eps_steps.append(steps+1)
 
         return eps_rews, eps_steps
 
@@ -937,8 +938,8 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        #model.agent.save(a.model_dir)
-        #loaded_model = TD3Agent.load(a.model_dir)
+        # model.agent.save(a.model_dir)
+        # loaded_model = TD3Agent.load(a.model_dir)
 
 
         # Evaluation
