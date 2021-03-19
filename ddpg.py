@@ -92,7 +92,7 @@ class OrnsteinUhlenbeckActionNoise():
         pass
 
 # === Replay buffer ===
-class ReplayBuffer():
+class Buffer():
 
 # === Networks ===
 
@@ -126,8 +126,6 @@ class PolicyNet(tf.keras.Model):
 class ValueNet(tf.keras.Model):
     def __init__(self):
         super().__init__()
-
-        self.concat = 
 
         self._obs_layers = [
             tf.keras.layers.Flatten(),
