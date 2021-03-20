@@ -270,7 +270,7 @@ class Agent(SavableModel):
 
         # construct networks
         obs_inputs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
-        act_inputs = tf.keras.Input(shape=self.action_space.shape, dtype=tf.float32)
+        act_inputs = tf.keras.Input(shape=self.action_space.shape,      dtype=tf.float32)
         self.actor(obs_inputs)
         self.critic_1([obs_inputs, act_inputs])
         self.critic_2([obs_inputs, act_inputs])
@@ -375,11 +375,11 @@ class TD3(SavableModel):
         assert isinstance(action_space, gym.spaces.Box), 'The action space must be gym.spaces.Box, got {}'.format(type(action_space))
 
         self.observation_space = observation_space
-        self.action_space = action_space
+        self.action_space      = action_space
 
         # --- setup model ---
-        self.buffer = ReplayBuffer(buffer_size=self.buffer_size)
-        self.agent = Agent(self.observation_space, self.action_space)
+        self.buffer       = ReplayBuffer(buffer_size=self.buffer_size)
+        self.agent        = Agent(self.observation_space, self.action_space)
         self.agent_target = Agent(self.observation_space, self.action_space)
 
         self.actor_optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
@@ -437,8 +437,8 @@ class TD3(SavableModel):
                 action = np.array([self.action_space.sample() for n in range(self.n_envs)])
                 action = normalize_action(action, high=self.action_space.high, low=self.action_space.low)
             else:
-                # sample from policy
-                action = self(obs)
+                # sample from policy (normalized)
+                action = self(obs, normalized=True)
             
             # add action noise
             if self.action_noise is not None:
@@ -469,7 +469,7 @@ class TD3(SavableModel):
         mu = self.agent.actor(obs)
         return -tf.reduce_mean(self.agent.critic_1([obs, mu]))
 
-    @tf.function
+    #@tf.function
     def critic_loss(self, obs, action, next_obs, done, reward):
         '''
         Compute critic loss

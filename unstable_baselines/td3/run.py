@@ -45,7 +45,8 @@ from unstable_baselines import logger
 from unstable_baselines.envs import *
 from unstable_baselines.utils import set_global_seeds
 
-from unstable_baselines.td3.model import TD3, Agent
+from unstable_baselines.td3.model import TD3
+from unstable_baselines.td3.model import Agent as PPOAgent
 
 
 def parse_args():
@@ -217,7 +218,7 @@ if __name__ == '__main__':
 
         # Save agent only
         # model.agent.save(a.model_dir)
-        # loaded_model = Agent.load(a.model_dir)
+        # loaded_model = PPOAgent.load(a.model_dir)
 
 
         # Evaluation
@@ -245,7 +246,7 @@ if __name__ == '__main__':
             LOG.flush('INFO')
         
             eps_rews.append(total_rews)
-            eps_steps.append(steps)
+            eps_steps.append(steps+1)
         
         max_idx    = np.argmax(eps_rews)
         max_rews   = eps_rews[max_idx]
