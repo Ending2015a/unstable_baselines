@@ -27,6 +27,7 @@ import tensorflow as tf
 
 
 __all__ = [
+    'NormalActionNoise',
     'set_global_seeds',
     'normalize_action',
     'unnormalize_action',
@@ -34,6 +35,22 @@ __all__ = [
     'from_json_serializable',
     'tf_soft_update_params'
 ]
+
+
+# === Action noises ===
+class NormalActionNoise():
+    def __init__(self, mean, scale):
+        self.mean = mean
+        self.scale = scale
+
+    def __call__(self, shape=None):
+        return np.random.normal(self.mean, self.scale, size=shape)
+
+    def __repr__(self):
+        return 'NormalActionNoise(mean={}, scale={})'.format(self.mean, self.scale)
+
+    def reset(self):
+        pass
 
 # === utils ===
 def set_global_seeds(seed):
