@@ -5,7 +5,7 @@
 
 ## How to use
 ```python
-python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo_20m/{rank}' \
+python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v0" --num_envs=8 --num_episodes=20000 \
                --num_steps=128 --num_epochs=4 --batch_size=256 --verbose=2
@@ -18,7 +18,11 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 
 ### Video
 
-> Best video
+| `BeamRider` | `Breakout` |
+|-|-|
+|<img src="https://user-images.githubusercontent.com/18180004/112180304-670d9c80-8c36-11eb-8ca7-48d0529ff8a9.gif" height=300px>|<img src="https://user-images.githubusercontent.com/18180004/112181622-8f49cb00-8c37-11eb-9020-9f65a548d1e5.gif" height=300px>|
+
+
 
 ### Learning Curve
 
