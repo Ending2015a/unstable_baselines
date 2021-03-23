@@ -41,6 +41,9 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 <br/>
 <br/>
 
+
+<img src='https://g.gravizo.com/svg?digraph%20D%20%7B%0A%20%20%20%20splines%3Dfalse%3B%0A%20%20%20%20bgcolor%3D%22white%22%3B%0A%20%20%20%20node%20%5Bshape%3Dbox%2C%20color%3Dblack%2C%20fontsize%3D12%2C%20height%3D0.1%2C%20width%3D0.1%5D%3B%0A%20%20%20%20obs%5Blabel%3D%22Observation%22%5D%3B%0A%20%20%20%20subgraph%20cluster_cnn%7B%0A%20%20%20%20%20%20%20%20label%3D%22Nature%20CNN%22%3B%0A%20%20%20%20%20%20%20%20labeljust%3D%22l%22%3B%0A%20%20%20%20%20%20%20%20graph%5Bstyle%3Ddotted%5D%3B%0A%20%20%20%20%20%20%20%20nature_cnn%20%5Bshape%3Drecord%2C%20label%3D%22%7BConv2D%2832%2C%208%2C%204%29%7CReLU%7CConv2D%2864%2C%204%2C%202%29%7CReLU%7CConv2D%2832%2C%203%2C%201%29%7CReLU%7CDense%28512%29%7CReLU%7D%22%5D%0A%20%20%20%20%7D%0A%20%20%20%20subgraph%20cluster_policy%7B%0A%20%20%20%20%20%20%20%20label%3D%22Policy%22%3B%0A%20%20%20%20%20%20%20%20labeljust%3D%22l%22%3B%0A%20%20%20%20%20%20%20%20graph%5Bstyle%3Ddashed%5D%3B%0A%20%20%20%20%20%20%20%20policy_net%20%5Bshape%3Drecord%2C%20label%3D%22Dense%28Action%20space%29%22%5D%3B%0A%20%20%20%20%7D%0A%20%20%20%20subgraph%20cluster_value%7B%0A%20%20%20%20%20%20%20%20label%3D%22Value%22%3B%0A%20%20%20%20%20%20%20%20labeljust%3D%22l%22%3B%0A%20%20%20%20%20%20%20%20graph%5Bstyle%3Ddashed%5D%3B%0A%20%20%20%20%20%20%20%20value_net%20%5Bshape%3Drecord%2C%20label%3D%22Dense%281%29%22%5D%3B%0A%20%20%20%20%7D%0A%20%20%20%20obs%20-%3E%20nature_cnn%3B%0A%20%20%20%20nature_cnn%3As-%3E%7Bpolicy_net%2C%20value_net%7D%3B%0A%20%20%20%20policy_net%20-%3E%20pi%3B%0A%20%20%20%20value_net%20-%3E%20v%3B%0A%20%20%20%20pi%5Blabel%3D%22Action%22%5D%3B%0A%20%20%20%20v%5Blabel%3D%22Value%22%5D%0A%7D'>
+
 <img src='https://g.gravizo.com/svg?
 digraph D {
     splines=false;
