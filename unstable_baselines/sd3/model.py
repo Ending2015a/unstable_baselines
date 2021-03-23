@@ -361,7 +361,7 @@ class SD3(SavableModel):
                             beta:                float = 0.001,
                             action_samples:        int = 50,
                             action_noise:        float = 0.2,
-                            action_noise_clip:   float = 100,
+                            action_noise_clip:   float = 0.5,
                             explore_noise              = None,
                             importance_sampling:  bool = False,
                             verbose:               int = 0,
@@ -495,8 +495,8 @@ class SD3(SavableModel):
         L = -Q(s, mu(s))
         '''
 
-        mu = self.agent.actor(obs)
-        return -tf.reduce_mean(self.agent.critic_1([obs, mu]))
+        act = self.agent.actor(obs)
+        return -tf.reduce_mean(self.agent.critic_1([obs, act]))
 
     @tf.function
     def critic_loss(self, obs, action, next_obs, done, reward):
@@ -524,7 +524,6 @@ class SD3(SavableModel):
         # get shapes
         obs_shape     = obs.shape
         act_shape     = action.shape
-        dup_obs_shape = dup_next_obs.shape
         dup_act_shape = dup_next_act.shape
 
         # sample noises & compute pdf
@@ -534,7 +533,7 @@ class SD3(SavableModel):
         noise_prob   = normal_prob(noise, mean=noise_mean, scale=noise_scale) # (batch, action_samples, act_space.shape)
         noise_prob   = tf.math.reduce_prod(noise_prob, axis=-1)               # (batch, action_samples)
         noise        = tf.clip_by_value(noise, -self.action_noise_clip, self.action_noise_clip)
-        dup_next_act = tf.clip_by_value(dup_next_act + noise, -1., -1.)
+        dup_next_act = tf.clip_by_value(dup_next_act + noise, -1., 1.)
 
         next_obs = tf.reshape(dup_next_obs, shape=(-1, *obs_shape[1:])) # (batch*action_samples, obs_space.shape)
         next_act = tf.reshape(dup_next_act, shape=(-1, *act_shape[1:])) # (batch*action_samples, act_space.shape)
@@ -557,7 +556,7 @@ class SD3(SavableModel):
         target_q = exp_q_ / z_exp_q_ # (batch,)
         
         # compute target value
-        y = reward + tf.stop_gradient( (1.-done) * self.gamma * target_q) # (batch, )
+        y = reward + tf.stop_gradient( (1.-done) * self.gamma * target_q ) # (batch, )
 
         # compute Q estimate
         q1 = tf.squeeze(self.agent.critic_1([obs, action]), axis=-1) # (batch, )
