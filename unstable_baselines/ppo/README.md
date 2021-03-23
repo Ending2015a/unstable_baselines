@@ -38,7 +38,7 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 | Observation |       | :heavy_check_mark: | :x:             | :x:           |
 | Action      |       | :heavy_check_mark: | :x:             | :x:           |
 
-
+![PPO discrete](https://g.gravizo.com/source/svg/ppo_discrete?https://raw.githubusercontent.com/Ending2015a/unstable_baselines/master/unstable_baselines/ppo/README.md)
 
 <details>
 <summary></summary>
