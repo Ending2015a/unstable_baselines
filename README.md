@@ -1,4 +1,4 @@
-# unstable_baselines
+# Unstable Baselines
 
 A TensorFlow 2.0 implementation of some Reinforcement Learning algorithms.
 
