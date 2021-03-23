@@ -39,53 +39,52 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 | Action      |       | :heavy_check_mark: | :x:             | :x:           |
 
 
-
 <details>
 <summary></summary>
-ppo_arch
-digraph D{
-    compound=true;
-    splines=false;
-    bgcolor="transparent";
-    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1]
-    
-    obs[label="Observation"];
-    
-    subgraph cluster_cnn{
-        label="Nature CNN";
-        graph[style=dotted];
-        nature_cnn [label=<
-        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-            <TR><TD PORT="conv1">Conv2D(32, 8, 4)  </TD></TR>
-            <TR><TD PORT="relu1">ReLU</TD></TR>
-            <TR><TD PORT="conv2">Conv2D(64, 4, 2)  </TD></TR>
-            <TR><TD PORT="relu2">ReLU</TD></TR>
-            <TR><TD PORT="conv3">Conv2D(32, 3, 1)  </TD></TR>
-            <TR><TD PORT="relu3">ReLU</TD></TR>
-            <TR><TD PORT="dense">Dense(512)  </TD></TR>
-            <TR><TD PORT="relu4">ReLU</TD></TR>
-        </TABLE>>, shape=plaintext];
-    }    
-    
-    policy_net [label=<
-        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-            <TR><TD PORT="dense">Dense(action_space)  </TD></TR>
-        </TABLE>>, shape=plaintext];
-    
-    value_net [label=<
-        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-            <TR><TD PORT="dense">Dense(1)  </TD></TR>
-        </TABLE>>, shape=plaintext];
+ppo_discrete
+    digraph D{
+        compound=true;
+        splines=false;
+        bgcolor="transparent";
+        node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
         
-    
-    obs -> nature_cnn[ltail=obs, lhead=cluster_cnn, label=" "];
-    
-    nature_cnn:s->{policy_net, value_net}[ltail=cluster_cnn];
-    policy_net -> pi;
-    value_net -> v;
-    
-    pi[label="Action"];
-    v[label="Value"]
-}
-ppo_arch
+        obs[label="Observation"];
+        
+        subgraph cluster_cnn{
+            label="Nature CNN";
+            graph[style=dotted];
+            nature_cnn [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
+                <TR><TD PORT="conv1">Conv2D(32, 8, 4)  </TD></TR>
+                <TR><TD PORT="relu1">ReLU</TD></TR>
+                <TR><TD PORT="conv2">Conv2D(64, 4, 2)  </TD></TR>
+                <TR><TD PORT="relu2">ReLU</TD></TR>
+                <TR><TD PORT="conv3">Conv2D(32, 3, 1)  </TD></TR>
+                <TR><TD PORT="relu3">ReLU</TD></TR>
+                <TR><TD PORT="dense">Dense(512)  </TD></TR>
+                <TR><TD PORT="relu4">ReLU</TD></TR>
+            </TABLE>>, shape=plaintext];
+        }    
+        
+        policy_net [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
+                <TR><TD PORT="dense">Dense(action_space)  </TD></TR>
+            </TABLE>>, shape=plaintext];
+        
+        value_net [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
+                <TR><TD PORT="dense">Dense(1)  </TD></TR>
+            </TABLE>>, shape=plaintext];
+            
+        
+        obs -> nature_cnn[ltail=obs, lhead=cluster_cnn, label=" "];
+        
+        nature_cnn:s->{policy_net, value_net}[ltail=cluster_cnn];
+        policy_net -> pi;
+        value_net -> v;
+        
+        pi[label="Action"];
+        v[label="Value"]
+    }
+ppo_discrete
 </details>
