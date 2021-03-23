@@ -41,7 +41,12 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 | Observation | :heavy_check_mark: | :x:        | :x:             | :x:           |
 | Action      | :heavy_check_mark: | :x:        | :x:             | :x:           |
 
-<img src='https://g.gravizo.com/svg?
+
+![](https://g.gravizo.com/source/svg/td3_arch?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Ftd3%2FREADME.md)
+
+<details>
+<summary></summary>
+td3_arch
 digraph D {
     splines=false;
     node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
@@ -63,40 +68,6 @@ digraph D {
     input2 -> critic:n;
     actor:s -> pi;
     critic:s -> v;
-    pi[label="Action"];
-    v[label="Value"]
-}'/>
-
-<details>
-<summary></summary>
-td3_arch
-digraph D {
-    splines=false;
-    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1]
-    
-    input1[label="Observation"];
-    input2[shape=record, label="Observation|Action"];
-    
-    subgraph cluster_actor{
-        label="Actor";
-        labeljust="l";
-        graph[style=dotted];
-        actor [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(Action space)|Tanh}"]
-    }
-    
-    subgraph cluster_critic{
-        label="Critic";
-        labeljust="l";
-        graph[style=dotted];
-        critic [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(1)}"]
-    }    
-    
-    input1 -> actor:n;
-    input2 -> critic:n;
-    
-    actor:s -> pi[ltail=cluster_actor];
-    critic:s -> v[ltail=cluster_critic];
-    
     pi[label="Action"];
     v[label="Value"]
 }

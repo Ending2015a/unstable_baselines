@@ -43,7 +43,12 @@ python -m unstable_baselines.sd3.run \
 | Observation | :heavy_check_mark: | :x:        | :x:             | :x:           |
 | Action      | :heavy_check_mark: | :x:        | :x:             | :x:           |
 
-<img src='https://g.gravizo.com/svg?
+
+![](https://g.gravizo.com/source/svg/sd3_arch?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Fsd3%2FREADME.md)
+
+<details>
+<summary></summary>
+sd3_arch
 digraph D {
     splines=false;
     node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
@@ -67,5 +72,7 @@ digraph D {
     critic:s -> v;
     pi[label="Action"];
     v[label="Value"]
-}'/>
+}
+sd3_arch
+</details>
 

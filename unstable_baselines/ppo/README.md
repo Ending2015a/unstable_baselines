@@ -42,12 +42,12 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 <br/>
 
 
-<img src='https://g.gravizo.com/source/svg/ppo_arch?https://raw.githubusercontent.com/Ending2015a/unstable_baselines/master/unstable_baselines/ppo/README.md'>
+![](https://g.gravizo.com/source/svg/ppo_discrete?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Fppo%2FREADME.md)
 
 
 <details>
 <summary></summary>
-ppo_arch
+ppo_discrete
 digraph D {
     splines=false;
     bgcolor=white;
@@ -78,5 +78,5 @@ digraph D {
     pi[label="Action"];
     v[label="Value"]
 }
-ppo_arch
+ppo_discrete
 </details>
