@@ -38,6 +38,41 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 | Observation |       | :heavy_check_mark: | :x:             | :x:           |
 | Action      |       | :heavy_check_mark: | :x:             | :x:           |
 
+
+
+<img src='https://g.gravizo.com/svg?
+digraph D {
+    splines=false;
+    bgcolor="white";
+    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
+    obs[label="Observation"];
+    subgraph cluster_cnn{
+        label="Nature CNN";
+        labeljust="l";
+        graph[style=dotted];
+        nature_cnn [shape=record, label="{Conv2D(32, 8, 4)|ReLU|Conv2D(64, 4, 2)|ReLU|Conv2D(32, 3, 1)|ReLU|Dense(512)|ReLU}"]
+    }
+    subgraph cluster_policy{
+        label="Policy";
+        labeljust="l";
+        graph[style=dotted];
+        policy_net [shape=record, label="Dense(Action space)"];
+    }
+    subgraph cluster_value{
+        label="Value";
+        labeljust="l";
+        graph[style=dotted];
+        policy_net [shape=record, label="Dense(1)"];
+    }
+    obs -> nature_cnn;
+    nature_cnn:s->{policy_net, value_net};
+    policy_net -> pi;
+    value_net -> v;
+    pi[label="Action"];
+    v[label="Value"]
+}'/>
+
+
 ![PPO discrete](https://g.gravizo.com/source/svg/ppo_discrete?https://raw.githubusercontent.com/Ending2015a/unstable_baselines/master/unstable_baselines/ppo/README.md)
 
 <details>

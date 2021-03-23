@@ -5,11 +5,10 @@
 
 ## How to run
 ```python
-python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}/td3_1m/{rank}' \
+python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}/td3/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_episodes=1000 --min_buffer=10000 \
                --num_steps=1000 --gradient_steps=1000 --batch_size=100 --verbose=2
-
 ```
 
 * Total timesteps (Samples) = num_envs * num_steps * num_episodes (~1M in this case)
@@ -26,12 +25,12 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 > Learning curve
 
 ### Hyperparameters
-| | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` |
-|-|-|-|-|-|-|
-| `HalfCheetahBulletEnv-v0` | 1 | 1000 | 1000 | 1000 | 100 |
-| `AntBulletEnv-v0` | 1 | 1000 | 1000 | 1000 | 100 |
-| `Walker2DBulletEnv-v0` | 1 | 1000 | 1000 | 1000 | 100 |
-| `HumanoidBulletEnv-v0` | 4 | 2500 | 1000 | 1000 | 256 | 
+|                           | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`action_noise` |
+|---------------------------|------------|----------------|-------------|------------------|--------------|----------------|----------------|
+| `HalfCheetahBulletEnv-v0` | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | `None`         |
+| `AntBulletEnv-v0`         | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | `None`         |
+| `Walker2DBulletEnv-v0`    | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | `None`         |
+| `HumanoidBulletEnv-v0`    | 4          | 2500           | 1000        | 1000             | 256          | 3e-4           | `None`         |
 
 
 
@@ -42,24 +41,64 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 | Observation | :heavy_check_mark: | :x:        | :x:             | :x:           |
 | Action      | :heavy_check_mark: | :x:        | :x:             | :x:           |
 
+<img src='https://g.gravizo.com/svg?
+digraph D {
+    splines=false;
+    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
+    input1[label="Observation"];
+    input2[shape=record, label="Observation|Action"];
+    subgraph cluster_actor{
+        label="Actor";
+        labeljust="l";
+        graph[style=dotted];
+        actor [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(Action space)|Tanh}"]
+    }
+    subgraph cluster_critic{
+        label="Critic";
+        labeljust="l";
+        graph[style=dotted];
+        critic [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(1)}"]
+    }    
+    input1 -> actor:n;
+    input2 -> critic:n;
+    actor:s -> pi;
+    critic:s -> v;
+    pi[label="Action"];
+    v[label="Value"]
+}'/>
 
-* Actor network
-```
-Dense(400)
-ReLU
-Dense(300)
-ReLU
-Dense(action_space)
-Tanh
-```
-* Critic network
-```
-Concat(observation_space + action_space)
-Dense(400)
-ReLU
-Dense(300)
-ReLU
-Dense(1)
-```
-
-
+<details>
+<summary></summary>
+td3_arch
+digraph D {
+    splines=false;
+    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1]
+    
+    input1[label="Observation"];
+    input2[shape=record, label="Observation|Action"];
+    
+    subgraph cluster_actor{
+        label="Actor";
+        labeljust="l";
+        graph[style=dotted];
+        actor [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(Action space)|Tanh}"]
+    }
+    
+    subgraph cluster_critic{
+        label="Critic";
+        labeljust="l";
+        graph[style=dotted];
+        critic [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(1)}"]
+    }    
+    
+    input1 -> actor:n;
+    input2 -> critic:n;
+    
+    actor:s -> pi[ltail=cluster_actor];
+    critic:s -> v[ltail=cluster_critic];
+    
+    pi[label="Action"];
+    v[label="Value"]
+}
+td3_arch
+</details>
