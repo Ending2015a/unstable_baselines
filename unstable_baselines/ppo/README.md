@@ -39,10 +39,11 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 | Action      |       | :heavy_check_mark: | :x:             | :x:           |
 
 
+
 <details>
 <summary></summary>
 ppo_discrete
-    digraph D{
+    digraph D {
         compound=true;
         splines=false;
         bgcolor="transparent";
