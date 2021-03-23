@@ -46,7 +46,6 @@ ppo_discrete
     digraph D {
         compound=true;
         splines=false;
-        bgcolor="transparent";
         node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
         
         obs[label="Observation"];
