@@ -56,25 +56,25 @@ ppo_discrete
             graph[style=dotted];
             nature_cnn [label=<
             <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-                <TR><TD PORT="conv1">Conv2D(32, 8, 4)  </TD></TR>
+                <TR><TD PORT="conv1">Conv2D(32, 8, 4)</TD></TR>
                 <TR><TD PORT="relu1">ReLU</TD></TR>
-                <TR><TD PORT="conv2">Conv2D(64, 4, 2)  </TD></TR>
+                <TR><TD PORT="conv2">Conv2D(64, 4, 2)</TD></TR>
                 <TR><TD PORT="relu2">ReLU</TD></TR>
-                <TR><TD PORT="conv3">Conv2D(32, 3, 1)  </TD></TR>
+                <TR><TD PORT="conv3">Conv2D(32, 3, 1)</TD></TR>
                 <TR><TD PORT="relu3">ReLU</TD></TR>
-                <TR><TD PORT="dense">Dense(512)  </TD></TR>
+                <TR><TD PORT="dense">Dense(512)</TD></TR>
                 <TR><TD PORT="relu4">ReLU</TD></TR>
             </TABLE>>, shape=plaintext];
         }    
         
         policy_net [label=<
             <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-                <TR><TD PORT="dense">Dense(action_space)  </TD></TR>
+                <TR><TD PORT="dense">Dense(action_space)</TD></TR>
             </TABLE>>, shape=plaintext];
         
         value_net [label=<
             <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="2">
-                <TR><TD PORT="dense">Dense(1)  </TD></TR>
+                <TR><TD PORT="dense">Dense(1)</TD></TR>
             </TABLE>>, shape=plaintext];
             
         
