@@ -44,6 +44,9 @@ python -m unstable_baselines.sd3.run \
 | Action      | :heavy_check_mark: | :x:        | :x:             | :x:           |
 
 
+<br/>
+<br/>
+
 ![](https://g.gravizo.com/source/svg/sd3_arch?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Fsd3%2FREADME.md)
 
 <details>
