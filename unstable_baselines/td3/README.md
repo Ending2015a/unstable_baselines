@@ -20,7 +20,7 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 
 | Environment | Video |
 |-|-|
-|`HalfCheetahBulletEnv-v0`|
+|`HalfCheetahBulletEnv-v0`|<img src="../../assets/images/td3.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>
 | `AntBulletEnv-v0`|
 |`Walker2DBulletEnv-v0`|
 |`HumanoidBulletEnv-v0`|
@@ -31,7 +31,7 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 > Learning curve
 
 ### Hyperparameters
-| Environment               | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`action_noise` |
+| `env_id`                  | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`action_noise` |
 |---------------------------|------------|----------------|-------------|------------------|--------------|----------------|----------------|
 | `HalfCheetahBulletEnv-v0` | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | `None`         |
 | `AntBulletEnv-v0`         | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | `None`         |
