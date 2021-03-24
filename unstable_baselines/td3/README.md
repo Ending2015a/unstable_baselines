@@ -20,7 +20,7 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 
 | Environment | Video |
 |-|-|
-|`HalfCheetahBulletEnv-v0`|<img src="../../assets/images/td3.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>
+|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>
 | `AntBulletEnv-v0`|
 |`Walker2DBulletEnv-v0`|
 |`HumanoidBulletEnv-v0`|
