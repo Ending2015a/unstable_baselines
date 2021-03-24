@@ -1,0 +1,5 @@
+gym>=0.18.0
+tensorflow>=2.1.0
+dill>=0.3.3
+pybullet>=3.0.8
+atari-py>=0.2.6
