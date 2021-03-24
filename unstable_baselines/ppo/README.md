@@ -20,7 +20,7 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 
 | `BeamRider` | `Breakout` |
 |-|-|
-|<img src="../../assets/images/ppo.BeamRiderNoFrameskip-v0.eval.gif" height=300px>|<img src="../../assets/images/ppo.BreakoutNoFrameskip-v0.eval.gif" height=300px>|
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BeamRiderNoFrameskip-v0.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BreakoutNoFrameskip-v0.eval.gif" height=300px>|
 
 
 
