@@ -2,6 +2,23 @@
 
 A TensorFlow 2.0 implementation of some Reinforcement Learning algorithms.
 
+## Installation
+
+### Install dependencies
+```
+gym==0.18.0
+tensorflow==2.4.1
+dill==0.3.3
+pybullet==3.0.8
+atari-py==0.2.6
+```
+
+### Clone repo
+
+```
+git clone --recursive https://github.com/Ending2015a/unstable_baselines.git
+```
+
 ## Algorithms
 
 ### Basic RL
