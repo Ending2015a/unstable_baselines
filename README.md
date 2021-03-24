@@ -49,7 +49,7 @@ pip install -r requirements.txt
 
 ### Done
 
-Modify the code to fit your needs, or you can run the sample code. (Please see README in each algo folder)
+Modify the code to fit your needs, or you can run demo code. (Please see README in each algo folder)
 
 ## Algorithms
 
