@@ -61,7 +61,7 @@ from unstable_baselines.utils import (normalize_action,
 
 __all__ = [
     'TD3',
-    'Agent'
+    'Agent',
 ]
 
 
@@ -152,8 +152,8 @@ class ReplayBuffer():
         return (self.obss[batch_inds],
                 self.acts[batch_inds],
                 self.next_obss[batch_inds],
-                self.dones[batch_inds].reshape(-1 ,1),  # (batch, 1)
-                self.rews[batch_inds].reshape(-1, 1))   # (batch, 1)
+                self.dones[batch_inds],
+                self.rews[batch_inds])
 
 
 
@@ -336,8 +336,8 @@ class TD3(SavableModel):
                             gamma:               float = 0.99,
                             tau:                 float = 0.005, # polyak
                             target_policy_noise: float = 0.2,
-                            target_noise_clip:   float = 100,
-                            action_noise               = None,
+                            target_noise_clip:   float = 0.5,
+                            explore_noise              = None,
                             verbose:               int = 0,
                             **kwargs):
         super().__init__(**kwargs)
@@ -355,7 +355,7 @@ class TD3(SavableModel):
         self.tau                 = tau
         self.target_policy_noise = target_policy_noise
         self.target_noise_clip   = target_noise_clip
-        self.action_noise        = action_noise
+        self.explore_noise       = explore_noise
         self.verbose             = verbose
 
         self.num_timesteps     = 0
@@ -427,8 +427,8 @@ class TD3(SavableModel):
         if obs is None:
             obs = self.env.reset()
 
-        if self.action_noise is not None:
-            self.action_noise.reset()
+        if self.explore_noise is not None:
+            self.explore_noise.reset()
 
         for _ in range(steps):
 
@@ -441,8 +441,8 @@ class TD3(SavableModel):
                 action = self(obs, normalized=True)
             
             # add action noise
-            if self.action_noise is not None:
-                action = np.clip(action + self.action_noise(), -1, 1)
+            if self.explore_noise is not None:
+                action = np.clip(action + self.explore_noise(shape=action.shape), -1, 1)
 
             # step environment
             raw_action = unnormalize_action(action, high=self.action_space.high, low=self.action_space.low)
@@ -453,8 +453,8 @@ class TD3(SavableModel):
             obs = new_obs
 
             if self.n_envs == 1 and done[0]:
-                if self.action_noise is not None:
-                    self.action_noise.reset()
+                if self.explore_noise is not None:
+                    self.explore_noise.reset()
 
         return new_obs
 
@@ -466,10 +466,10 @@ class TD3(SavableModel):
         L = -Q(s, mu(s))
         '''
 
-        mu = self.agent.actor(obs)
-        return -tf.reduce_mean(self.agent.critic_1([obs, mu]))
+        act = self.agent.actor(obs)
+        return -tf.reduce_mean(self.agent.critic_1([obs, act]))
 
-    #@tf.function
+    @tf.function
     def critic_loss(self, obs, action, next_obs, done, reward):
         '''
         Compute critic loss
@@ -486,15 +486,15 @@ class TD3(SavableModel):
         next_act = tf.clip_by_value(self.agent_target.actor(next_obs) + noise, -1., 1.)
 
         # compute the target Q value
-        Q1       = self.agent_target.critic_1([next_obs, next_act])
-        Q2       = self.agent_target.critic_2([next_obs, next_act])
-        target_Q = tf.minimum(Q1, Q2)
+        q1       = tf.squeeze(self.agent_target.critic_1([next_obs, next_act]), axis=-1)
+        q2       = tf.squeeze(self.agent_target.critic_2([next_obs, next_act]), axis=-1)
+        target_q = tf.minimum(q1, q2) # (batch, )
 
-        y = reward + tf.stop_gradient( (1.-done) * self.gamma * target_Q) # (batch, 1)
+        y = reward + tf.stop_gradient( (1.-done) * self.gamma * target_q)
 
         # compute Q estimate
-        q1 = self.agent.critic_1([obs, action]) # (batch, 1)
-        q2 = self.agent.critic_2([obs, action]) # (batch, 1)
+        q1 = tf.squeeze(self.agent.critic_1([obs, action]), axis=-1) # (batch, )
+        q2 = tf.squeeze(self.agent.critic_2([obs, action]), axis=-1) # (batch, )
     
         # compute critic loss
         return tf.keras.losses.MSE(q1, y) + tf.keras.losses.MSE(q2, y)
@@ -719,7 +719,7 @@ class TD3(SavableModel):
                 LOG.add_row('     Length',  max_steps)
                 LOG.add_line()
                 LOG.add_row('Mean rewards', mean_rews)
-                LOG.add_row(' Std rewards', std_rews, fmt='{}: {:.6f}')
+                LOG.add_row(' Std rewards', std_rews, fmt='{}: {:.3f}')
                 LOG.add_row(' Mean length', mean_steps)
                 LOG.add_line()
                 LOG.flush('INFO')
@@ -739,7 +739,7 @@ class TD3(SavableModel):
                         'tau':                 self.tau,
                         'target_policy_noise': self.target_policy_noise,
                         'target_noise_clip':   self.target_noise_clip,
-                        'action_noise':        self.action_noise,
+                        'explore_noise':       self.explore_noise,
                         'verbose':             self.verbose}
 
         setup_config = {'observation_space': self.observation_space,

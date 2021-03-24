@@ -43,43 +43,47 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.envs import *
-from unstable_baselines.utils import set_global_seeds
+from unstable_baselines.utils import (NormalActionNoise,
+                                      set_global_seeds)
 
 from unstable_baselines.td3.model import TD3
-from unstable_baselines.td3.model import Agent as PPOAgent
+from unstable_baselines.td3.model import Agent as TD3Agent
 
 
 def parse_args():
 
     parser = argparse.ArgumentParser(description='Twined Delayed Deep Deterministic Policy Gradient (TD3)')
-    parser.add_argument('--logdir',           type=str, default='log/{env_id}/ppo/{rank}',help='Root dir             (args: {env_id}, {rank})')
-    parser.add_argument('--logging',          type=str, default='train.log',              help='Log path             (args: {env_id}, {rank})')
-    parser.add_argument('--monitor_dir',      type=str, default='monitor',                help='Monitor dir          (args: {env_id}, {rank})')
-    parser.add_argument('--tb_logdir',        type=str, default='',                       help='Tensorboard log name (args: {env_id}, {rank})')
-    parser.add_argument('--model_dir',        type=str, default='model',                  help='Model export path    (args: {env_id}, {rank})')
-    parser.add_argument('--env_id',           type=str, default='BeamRiderNoFrameskip-v0',help='Environment ID')
-    parser.add_argument('--buffer_size',      type=int, default=1000000, help='Maximum size of replay buffer')
-    parser.add_argument('--min_buffer',       type=int, default=10000,   help='Minimum number of samples in replay buffer')
-    parser.add_argument('--num_envs',         type=int, default=1,       help='Number of environments')
-    parser.add_argument('--num_episodes',     type=int, default=1000,    help='Number of training episodes (not environment episodes)')
-    parser.add_argument('--num_steps',        type=int, default=1000,    help='Number of timesteps per episode (interact with envs)')
-    parser.add_argument('--gradient_steps',   type=int, default=1000,    help='Number of gradient steps')
-    parser.add_argument('--batch_size',       type=int, default=100,     help='Training batch size')
-    parser.add_argument('--policy_delay',     type=int, default=2,       help='Delayed gradient steps to update policy')
-    parser.add_argument('--verbose',          type=int, default=1,       help='Print more message, 0=less, 1=more train log, 2=more eval log')
-    parser.add_argument('--rank',             type=int, default=0,       help='Optional arguments for parallel training')
-    parser.add_argument('--seed',             type=int, default=0,       help='Random seed')
-    parser.add_argument('--log_interval',     type=int, default=1,       help='Logging interval (episodes)')
-    parser.add_argument('--eval_interval',    type=int, default=100,     help='Evaluation interval (episodes)')
-    parser.add_argument('--eval_episodes',    type=int, default=5,       help='Number of episodes each evaluation')
-    parser.add_argument('--eval_max_steps',   type=int, default=1000,    help='Maximum timesteps in each evaluation episode')
-    parser.add_argument('--eval_seed',        type=int, default=0,       help='Environment seed for evaluation')
-    parser.add_argument('--action_noise',     type=str, default=None,    help='Action noise, can be one of [\'None\']')
-    parser.add_argument('--lr',                  type=float, default=1e-3,  help='Learning rate')
-    parser.add_argument('--gamma',               type=float, default=0.99,  help='Gamma decay rate')
-    parser.add_argument('--polyak',              type=float, default=0.005, help='Polyak coefficient (tau in original paper)')
-    parser.add_argument('--target_policy_noise', type=float, default=0.2,   help='Policy noise range')
-    parser.add_argument('--target_noise_clip',   type=float, default=0.5,   help='Policy noise clip range')
+    parser.add_argument('--logdir',              type=str,   default='log/{env_id}/ppo/{rank}',help='Root dir             (args: {env_id}, {rank})')
+    parser.add_argument('--logging',             type=str,   default='train.log',              help='Log path             (args: {env_id}, {rank})')
+    parser.add_argument('--monitor_dir',         type=str,   default='monitor',                help='Monitor dir          (args: {env_id}, {rank})')
+    parser.add_argument('--tb_logdir',           type=str,   default='',                       help='Tensorboard log name (args: {env_id}, {rank})')
+    parser.add_argument('--model_dir',           type=str,   default='model',                  help='Model export path    (args: {env_id}, {rank})')
+    parser.add_argument('--env_id',              type=str,   default='HalfCheetahBulletEnv-v0',help='Environment ID')
+    parser.add_argument('--buffer_size',         type=int,   default=1000000, help='Maximum size of replay buffer')
+    parser.add_argument('--min_buffer',          type=int,   default=10000,   help='Minimum number of samples in replay buffer')
+    parser.add_argument('--num_envs',            type=int,   default=1,       help='Number of environments')
+    parser.add_argument('--num_episodes',        type=int,   default=1000,    help='Number of training episodes (not environment episodes)')
+    parser.add_argument('--num_steps',           type=int,   default=1000,    help='Number of timesteps per episode (interact with envs)')
+    parser.add_argument('--gradient_steps',      type=int,   default=1000,    help='Number of gradient steps')
+    parser.add_argument('--batch_size',          type=int,   default=100,     help='Training batch size')
+    parser.add_argument('--policy_delay',        type=int,   default=2,       help='Delayed gradient steps to update policy')
+    parser.add_argument('--verbose',             type=int,   default=1,       help='Print more message, 0=less, 1=more train log, 2=more eval log')
+    parser.add_argument('--rank',                type=int,   default=0,       help='Optional arguments for parallel training')
+    parser.add_argument('--seed',                type=int,   default=0,       help='Random seed')
+    parser.add_argument('--log_interval',        type=int,   default=1,       help='Logging interval (episodes)')
+    parser.add_argument('--eval_interval',       type=int,   default=100,     help='Evaluation interval (episodes)')
+    parser.add_argument('--eval_episodes',       type=int,   default=5,       help='Number of episodes each evaluation')
+    parser.add_argument('--eval_max_steps',      type=int,   default=1000,    help='Maximum timesteps in each evaluation episode')
+    parser.add_argument('--eval_seed',           type=int,   default=0,       help='Environment seed for evaluation')
+    parser.add_argument('--explore_noise_mean',  type=float, default=0,       help='Mean of normal action noise')
+    parser.add_argument('--explore_noise_scale', type=float, default=0.1,     help='Scale of normal action noise')
+    parser.add_argument('--lr',                  type=float, default=1e-3,    help='Learning rate')
+    parser.add_argument('--gamma',               type=float, default=0.99,    help='Discount factor')
+    parser.add_argument('--polyak',              type=float, default=0.005,   help='Polyak coefficient (tau in original paper)')
+    parser.add_argument('--target_policy_noise', type=float, default=0.2,     help='Target action noise range')
+    parser.add_argument('--target_noise_clip',   type=float, default=0.5,     help='Target action noise clip range')
+    parser.add_argument('--explore_noise',       action='store_true',         help='Enable exploration noise')
+
 
     a = parser.parse_args()
 
@@ -99,6 +103,13 @@ if __name__ == '__main__':
         pass
 
     a = parse_args()
+
+    # === Create action noise ===
+    if a.explore_noise:
+        explore_noise = NormalActionNoise(a.explore_noise_mean, 
+                                          a.explore_noise_scale)
+    else:
+        explore_noise = None
 
     # === Reset logger ===
     logger.Config.use(filename=a.logging, level='DEBUG', colored=True, reset=True)
@@ -136,13 +147,13 @@ if __name__ == '__main__':
     LOG.add_row('Min buffer size',       a.min_buffer)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
-    LOG.add_row('Learning rate',     a.lr)
-    LOG.add_row('Gamma',             a.gamma)
-    LOG.add_row('Polya (tau)', a.polyak)
-    LOG.add_row('Policy delay', a.policy_delay)
+    LOG.add_row('Learning rate',       a.lr)
+    LOG.add_row('Gamma',               a.gamma)
+    LOG.add_row('Polyak (tau)',        a.polyak)
+    LOG.add_row('Policy delay',        a.policy_delay)
     LOG.add_row('Target policy noise', a.target_policy_noise)
-    LOG.add_row('Target noise clip', a.target_noise_clip)
-    LOG.add_row('Action noise', a.action_noise)
+    LOG.add_row('Target noise clip',   a.target_noise_clip)
+    LOG.add_row('Explore noise',         explore_noise)
     LOG.flush('WARNING')
 
     # === Make envs ===
@@ -188,14 +199,14 @@ if __name__ == '__main__':
                          tau                 = a.polyak,
                          target_policy_noise = a.target_policy_noise,
                          target_noise_clip   = a.target_noise_clip,
-                         action_noise        = a.action_noise,
+                         explore_noise       =   explore_noise,
                          verbose             = a.verbose)
         
         # Total timesteps = num_steps * num_envs * num_episodes (default ~ 10M)
         model.learn(a.num_steps *    a.num_envs * a.num_episodes,
                     tb_logdir      = a.tb_logdir,
                     log_interval   = a.log_interval,
-                    eval_env       =  eval_env, 
+                    eval_env       =   eval_env, 
                     eval_interval  = a.eval_interval, 
                     eval_episodes  = a.eval_episodes, 
                     eval_max_steps = a.eval_max_steps)
@@ -218,7 +229,7 @@ if __name__ == '__main__':
 
         # Save agent only
         # model.agent.save(a.model_dir)
-        # loaded_model = PPOAgent.load(a.model_dir)
+        # loaded_model = TD3Agent.load(a.model_dir)
 
 
         # Evaluation
@@ -262,7 +273,7 @@ if __name__ == '__main__':
         LOG.add_row('     Length',  max_steps)
         LOG.add_line()
         LOG.add_row('Mean rewards', mean_rews)
-        LOG.add_row(' Std rewards', std_rews, fmt='{}: {:.6f}')
+        LOG.add_row(' Std rewards', std_rews, fmt='{}: {:.3f}')
         LOG.add_row(' Mean length', mean_steps)
         LOG.add_line()
         LOG.flush('INFO')
