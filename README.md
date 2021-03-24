@@ -39,6 +39,7 @@ git clone --recursive https://github.com/Ending2015a/unstable_baselines.git
 * 2021.03.10: Implement PPO
   * From paper: [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)
 
+<!---
 ### Distributional RL
 
 | Algorithm | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
@@ -58,7 +59,7 @@ git clone --recursive https://github.com/Ending2015a/unstable_baselines.git
 | Algorithm | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
 |:-----------:|:--------------------:|:--------------------:|:--------------------:|:--------------------:|
 
-
+--->
 ## Examples
 
 > some video
