@@ -29,8 +29,8 @@ import tensorflow as tf
 __all__ = [
     'NormalActionNoise',
     'set_global_seeds',
-    'normalize_action',
-    'unnormalize_action',
+    'normalize',
+    'unnormalize',
     'to_json_serializable',
     'from_json_serializable',
     'tf_soft_update_params'
@@ -58,16 +58,12 @@ def set_global_seeds(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def normalize_action(action, high, low):
-    assert high is not None and low is not None, 'High and low must be specified'
 
-    return 2.0 * ((action-low)/(high-low)) - 1.0
+def normalize(x, high, low):
+    return 2.0 * ((x-low)/(high-low)) - 1.0
 
-def unnormalize_action(action, high, low):
-    assert high is not None and low is not None, 'High and low must be specified'
-
-    return low + (0.5 * (action + 1.0) * (high - low))
-
+def unnormalize(x, high, low):
+    return low + (0.5 * (x + 1.0) * (high - low))
 
 def flatten_obs(obs, space):
     assert isinstance(obs, (list, tuple)), "expected list or tuple of observations per environment"

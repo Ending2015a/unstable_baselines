@@ -51,8 +51,9 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.base import SavableModel
-from unstable_baselines.utils import (normalize_action,
-                                      unnormalize_action,
+from unstable_baselines.prob import Normal
+from unstable_baselines.utils import (normalize,
+                                      unnormalize,
                                       to_json_serializable,
                                       from_json_serializable,
                                       tf_soft_update_params)
@@ -66,30 +67,6 @@ __all__ = [
 
 logger.Config.use(level='DEBUG', colored=True, reset=False)
 LOG = logger.getLogger('SD3')
-
-# === Pdf ===
-@tf.function
-def normal_prob(samples, mean, scale):
-    '''
-    Calculate pdf of normal distribution
-
-    f(x) = 1/sqrt(2**pi) e^(-(x-mean)^2/(2*scale))
-
-    samples: batch samples
-    mean: mean of normal distribution
-    scale: scale of normal distribution
-    '''
-
-    mean  = tf.convert_to_tensor(mean)
-    scale = tf.convert_to_tensor(scale)
-
-    p        = 0.5 * tf.math.squared_difference(samples/scale, mean/scale)
-    const    = tf.constant(0.5 * np.log(2. * np.pi), dtype=tf.float32)
-    Z        = const + tf.math.log(scale)
-    log_prob = -(p+Z)
-
-    return tf.math.exp(log_prob)
-
 
 # === Buffer ===
 
@@ -313,7 +290,7 @@ class Agent(SavableModel):
         action = self._forward(inputs)
 
         if not normalized:
-            action = unnormalize_action(action, high=self.action_space.high, low=self.action_space.low)
+            action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
         
         return action
 
@@ -464,7 +441,7 @@ class SD3(SavableModel):
             if len(self.buffer) < self.min_buffer:
                 # random sample (collecting rollouts)
                 action = np.array([self.action_space.sample() for n in range(self.n_envs)])
-                action = normalize_action(action, high=self.action_space.high, low=self.action_space.low)
+                action = normalize(action, high=self.action_space.high, low=self.action_space.low)
             else:
                 # sample from policy (normalized)
                 action = self(obs, normalized=True)
@@ -474,7 +451,7 @@ class SD3(SavableModel):
                 action = np.clip(action + self.explore_noise(shape=action.shape), -1, 1)
 
             # step environment
-            raw_action = unnormalize_action(action, high=self.action_space.high, low=self.action_space.low)
+            raw_action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
             new_obs, reward, done, infos = self.env.step(raw_action)
             
             # add to buffer
@@ -526,11 +503,11 @@ class SD3(SavableModel):
         act_shape     = action.shape
         dup_act_shape = dup_next_act.shape
 
-        # sample noises & compute pdf
+        # sample noise
         noise_mean   = tf.constant(0., dtype=tf.float32)
         noise_scale  = tf.constant(self.action_noise, dtype=tf.float32)
         noise        = tf.random.normal(shape=dup_act_shape) * noise_scale
-        noise_prob   = normal_prob(noise, mean=noise_mean, scale=noise_scale) # (batch, action_samples, act_space.shape)
+        noise_prob   = Normal(noise_mean, noise_scale).prob(noise)            # (batch, action_samples, act_space.shape)
         noise_prob   = tf.math.reduce_prod(noise_prob, axis=-1)               # (batch, action_samples)
         noise        = tf.clip_by_value(noise, -self.action_noise_clip, self.action_noise_clip)
         dup_next_act = tf.clip_by_value(dup_next_act + noise, -1., 1.)
@@ -545,15 +522,15 @@ class SD3(SavableModel):
         target_q = tf.reshape(target_q, shape=(-1, self.action_samples)) # (batch, action_samples)
 
         # compute softmax (safe softmax)
-        q_ = target_q - tf.math.reduce_max(target_q, axis=-1, keepdims=True)
-        exp_q_ = tf.math.exp(self.beta * q_)
+        q = target_q - tf.math.reduce_max(target_q, axis=-1, keepdims=True)
+        e = tf.math.exp(self.beta * q)
 
         if self.importance_sampling:
-            exp_q_ = exp_q_ / noise_prob
-
-        z_exp_q_ = tf.math.reduce_sum(exp_q_, axis=-1) # (batch,)
-        exp_q_   = tf.math.reduce_sum(target_q * exp_q_, axis=-1) # (batch,)
-        target_q = exp_q_ / z_exp_q_ # (batch,)
+            e = e / noise_prob
+        
+        z = tf.math.reduce_sum(e, axis=-1)            # (batch, )
+        e = tf.math.reduce_sum(target_q * e, axis=-1) # (batch, )
+        target_q = e / z                              # (batch, )
         
         # compute target value
         y = reward + tf.stop_gradient( (1.-done) * self.gamma * target_q ) # (batch, )

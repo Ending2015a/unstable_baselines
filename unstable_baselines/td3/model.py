@@ -51,8 +51,8 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.base import SavableModel
-from unstable_baselines.utils import (normalize_action,
-                                      unnormalize_action,
+from unstable_baselines.utils import (normalize,
+                                      unnormalize,
                                       to_json_serializable,
                                       from_json_serializable,
                                       tf_soft_update_params)
@@ -289,7 +289,7 @@ class Agent(SavableModel):
         action = self._forward(inputs)
 
         if not normalized:
-            action = unnormalize_action(action, high=self.action_space.high, low=self.action_space.low)
+            action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
         
         return action
 
@@ -434,7 +434,7 @@ class TD3(SavableModel):
             if len(self.buffer) < self.min_buffer:
                 # random sample (collecting rollouts)
                 action = np.array([self.action_space.sample() for n in range(self.n_envs)])
-                action = normalize_action(action, high=self.action_space.high, low=self.action_space.low)
+                action = normalize(action, high=self.action_space.high, low=self.action_space.low)
             else:
                 # sample from policy (normalized)
                 action = self(obs, normalized=True)
@@ -444,7 +444,7 @@ class TD3(SavableModel):
                 action = np.clip(action + self.explore_noise(shape=action.shape), -1, 1)
 
             # step environment
-            raw_action = unnormalize_action(action, high=self.action_space.high, low=self.action_space.low)
+            raw_action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
             new_obs, reward, done, infos = self.env.step(raw_action)
             
             # add to buffer
