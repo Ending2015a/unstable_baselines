@@ -33,7 +33,7 @@ We don't have any documentation yet.
 ## Installation
 <sup>Worked on Linux, not test on Windows or other operating systems.</sup><br>
 * Python >= 3.6
-* TensorFlow (CPU/GPU) >= 2.1.0
+* TensorFlow (CPU/[GPU](https://www.tensorflow.org/install/source#gpu)) >= 2.1.0
 
 ### Clone repo
 
@@ -57,11 +57,11 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 
 
-| Algorithm | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
-|:-----------:|:--------------------:|:--------------------:|:--------------------:|:--------------------:|
-| [PPO](unstable_baselines/ppo)       |   | :heavy_check_mark: | :x: | :x: |
-| [TD3](unstable_baselines/td3)       | :heavy_check_mark: | :x: | :x: | :x: |
-| [SD3](unstable_baselines/sd3)       | :heavy_check_mark: | :x: | :x: | :x: |
+| Algorithm                     | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
+|:-----------------------------:|:------------------:|:------------------:|:------------------:|:------------------:|
+| [PPO](unstable_baselines/ppo) |                    | :heavy_check_mark: | :x:                | :x:                |
+| [TD3](unstable_baselines/td3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
+| [SD3](unstable_baselines/sd3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
 
 
 * 2021.03.23: Implement [SD3](unstable_baselines/sd3)
