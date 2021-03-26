@@ -259,18 +259,18 @@ if __name__ == '__main__':
         loaded_model = PPO.load(a.model_dir)
 
         # set env to continue training
-        loaded_model.set_env(env)
-        loaded_model.learn(a.num_steps *    a.num_envs * a.num_episodes * 2,
-                            tb_logdir      = a.tb_logdir,
-                            log_interval   = a.log_interval,
-                            eval_env       =  eval_env, 
-                            eval_interval  = a.eval_interval, 
-                            eval_episodes  = a.eval_episodes, 
-                            eval_max_steps = a.eval_max_steps)
+        # loaded_model.set_env(env)
+        # loaded_model.learn(a.num_steps *    a.num_envs * a.num_episodes * 2,
+        #                     tb_logdir      = a.tb_logdir,
+        #                     log_interval   = a.log_interval,
+        #                     eval_env       =  eval_env, 
+        #                     eval_interval  = a.eval_interval, 
+        #                     eval_episodes  = a.eval_episodes, 
+        #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        model.agent.save(a.model_dir)
-        loaded_model = PPOAgent.load(a.model_dir)
+        # model.agent.save(a.model_dir)
+        # loaded_model = PPOAgent.load(a.model_dir)
 
         # Evaluation
         eps_rews  = []

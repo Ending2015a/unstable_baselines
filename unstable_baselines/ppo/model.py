@@ -148,9 +148,9 @@ class GaeBuffer():
 
         # compute GAE
         last_gae_lam = 0
-        buffer_size = len(self)
+        buffer_size  = len(self)
         next_non_terminal = 1.0 - self.dones[-1]
-        next_value = self.values[-1]
+        next_value   = self.values[-1]
 
         for step in reversed(range(buffer_size)):
 
@@ -174,8 +174,7 @@ class GaeBuffer():
 
         self.ready_for_sampling = True
     
-    @classmethod
-    def _swap_flatten(cls, v):
+    def _swap_flatten(self, v):
         '''
         Swap and flatten first two dimensions
 
@@ -215,7 +214,7 @@ class NatureCnn(tf.keras.Model):
 
     def call(self, inputs, training=False):
         '''
-        inputs: observations (batch, obs_space.shape)
+        inputs: observations with shape (batch, obs_space.shape)
         '''
         x = inputs
         for layer in self._layers:
@@ -237,7 +236,7 @@ class Mlp(tf.keras.Model):
         ]
     def call(self, inputs, training=False):
         '''
-        inputs: observations (batch, obs_space.shape)
+        inputs: observations with shape (batch, obs_space.shape)
         '''
         x = inputs
         for layer in self._layers:
@@ -245,7 +244,7 @@ class Mlp(tf.keras.Model):
         return x
 
 
-# for Discrete action space
+# Categorical policy for Discrete action space
 class CategoricalPolicyNet(tf.keras.Model):
     def __init__(self, action_space, **kwargs):
         super().__init__(**kwargs)
@@ -256,7 +255,7 @@ class CategoricalPolicyNet(tf.keras.Model):
     
     def call(self, inputs, training=False):
         '''
-        inputs: latent (batch, latent_size)
+        inputs: latent with shape (batch, latent_size)
         '''
         x = inputs
         for layer in self._layers:
@@ -265,9 +264,12 @@ class CategoricalPolicyNet(tf.keras.Model):
         return x
 
     def get_distribution(self, logits):
+        '''
+        Using categorical distribution
+        '''
         return Categorical(logits)
 
-# for Continuous (Box) action space
+# Diagonal Gaussian policy for Continuous (Box) action space
 class DiagGaussianPolicyNet(tf.keras.Model):
     def __init__(self, action_space, **kwargs):
         super().__init__(**kwargs)
@@ -276,13 +278,15 @@ class DiagGaussianPolicyNet(tf.keras.Model):
             tf.keras.layers.Dense(action_space.shape[0])
         ]
         
-        self._logstd = tf.Variable(tf.keras.initializers.Zeros()(shape=(action_space.shape[0],)),
-                                   shape=(action_space.shape[0],), dtype=tf.float32)
+        # State-independent std
+        self._logstd = tf.Variable(np.zeros(shape=(action_space.shape[0],), 
+                                            dtype=np.float32),
+                                   dtype=tf.float32)
 
     def call(self, inputs, training=False):
         '''
-        inputs: latent (batch, latent_size)
-        outputs: [mean, scale]
+        inputs: latent with shape (batch, latent_size)
+        return mean, scale
         '''
         x = inputs
         for layer in self._layers:
@@ -292,6 +296,11 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         return x, std
 
     def get_distribution(self, logits):
+        '''
+        Using Multivariate normal distribution
+
+        logits: a tuple, (mean, scale)
+        '''
         return MultiNormal(logits[0], logits[1])
 
 # Policy network
@@ -308,13 +317,15 @@ class PolicyNet(tf.keras.Model):
 
     def call(self, inputs, training=False):
         '''
-        inputs: latent (batch, latent_size)
+        inputs: latent with shape (batch, latent_size)
         '''
         
         return self._net(inputs, training=training)
 
     def get_distribution(self, logits):
-
+        '''
+        Get corresponding distribution
+        '''
         return self._net.get_distribution(logits)
 
 # Value network
@@ -328,7 +339,7 @@ class ValueNet(tf.keras.Model):
 
     def call(self, inputs, training=False):
         '''
-        inputs: latent (batch, latent_size)
+        inputs: latent with shape (batch, latent_size)
         '''
         x = inputs
         for layer in self._layers:
@@ -341,7 +352,7 @@ class ValueNet(tf.keras.Model):
 class Agent(SavableModel):
     def __init__(self, observation_space, action_space, force_mlp=False, **kwargs):
         '''
-        force_mlp: Force Mlp
+        force_mlp: Force to use mlp network
         '''
         super().__init__(**kwargs)
 
@@ -364,7 +375,7 @@ class Agent(SavableModel):
 
         # --- setup model ---
         if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
-            # Image observation and mlp is False
+            # Image observation and not force to use mlp
             self.net = NatureCnn()
         else:
             self.net = Mlp()
@@ -378,20 +389,22 @@ class Agent(SavableModel):
         self.policy_net(outputs)
         self.value_net(outputs)
 
-    #@tf.function
+    @tf.function
     def _forward(self, inputs, training=True):
         '''
         Forward network
 
+        inputs: observations, only accepts shape (batch, obs_space.shape)
+
         return logits, values
         '''
 
-        # cast and normalize non float32 inputs (e.g. image with uint8)
+        # cast and normalize non-float32 inputs (e.g. image with uint8)
         if inputs.dtype != tf.float32:
             # cast observations to float32
             inputs = tf.cast(inputs, dtype=tf.float32)
-            low = tf.cast(self.observation_space.low, dtype=tf.float32)
-            high = tf.cast(self.observation_space.high, dtype=tf.float32)
+            low    = tf.cast(self.observation_space.low, dtype=tf.float32)
+            high   = tf.cast(self.observation_space.high, dtype=tf.float32)
             # normalize observations
             inputs = normalize(inputs, low=low, high=high)
 
@@ -409,8 +422,12 @@ class Agent(SavableModel):
         '''
         Predict actions
 
+        inputs: observations, only accepts shape (batch, obs_space.shape)
         deterministic: deterministic action
-        return actions, values, log_probs
+
+        return actions,   shape (batch, act_space.shape)
+               values,    shape (batch, )
+               log_probs  shape (batch, )
         '''
 
         # forward 
@@ -424,19 +441,17 @@ class Agent(SavableModel):
 
         log_probs = distrib.log_prob(actions)
 
-        # actions (batch, act_space.shape)
-        # values (batch, )
-        # log_probs (batch, )
         return actions, values, log_probs
 
     def predict(self, inputs, clip_action=True, deterministic=True):
         '''
         Predict actions
 
-        inputs: observations, shape: (obs.shape) or (batch, obs.shape)
-        clip_action: clip action range (for Continuous action)
+        inputs: observations, shape (obs_space.shape) or (batch, obs_space.shape)
+        clip_action: clip action range (Continuous action)
         deterministic: deterministic action
-        return clipped actions
+
+        return clipped actions if clip_action is True
         '''
         one_sample  = (len(inputs.shape) == len(self.observation_space.shape))
 
@@ -447,6 +462,7 @@ class Agent(SavableModel):
         outputs, *_ = self(inputs, deterministic=deterministic, training=False)
         outputs     = outputs.numpy()
 
+        # clip action to a valid range (Continuous action)
         if clip_action and isinstance(self.action_space, gym.spaces.Box):
             outputs = np.clip(outputs, self.action_space.low, self.action_space.high)
 
@@ -531,7 +547,7 @@ class PPO(SavableModel):
         if self.action_space is not None:
             assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
                                                                 self.action_space, env.action_space)
-        self.env = env
+        self.env    = env
         self.n_envs = env.n_envs
 
     @tf.function
@@ -539,15 +555,22 @@ class PPO(SavableModel):
         '''
         Forward agent
 
+        inputs: observations, only accepts shape (batch, obs_space.shape)
+
         return logits, values
         '''
         return self.agent._forward(input, training=training)
     
     def call(self, inputs, deterministic=False, training=True):
         '''
-        Forward
+        Predict actions
 
-        return actions, values, log_probs
+        inputs: observations, only accepts shape (batch, obs_space.shape)
+        deterministic: deterministic action
+
+        return actions,   shape (batch, act_space.shape)
+               values,    shape (batch, )
+               log_probs  shape (batch, )
         '''
         return self.agent(inputs, deterministic=deterministic, training=training)
 
@@ -555,8 +578,11 @@ class PPO(SavableModel):
         '''
         Predict actions
 
-        inputs: observations, shape: (obs.shape) or (batch, obs.shape)
-        return clipped actions
+        inputs: observations, shape (obs_space.shape) or (batch, obs_space.shape)
+        clip_action: clip action range (Continuous action)
+        deterministic: deterministic action
+
+        return clipped actions if clip_action is True
         '''
         return self.agent.predict(inputs, clip_action=clip_action, deterministic=deterministic)
 
@@ -579,7 +605,7 @@ class PPO(SavableModel):
             values    = values.numpy()
             log_probs = log_probs.numpy()
 
-            # clip action range (for Continuous action)
+            # clip action to a valid range (Continuous action)
             if isinstance(self.action_space, gym.spaces.Box):
                 actions = np.clip(actions, self.action_space.low, self.action_space.high)
 
@@ -596,8 +622,8 @@ class PPO(SavableModel):
         '''
         Compute policy loss (Clipped surrogate loss)
         
-        advantages: (batch, )
-        log_prob: (batch, )
+        advantages:   (batch, )
+        log_prob:     (batch, )
         old_log_prob: (batch, )
         '''
         # normalize advantage, stable baselines: ppo2.py#L265
@@ -616,9 +642,9 @@ class PPO(SavableModel):
         '''
         Compute value loss
 
-        values: (batch, )
+        values:     (batch, )
         old_values: (batch, )
-        returns: (batch, )
+        returns:    (batch, )
         '''
         if clip_range_vf is None:
             values_pred = values
@@ -632,12 +658,12 @@ class PPO(SavableModel):
         '''
         Update networks (one step gradient)
 
-        obs: (batch, obs_space.shape)
-        actions: (batch, act_space.shape)
-        old_values: (batch, )
+        obs:           (batch, obs_space.shape)
+        actions:       (batch, act_space.shape)
+        old_values:    (batch, )
         old_log_probs: (batch, )
-        advantages: (batch, )
-        returns: (batch,)
+        advantages:    (batch, )
+        returns:       (batch,)
         '''
 
         actions = tf.cast(actions, dtype=tf.int64)
@@ -810,17 +836,17 @@ class PPO(SavableModel):
             # print training log
             if log_interval is not None and episode % log_interval == 0:
                 # current time
-                time_now = time.time()
+                time_now        = time.time()
                 # execution time (one epoch)
-                execution_time = (time_now - time_start) - time_spent
+                execution_time  = (time_now - time_start) - time_spent
                 # total time spent
-                time_spent   = time_now - time_start
+                time_spent      = time_now - time_start
                 # remaining time
                 remaining_time  = (time_spent / progress)*(1.0-progress)
                 # end at
-                end_at = (datetime.datetime.now() + datetime.timedelta(seconds=remaining_time)).strftime('%Y-%m-%d %H:%M:%S')
+                end_at          = (datetime.datetime.now() + datetime.timedelta(seconds=remaining_time)).strftime('%Y-%m-%d %H:%M:%S')
                 # average steps per second
-                fps = float(self.num_timesteps) / time_spent
+                fps             = float(self.num_timesteps) / time_spent
 
                 LOG.set_header('Episode {}/{}'.format(episode, total_episode))
                 LOG.add_line()
@@ -832,7 +858,7 @@ class PPO(SavableModel):
                     LOG.add_row('Execution time', datetime.timedelta(seconds=execution_time))
                     LOG.add_row('Elapsed time',   datetime.timedelta(seconds=time_spent))
                     LOG.add_row('Remaining time', datetime.timedelta(seconds=remaining_time))
-                    LOG.add_row('End at',         end_at)
+                    LOG.add_row('ETA',            end_at)
                     LOG.add_line()
                     LOG.add_row('Loss',           loss,     fmt='{}: {:.6f}')
                     LOG.add_row('Approx KL',      kl,       fmt='{}: {:.6f}')
