@@ -39,6 +39,13 @@ class Distribution(tf.Module,
         raise NotImplementedError("Method not implemented")
 
     @abc.abstractmethod
+    def mode(self):
+        '''
+        Mode
+        '''
+        raise NotImplementedError("Method not implemented")
+
+    @abc.abstractmethod
     def sample(self):
         '''
         Sample outcomes
@@ -95,6 +102,12 @@ class Categorical(Distribution):
         '''
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
                             labels=x, logits=self.logits)
+
+    def mode(self):
+        '''
+        Mode
+        '''
+        return tf.math.argmax(self.logits, axis=-1)
 
     def sample(self):
         '''
@@ -155,6 +168,12 @@ class Normal(Distribution):
         z = c + tf.math.log(self.scale)
         return -(p+z)
 
+    def mode(self):
+        '''
+        Mode
+        '''
+        return self.mean
+
     def sample(self):
         '''
         Sample outcomes
@@ -173,8 +192,30 @@ class Normal(Distribution):
         '''
         KL divergence
 
-        q: target probability ditribution (Categorical)
+        q: target probability distribution (Normal)
         '''
         log_diff = tf.math.log(self.scale) - tf.math.log(q.scale)
         return (0.5 * tf.math.square_difference(self.mean/q.scale, q.mean/q.scale) +
                 0.5 * tf.math.expm1(2. * log_diff) - log_diff)
+
+class MultiNormal(Normal):
+    def log_prob(self, x):
+        '''
+        Log probability
+        '''
+        return tf.math.reduce_sum(super().log_prob(x), axis=-1)
+
+    def entropy(self):
+        '''
+        Entropy
+        '''
+        return tf.math.reduce_sum(super().entropy(), axis=-1)
+
+    def kl(self, q):
+        '''
+        KL divergence
+
+        q: target probability distribution (MultiNormal)
+        '''
+        return tf.math.reduce_sum(super().kl(q), axis=-1)
+
