@@ -82,7 +82,7 @@ def parse_args():
     parser.add_argument('--target_policy_noise', type=float, default=0.2,     help='Target action noise range')
     parser.add_argument('--target_noise_clip',   type=float, default=0.5,     help='Target action noise clip range')
     parser.add_argument('--explore_noise',       action='store_true',         help='Enable exploration noise')
-
+    parser.add_argument('--record_video',        action='store_true',         help='Enable video recording')
 
     a = parser.parse_args()
 
@@ -96,10 +96,7 @@ def parse_args():
 
 if __name__ == '__main__':
     
-    try:
-        import pybullet_envs
-    except:
-        pass
+    import pybullet_envs
 
     a = parse_args()
 
@@ -124,14 +121,15 @@ if __name__ == '__main__':
 
     # === Print arguments ===
     LOG.set_header('Arguments')
-    LOG.add_row('Log dir',          a.logdir)
-    LOG.add_row('Logging path',     a.logging)
-    LOG.add_row('Monitor path',     a.monitor_dir)
-    LOG.add_row('Tensorboard path', a.tb_logdir)
-    LOG.add_row('Model path',       a.model_dir)
-    LOG.add_row('Env ID',           a.env_id)
-    LOG.add_row('Seed',             a.seed)
-    LOG.add_row('Eval seed',        a.eval_seed)
+    LOG.add_row('Log dir',               a.logdir)
+    LOG.add_row('Logging path',          a.logging)
+    LOG.add_row('Monitor path',          a.monitor_dir)
+    LOG.add_row('Tensorboard path',      a.tb_logdir)
+    LOG.add_row('Model path',            a.model_dir)
+    LOG.add_row('Env ID',                a.env_id)
+    LOG.add_row('Seed',                  a.seed)
+    LOG.add_row('Eval seed',             a.eval_seed)
+    LOG.add_row('Record video',          a.record_video)
     LOG.add_line()
     LOG.add_row('Num of envs',           a.num_envs)
     LOG.add_row('Num of steps/episode ', a.num_steps)
@@ -146,37 +144,37 @@ if __name__ == '__main__':
     LOG.add_row('Min buffer size',       a.min_buffer)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
-    LOG.add_row('Learning rate',       a.lr)
-    LOG.add_row('Gamma',               a.gamma)
-    LOG.add_row('Polyak (tau)',        a.polyak)
-    LOG.add_row('Policy delay',        a.policy_delay)
-    LOG.add_row('Target policy noise', a.target_policy_noise)
-    LOG.add_row('Target noise clip',   a.target_noise_clip)
-    LOG.add_row('Explore noise',         explore_noise)
+    LOG.add_row('Learning rate',         a.lr)
+    LOG.add_row('Gamma',                 a.gamma)
+    LOG.add_row('Polyak (tau)',          a.polyak)
+    LOG.add_row('Policy delay',          a.policy_delay)
+    LOG.add_row('Target policy noise',   a.target_policy_noise)
+    LOG.add_row('Target noise clip',     a.target_noise_clip)
+    LOG.add_row('Explore noise',           explore_noise)
     LOG.flush('WARNING')
 
     # === Make envs ===
     # make pybullet/mujoco env
-    def make_env(env_id, rank, log_path, seed=0):
+    def make_env(rank, a):
         def _init():
             import pybullet_envs
 
-            env = gym.make(env_id)
-            env.seed(seed + rank)
-            env = Monitor(env, directory=log_path, prefix=str(rank),
-                        enable_video_recording=True, force=True,
+            env = gym.make(a.env_id)
+            env.seed(a.seed + rank)
+            env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
+                        enable_video_recording=a.record_video, force=True,
                         video_kwargs={'prefix':'video/train.{}'.format(rank)})
             return env
-        set_global_seeds(seed)
+        set_global_seeds(a.seed)
         return _init
 
-    env = SubprocVecEnv([make_env(a.env_id, i, a.monitor_dir, seed=a.seed) for i in range(a.num_envs)])
+    env = SubprocVecEnv([make_env(i, a) for i in range(a.num_envs)])
 
     # make env for evaluation
     eval_env = gym.make(a.env_id)
     eval_env.seed(a.eval_seed)
     eval_env = Monitor(eval_env, directory=a.monitor_dir, prefix='eval',
-                       enable_video_recording=True, force=True,
+                       enable_video_recording=a.record_video, force=True,
                        video_kwargs={'prefix':'video/eval',
                                      'width': 640,
                                      'height': 480,

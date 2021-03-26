@@ -309,7 +309,7 @@ class Agent(SavableModel):
         # predict
         outputs = self(inputs, normalized=normalized).numpy()
         if one_sample:
-            outputs = outputs.reshape((-1,))
+            outputs = np.squeeze(outputs, axis=0)
 
         # predict
         return outputs

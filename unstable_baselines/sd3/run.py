@@ -98,10 +98,7 @@ def parse_args():
 
 if __name__ == '__main__':
     
-    try:
-        import pybullet_envs
-    except:
-        pass
+    import pybullet_envs
 
     a = parse_args()
 
@@ -126,15 +123,15 @@ if __name__ == '__main__':
 
     # === Print arguments ===
     LOG.set_header('Arguments')
-    LOG.add_row('Log dir',          a.logdir)
-    LOG.add_row('Logging path',     a.logging)
-    LOG.add_row('Monitor path',     a.monitor_dir)
-    LOG.add_row('Tensorboard path', a.tb_logdir)
-    LOG.add_row('Model path',       a.model_dir)
-    LOG.add_row('Env ID',           a.env_id)
-    LOG.add_row('Seed',             a.seed)
-    LOG.add_row('Eval seed',        a.eval_seed)
-    LOG.add_row('Record video',     a.record_video)
+    LOG.add_row('Log dir',               a.logdir)
+    LOG.add_row('Logging path',          a.logging)
+    LOG.add_row('Monitor path',          a.monitor_dir)
+    LOG.add_row('Tensorboard path',      a.tb_logdir)
+    LOG.add_row('Model path',            a.model_dir)
+    LOG.add_row('Env ID',                a.env_id)
+    LOG.add_row('Seed',                  a.seed)
+    LOG.add_row('Eval seed',             a.eval_seed)
+    LOG.add_row('Record video',          a.record_video)
     LOG.add_line()
     LOG.add_row('Num of envs',           a.num_envs)
     LOG.add_row('Num of steps/episode ', a.num_steps)
@@ -149,16 +146,16 @@ if __name__ == '__main__':
     LOG.add_row('Min buffer size',       a.min_buffer)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
-    LOG.add_row('Learning rate',       a.lr)
-    LOG.add_row('Beta',                a.beta)
-    LOG.add_row('Gamma',               a.gamma)
-    LOG.add_row('Polyak (tau)',        a.polyak)
-    LOG.add_row('Policy delay',        a.policy_delay)
-    LOG.add_row('Action samples',      a.action_samples)
-    LOG.add_row('Action noise',        a.action_noise)
-    LOG.add_row('Action noise clip',   a.action_noise_clip)
-    LOG.add_row('Explore noise',         explore_noise)
-    LOG.add_row('Importance sampling', a.importance_sampling)
+    LOG.add_row('Learning rate',         a.lr)
+    LOG.add_row('Beta',                  a.beta)
+    LOG.add_row('Gamma',                 a.gamma)
+    LOG.add_row('Polyak (tau)',          a.polyak)
+    LOG.add_row('Policy delay',          a.policy_delay)
+    LOG.add_row('Action samples',        a.action_samples)
+    LOG.add_row('Action noise',          a.action_noise)
+    LOG.add_row('Action noise clip',     a.action_noise_clip)
+    LOG.add_row('Explore noise',           explore_noise)
+    LOG.add_row('Importance sampling',   a.importance_sampling)
     LOG.flush('WARNING')
 
     # === Make envs ===
