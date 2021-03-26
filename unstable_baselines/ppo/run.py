@@ -34,8 +34,10 @@ import datetime
 
 # --- 3rd party ---
 import gym
+import cloudpickle
 
 import numpy as np
+import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import logger
@@ -77,6 +79,8 @@ def parse_args():
     parser.add_argument('--vf_coef',          type=float, default=0.5,  help='Value loss ratio')
     parser.add_argument('--max_grad_norm',    type=float, default=0.5,  help='Max gradient norm')
     parser.add_argument('--target_kl',        type=float, default=None, help='Target kl (early stop)')
+    parser.add_argument('--force_mlp',        action='store_true',      help='Use MLP network')
+    parser.add_argument('--record_video',     action='store_true',      help='Enable video recording')
 
     a = parser.parse_args()
 
@@ -88,6 +92,72 @@ def parse_args():
 
     return a
 
+
+def make_atari(a, eval=False):
+    '''
+    Make Atari-like env (Image observation)
+    '''
+    if not eval:
+        def _make_env(rank, a):
+            def _init():
+                env = gym.make(a.env_id)
+                env.seed(a.seed + rank)
+                env = NoopResetEnv(env, noop_max=30)
+                env = MaxAndSkipEnv(env, skip=4)
+                env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
+                            enable_video_recording=a.record_video, force=True,
+                            video_kwargs={'prefix':'video/train.{}'.format(rank)})
+                env = EpisodicLifeEnv(env)
+                env = WarpFrame(env)
+                env = ClipRewardEnv(env)
+                return env
+            set_global_seeds(a.seed)
+            return _init
+        env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
+        env = VecFrameStack(env, 4)
+    else:
+        env = gym.make(a.env_id)
+        env.seed(a.eval_seed)
+        env = NoopResetEnv(env, noop_max=30)
+        env = MaxAndSkipEnv(env, skip=4)
+        env = Monitor(env, directory=a.monitor_dir, prefix='eval',
+                        enable_video_recording=a.record_video, force=True,
+                        video_kwargs={'prefix':'video/eval',
+                                        'callback': lambda x: True})
+        env = WarpFrame(env)
+        env = FrameStack(env, 4)
+    
+    return env
+
+
+def make_env(a, eval=False):
+    '''
+    Make non-Atari env (Pybullet)
+    '''
+    import pybullet_envs
+
+    if not eval:
+        def _make_env(rank, a):
+            def _init():
+                import pybullet_envs
+                env = gym.make(a.env_id)
+                env.seed(a.seed + rank)
+                env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
+                            enable_video_recording=a.record_video, force=True,
+                            video_kwargs={'prefix':'video/train.{}'.format(rank)})
+                env = ClipRewardEnv(env)
+                return env
+            set_global_seeds(a.seed)
+            return _init
+        env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
+    else:
+        env = gym.make(a.env_id)
+        env.seed(a.eval_seed)
+        env = Monitor(env, directory=a.monitor_dir, prefix='eval',
+                        enable_video_recording=a.record_video, force=True,
+                        video_kwargs={'prefix':'video/eval',
+                                        'callback': lambda x: True})
+    return env
 
 
 if __name__ == '__main__':
@@ -108,14 +178,15 @@ if __name__ == '__main__':
 
     # === Print arguments ===
     LOG.set_header('Arguments')
-    LOG.add_row('Log dir',          a.logdir)
-    LOG.add_row('Logging path',     a.logging)
-    LOG.add_row('Monitor path',     a.monitor_dir)
-    LOG.add_row('Tensorboard path', a.tb_logdir)
-    LOG.add_row('Model path',       a.model_dir)
-    LOG.add_row('Env ID',           a.env_id)
-    LOG.add_row('Seed',             a.seed)
-    LOG.add_row('Eval seed',        a.eval_seed)
+    LOG.add_row('Log dir',               a.logdir)
+    LOG.add_row('Logging path',          a.logging)
+    LOG.add_row('Monitor path',          a.monitor_dir)
+    LOG.add_row('Tensorboard path',      a.tb_logdir)
+    LOG.add_row('Model path',            a.model_dir)
+    LOG.add_row('Env ID',                a.env_id)
+    LOG.add_row('Seed',                  a.seed)
+    LOG.add_row('Eval seed',             a.eval_seed)
+    LOG.add_row('Record video',          a.record_video)
     LOG.add_line()
     LOG.add_row('Num of envs',           a.num_envs)
     LOG.add_row('Num of steps/episode ', a.num_steps)
@@ -128,50 +199,28 @@ if __name__ == '__main__':
     LOG.add_row('Batch size',            a.batch_size)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
-    LOG.add_row('Learning rate',     a.lr)
-    LOG.add_row('Gamma',             a.gamma)
-    LOG.add_row('Lambda',            a.gae_lambda)
-    LOG.add_row('Clip range',        a.clip_range)
-    LOG.add_row('Value clip range',  a.clip_range_vf)
-    LOG.add_row('Entropy coef',      a.ent_coef)
-    LOG.add_row('Value coef',        a.vf_coef)
-    LOG.add_row('Max gradient norm', a.max_grad_norm)
-    LOG.add_row('Target KL',         a.target_kl)
+    LOG.add_row('Force MLP',             a.force_mlp)
+    LOG.add_row('Learning rate',         a.lr)
+    LOG.add_row('Gamma',                 a.gamma)
+    LOG.add_row('Lambda',                a.gae_lambda)
+    LOG.add_row('Clip range',            a.clip_range)
+    LOG.add_row('Value clip range',      a.clip_range_vf)
+    LOG.add_row('Entropy coef',          a.ent_coef)
+    LOG.add_row('Value coef',            a.vf_coef)
+    LOG.add_row('Max gradient norm',     a.max_grad_norm)
+    LOG.add_row('Target KL',             a.target_kl)
     LOG.flush('WARNING')
 
     # === Make envs ===
-    # make atari env
-    assert 'NoFrameskip' in a.env_id
-    def make_env(env_id, rank, log_path, seed=0):
-        def _init():
-            env = gym.make(env_id)
-            env.seed(seed + rank)
-            env = NoopResetEnv(env, noop_max=30)
-            env = MaxAndSkipEnv(env, skip=4)
-            env = Monitor(env, directory=log_path, prefix=str(rank),
-                        enable_video_recording=True, force=True,
-                        video_kwargs={'prefix':'video/train.{}'.format(rank)})
-            env = EpisodicLifeEnv(env)
-            env = WarpFrame(env)
-            env = ClipRewardEnv(env)
-            return env
-        set_global_seeds(seed)
-        return _init
 
-    # make env
-    env = SubprocVecEnv([make_env(a.env_id, i, a.monitor_dir, seed=a.seed) for i in range(a.num_envs)])
-    env = VecFrameStack(env, 4)
-
-    eval_env = gym.make(a.env_id)
-    eval_env.seed(a.eval_seed)
-    eval_env = NoopResetEnv(eval_env, noop_max=30)
-    eval_env = MaxAndSkipEnv(eval_env, skip=4)
-    eval_env = Monitor(eval_env, directory=a.monitor_dir, prefix='eval',
-                       enable_video_recording=True, force=True,
-                       video_kwargs={'prefix':'video/eval',
-                                     'callback': lambda x: True})
-    eval_env = WarpFrame(eval_env)
-    eval_env = FrameStack(eval_env, 4)
+    if 'NoFrameskip' in a.env_id:
+        # Atari env
+        env      = make_atari(a, eval=False)
+        eval_env = make_atari(a, eval=True)
+    else:
+        # Pybullet env
+        env      = make_env(a, eval=False)
+        eval_env = make_env(a, eval=True)
     
     LOG.debug('Action space: {}'.format(env.action_space))
     LOG.debug('Observation space: {}'.format(env.observation_space))
@@ -191,13 +240,14 @@ if __name__ == '__main__':
                          vf_coef         = a.vf_coef,
                          max_grad_norm   = a.max_grad_norm,
                          target_kl       = a.target_kl,
+                         force_mlp       = a.force_mlp,
                          verbose         = a.verbose)
         
         # Total timesteps = num_steps * num_envs * num_episodes (default ~ 10M)
         model.learn(a.num_steps *    a.num_envs * a.num_episodes, 
                     tb_logdir      = a.tb_logdir, 
                     log_interval   = a.log_interval,
-                    eval_env       = eval_env, 
+                    eval_env       =   eval_env, 
                     eval_interval  = a.eval_interval, 
                     eval_episodes  = a.eval_episodes, 
                     eval_max_steps = a.eval_max_steps)
@@ -209,18 +259,18 @@ if __name__ == '__main__':
         loaded_model = PPO.load(a.model_dir)
 
         # set env to continue training
-        # loaded_model.set_env(env)
-        # loaded_model.learn(a.num_steps *    a.num_envs * a.num_episodes * 2,
-        #                     tb_logdir      = a.tb_logdir,
-        #                     log_interval   = a.log_interval,
-        #                     eval_env       =  eval_env, 
-        #                     eval_interval  = a.eval_interval, 
-        #                     eval_episodes  = a.eval_episodes, 
-        #                     eval_max_steps = a.eval_max_steps)
+        loaded_model.set_env(env)
+        loaded_model.learn(a.num_steps *    a.num_envs * a.num_episodes * 2,
+                            tb_logdir      = a.tb_logdir,
+                            log_interval   = a.log_interval,
+                            eval_env       =  eval_env, 
+                            eval_interval  = a.eval_interval, 
+                            eval_episodes  = a.eval_episodes, 
+                            eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        # model.agent.save(a.model_dir)
-        # loaded_model = PPOAgent.load(a.model_dir)
+        model.agent.save(a.model_dir)
+        loaded_model = PPOAgent.load(a.model_dir)
 
         # Evaluation
         eps_rews  = []

@@ -40,7 +40,11 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.base import SavableModel
+from unstable_baselines.prob import (Categorical, 
+                                     MultiNormal)
 from unstable_baselines.utils import (set_global_seeds,
+                                      normalize,
+                                      unnormalize,
                                       to_json_serializable,
                                       from_json_serializable)
 
@@ -81,7 +85,7 @@ class GaeBuffer():
 
     def add(self, obs, action, reward, done, value, log_prob):
         '''
-        Add samples, (np.array)
+        Add samples
         
         obs: observations, shape: (n_envs, obs_space.shape)
         action: actions, shape: (n_envs, act_space.shape)
@@ -91,25 +95,14 @@ class GaeBuffer():
         log_prob: log pi, shape: (n_envs,)
         '''
         
-
         assert self.ready_for_sampling == False, 'The buffer is ready for sampling, please reset the buffer'
-
-        if len(log_prob.shape) == 0:
-            log_prob = log_prob.reshape(-1, 1)
-
-        #LOG.debug('observation shape: {}'.format(np.asarray(obs).shape))
-        #LOG.debug('action shape: {}'.format(np.asarray(action).shape))
-        #LOG.debug('reward shape: {}'.format(np.asarray(reward).shape))
-        #LOG.debug('done shape: {}'.format(np.asarray(done).shape))
-        #LOG.debug('value shape: {}'.format(value.flatten().shape))
-        #LOG.debug('log probs shape: {}'.format(log_prob.shape))
 
         self.observations.append(np.asarray(obs).copy())
         self.actions.append(np.asarray(action).copy())
         self.rewards.append(np.asarray(reward).copy())
         self.dones.append(np.asarray(done).copy())
-        self.values.append(value.flatten().copy())
-        self.log_probs.append(log_prob.copy())
+        self.values.append(np.asarray(value).copy())
+        self.log_probs.append(np.asarray(log_prob).copy())
 
     def __len__(self):
         return len(self.observations)
@@ -117,88 +110,96 @@ class GaeBuffer():
     def __call__(self, batch_size=None):
         assert self.ready_for_sampling, 'The buffer is not ready for sampling, please call make() first'
 
+        buffer_size = len(self)
+
         if batch_size is None:
-            batch_size = self.observations.shape[0]
+            batch_size = buffer_size
         
-        indices = np.random.permutation(self.observations.shape[0])
+        indices = np.random.permutation(buffer_size)
 
         start_idx = 0
-        while start_idx < self.observations.shape[0]:
+        while start_idx < buffer_size:
             # return generator
             yield self._get_samples(indices[start_idx:start_idx + batch_size])
             start_idx += batch_size
 
     def _get_samples(self, indices):
-        return (self.observations[indices],
-                self.actions[indices],
-                self.values[indices].flatten(),
-                self.log_probs[indices].flatten(),
-                self.advantages[indices].flatten(),
-                self.returns[indices].flatten())
+        '''
+        Generate samples
+
+        indices: 1D array
+        '''
+        return (self.observations[indices], # (batch, obs_space.shape)
+                self.actions[indices],      # (batch, act_space.shape)
+                self.values[indices],       # (batch, )
+                self.log_probs[indices],    # (batch, )
+                self.advantages[indices],   # (batch, )
+                self.returns[indices])      # (batch, )
 
     def make(self):
-        last_value = self.values[-1]
-        dones = self.dones[-1]
 
-        self.observations = np.asarray(self.observations, dtype=np.float32)
-        self.actions      = np.asarray(self.actions, dtype=np.float32)
-        self.rewards      = np.asarray(self.rewards, dtype=np.float32)
-        self.dones        = np.asarray(self.dones, dtype=np.float32)
-        self.values       = np.asarray(self.values, dtype=np.float32)
-        self.log_probs    = np.asarray(self.log_probs, dtype=np.float32)
-        self.advantages   = np.zeros(self.observations.shape[0:2], dtype=np.float32) # shape:(# of samples, n_envs)
+        self.observations = np.asarray(self.observations, dtype=np.float32) # (steps, n_envs, obs_space.shape)
+        self.actions      = np.asarray(self.actions,      dtype=np.float32) # (steps, n_envs, act_space.shape)
+        self.rewards      = np.asarray(self.rewards,      dtype=np.float32) # (steps, n_envs)
+        self.dones        = np.asarray(self.dones,        dtype=np.float32) # (steps, n_envs)
+        self.values       = np.asarray(self.values,       dtype=np.float32) # (steps, n_envs)
+        self.log_probs    = np.asarray(self.log_probs,    dtype=np.float32) # (steps, n_envs)
+        self.advantages   = np.zeros(self.values.shape,   dtype=np.float32) # (steps, n_envs)
 
         # compute GAE
         last_gae_lam = 0
         buffer_size = len(self)
-        for step in reversed(range(buffer_size)):
-            if step == buffer_size - 1:
-                next_non_terminal = np.array(1.0 - dones)
-                next_value        = last_value.flatten()
-            else:
-                next_non_terminal = 1.0 - self.dones[step+1]
-                next_value        = self.values[step + 1]
-            
-            delta        = self.rewards[step] + self.gamma * next_value * next_non_terminal - self.values[step]
-            last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+        next_non_terminal = 1.0 - self.dones[-1]
+        next_value = self.values[-1]
 
+        for step in reversed(range(buffer_size)):
+
+            delta = self.rewards[step] + self.gamma * next_value * next_non_terminal - self.values[step]
+            last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            
             self.advantages[step] = last_gae_lam
+            
+            next_non_terminal = 1.0 - self.dones[step]
+            next_value = self.values[step]
         
         self.returns = self.advantages + self.values
 
         # flatten 
-        self.observations = self._flatten(self.observations) # (n_envs*steps, observation size)
-        self.actions      = self._flatten(self.actions)      
-        self.values       = self._flatten(self.values)
-        self.log_probs    = self._flatten(self.log_probs)
-        self.advantages   = self._flatten(self.advantages)
-        self.returns      = self._flatten(self.returns)
+        self.observations = self._swap_flatten(self.observations) # (n_envs*steps, obs_space.shape)
+        self.actions      = self._swap_flatten(self.actions)      # (n_envs*steps, act_space.shape)
+        self.values       = self._swap_flatten(self.values)       # (n_envs*steps,)
+        self.log_probs    = self._swap_flatten(self.log_probs)    # (n_envs*steps,)
+        self.advantages   = self._swap_flatten(self.advantages)   # (n_envs*steps,)
+        self.returns      = self._swap_flatten(self.returns)      # (n_envs*steps,)
 
         self.ready_for_sampling = True
     
     @classmethod
-    def _flatten(cls, v):
+    def _swap_flatten(cls, v):
         '''
-        Flatten dimensions
+        Swap and flatten first two dimensions
 
-        (n_envs, steps, ...) -> (n_envs*steps, ...)
+        (steps, n_envs, ...) -> (n_envs*steps, ...)
         '''
         shape = v.shape
         if len(shape) < 3:
-            shape = shape + (1,)
-        return v.swapaxes(0, 1).reshape(shape[0]*shape[1], *shape[2:])
+            v = v.swapaxes(0, 1).reshape(shape[0]*shape[1])
+        else:
+            v = v.swapaxes(0, 1).reshape(shape[0]*shape[1], *shape[2:])
+
+        return v
 
 
 # === Networks ===
 
 # CNN feature extractor
 class NatureCnn(tf.keras.Model):
-    def __init__(self):
+    def __init__(self, **kwargs):
         '''
-        Nature CNN use the same architecture as the original paper
+        Nature CNN use the same architecture as its origin paper
             "Playing Atari with Deep Reinforcement Learning"
         '''
-        super().__init__()
+        super().__init__(**kwargs)
 
         self._layers = [
             tf.keras.layers.Conv2D(32, 8, 4, name='conv1'),
@@ -212,118 +213,139 @@ class NatureCnn(tf.keras.Model):
             tf.keras.layers.ReLU(name='relu4')
         ]
 
-    @tf.function
     def call(self, inputs, training=False):
+        '''
+        inputs: observations (batch, obs_space.shape)
+        '''
         x = inputs
         for layer in self._layers:
             x = layer(x)
         return x
 
-# Policy network (Discrete action)
-class PolicyNet(tf.keras.Model):
-    def __init__(self, action_space):
-        super().__init__()
 
-        self.action_space = action_space
+# Mlp feature extractor
+class Mlp(tf.keras.Model):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         self._layers = [
-            tf.keras.layers.Dense(action_space.n)
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(64, name='fc1'),
+            tf.keras.layers.ReLU(name='relu1'),
+            tf.keras.layers.Dense(64, name='fc2'),
+            tf.keras.layers.ReLU(name='relu2'),
         ]
-
     def call(self, inputs, training=False):
-        # forward hidden layers
+        '''
+        inputs: observations (batch, obs_space.shape)
+        '''
         x = inputs
         for layer in self._layers:
-            x = layer(inputs)
-
+            x = layer(x)
         return x
 
 
+# for Discrete action space
+class CategoricalPolicyNet(tf.keras.Model):
+    def __init__(self, action_space, **kwargs):
+        super().__init__(**kwargs)
+
+        self._layers = [
+            tf.keras.layers.Dense(action_space.n)
+        ]
+    
+    def call(self, inputs, training=False):
+        '''
+        inputs: latent (batch, latent_size)
+        '''
+        x = inputs
+        for layer in self._layers:
+            x = layer(x)
+        
+        return x
+
+    def get_distribution(self, logits):
+        return Categorical(logits)
+
+# for Continuous (Box) action space
+class DiagGaussianPolicyNet(tf.keras.Model):
+    def __init__(self, action_space, **kwargs):
+        super().__init__(**kwargs)
+
+        self._layers = [
+            tf.keras.layers.Dense(action_space.shape[0])
+        ]
+        
+        self._logstd = tf.Variable(tf.keras.initializers.Zeros()(shape=(action_space.shape[0],)),
+                                   shape=(action_space.shape[0],), dtype=tf.float32)
+
+    def call(self, inputs, training=False):
+        '''
+        inputs: latent (batch, latent_size)
+        outputs: [mean, scale]
+        '''
+        x = inputs
+        for layer in self._layers:
+            x = layer(x)
+        
+        std = tf.expand_dims(tf.math.exp(self._logstd), axis=0)
+        return x, std
+
+    def get_distribution(self, logits):
+        return MultiNormal(logits[0], logits[1])
+
+# Policy network
+class PolicyNet(tf.keras.Model):
+    def __init__(self, action_space, **kwargs):
+        super().__init__(**kwargs)
+
+        if isinstance(action_space, gym.spaces.Discrete):
+            self._net = CategoricalPolicyNet(action_space)
+        elif isinstance(action_space, gym.spaces.Box):
+            self._net = DiagGaussianPolicyNet(action_space)
+        else:
+            raise NotImplementedError('Action space not supported: {}'.format(type(action_space)))
+
+    def call(self, inputs, training=False):
+        '''
+        inputs: latent (batch, latent_size)
+        '''
+        
+        return self._net(inputs, training=training)
+
+    def get_distribution(self, logits):
+
+        return self._net.get_distribution(logits)
+
 # Value network
 class ValueNet(tf.keras.Model):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self._layers = [
             tf.keras.layers.Dense(1)
         ]
 
-    @tf.function
     def call(self, inputs, training=False):
+        '''
+        inputs: latent (batch, latent_size)
+        '''
         x = inputs
         for layer in self._layers:
             x = layer(x)
         return x
 
 
-# === Probability ===
-
-# Categorical probability (Discrete action)
-class Categorical(tf.Module):
-
-    @staticmethod
-    def _p_pi(logits):
-        logits    = tf.convert_to_tensor(logits)
-        # softmax (safe softmax)
-        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
-        exp_pi_   = tf.exp(pi_)
-        z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
-        p_pi      = exp_pi_ / z_exp_pi_
-        return p_pi
-    
-    @staticmethod
-    def _logp_pi(logits):
-        logits    = tf.convert_to_tensor(logits)
-        # softmax (safe softmax)
-        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
-        exp_pi_   = tf.exp(pi_)
-        z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
-        logp_pi   = pi_ - tf.math.log(z_exp_pi_)
-        return logp_pi
-
-    @staticmethod
-    def sample(logits):
-        logits  = tf.convert_to_tensor(logits)
-        # gumbel reparameterization
-        e       = tf.random.uniform(tf.shape(logits)) # noise
-        it      = logits - tf.math.log(-tf.math.log(e))
-        samples = tf.math.argmax(it, axis=-1)
-        return samples
-
-    @staticmethod
-    def log_prob(logits, x):
-        logits    = tf.convert_to_tensor(logits)
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(
-                            labels=x, logits=logits)
-    
-    @staticmethod
-    def entropy(logits):
-        logits    = tf.convert_to_tensor(logits)
-        # softmax (safe softmax)
-        pi_       = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
-        exp_pi_   = tf.exp(pi_)
-        z_exp_pi_ = tf.math.reduce_sum(exp_pi_, axis=-1, keepdims=True)
-        p_pi      = exp_pi_ / z_exp_pi_
-        # entropy
-        logp_pi   = pi_ - tf.math.log(z_exp_pi_)
-        ent_pi    = tf.math.reduce_sum(-p_pi * logp_pi, axis=-1)
-        return ent_pi
-
-    @staticmethod
-    def kl(logits, target_logits):
-        logits        = tf.convert_to_tensor(logits)
-        # softmax (safe softmax)
-        logits_       = target_logits - tf.math.reduce_max(target_logits, axis=-1, keepdims=True)
-        exp_logits_   = tf.exp(logits_)
-        z_exp_logits_ = tf.math.reduce_sum(exp_logits_, axis=-1, keepdims=True)
-        # kl divergence
-        log_qp        = logits - tf.math.log(z_exp_logits_) - self.pi_ + tf.math.log(self.z_exp_pi_)
-        kl            = tf.math.reduce_sum(-self._p_pi() * log_qp, axis=-1)
-        return kl
-
+# ==== Agent, Model ===
 
 class Agent(SavableModel):
-    def __init__(self, observation_space, action_space, **kwargs):
+    def __init__(self, observation_space, action_space, force_mlp=False, **kwargs):
+        '''
+        force_mlp: Force Mlp
+        '''
         super().__init__(**kwargs)
+
+        self.force_mlp = force_mlp
 
         # --- Initialize ---
         self.observation_space = None
@@ -337,15 +359,16 @@ class Agent(SavableModel):
 
     def setup_model(self, observation_space, action_space):
 
-        # check observation/action space
-        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
-        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
-
         self.observation_space = observation_space
         self.action_space      = action_space
 
         # --- setup model ---
-        self.net        = NatureCnn()
+        if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
+            # Image observation and mlp is False
+            self.net = NatureCnn()
+        else:
+            self.net = Mlp()
+            
         self.policy_net = PolicyNet(self.action_space)
         self.value_net  = ValueNet()
 
@@ -355,19 +378,30 @@ class Agent(SavableModel):
         self.policy_net(outputs)
         self.value_net(outputs)
 
-    @tf.function
+    #@tf.function
     def _forward(self, inputs, training=True):
-        # cast image inputs (uint8) to float32
-        inputs = tf.cast(inputs, dtype=tf.float32)
-        # normalize
-        inputs = (inputs - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
+        '''
+        Forward network
+
+        return logits, values
+        '''
+
+        # cast and normalize non float32 inputs (e.g. image with uint8)
+        if inputs.dtype != tf.float32:
+            # cast observations to float32
+            inputs = tf.cast(inputs, dtype=tf.float32)
+            low = tf.cast(self.observation_space.low, dtype=tf.float32)
+            high = tf.cast(self.observation_space.high, dtype=tf.float32)
+            # normalize observations
+            inputs = normalize(inputs, low=low, high=high)
 
         # forward network
         latent = self.net(inputs, training=training)
         # forward policy net
         logits = self.policy_net(latent, training=training)
         # forward value net
-        values = self.value_net(latent, training=training)
+        values = self.value_net(latent, training=training) # (batch, 1)
+        values = tf.squeeze(values, axis=-1)               # (batch, )
 
         return logits, values
 
@@ -376,36 +410,48 @@ class Agent(SavableModel):
         Predict actions
 
         deterministic: deterministic action
+        return actions, values, log_probs
         '''
 
-        # forward
+        # forward 
         logits, values = self._forward(inputs, training=training)
-        
-        if deterministic:
-            return tf.math.argmax(logits, axis=-1)
-        
-        actions   = Categorical.sample(logits)
-        log_probs = Categorical.log_prob(logits, actions)
+        distrib = self.policy_net.get_distribution(logits)
 
+        if deterministic:
+            actions = distrib.mode()
+        else:
+            actions = distrib.sample()
+
+        log_probs = distrib.log_prob(actions)
+
+        # actions (batch, act_space.shape)
+        # values (batch, )
+        # log_probs (batch, )
         return actions, values, log_probs
 
-    def predict(self, inputs, deterministic=True):
+    def predict(self, inputs, clip_action=True, deterministic=True):
         '''
         Predict actions
 
         inputs: observations, shape: (obs.shape) or (batch, obs.shape)
+        clip_action: clip action range (for Continuous action)
         deterministic: deterministic action
+        return clipped actions
         '''
-        one_sample = (len(inputs.shape) == len(self.observation_space.shape))
+        one_sample  = (len(inputs.shape) == len(self.observation_space.shape))
 
         if one_sample:
-            inputs = np.expand_dims(inputs, axis=0)
+            inputs  = np.expand_dims(inputs, axis=0)
 
         # predict
-        outputs = self(inputs, deterministic=deterministic, training=False).numpy()
+        outputs, *_ = self(inputs, deterministic=deterministic, training=False)
+        outputs     = outputs.numpy()
+
+        if clip_action and isinstance(self.action_space, gym.spaces.Box):
+            outputs = np.clip(outputs, self.action_space.low, self.action_space.high)
 
         if one_sample:
-            outputs = outputs.reshape((-1,)).item()
+            outputs = np.squeeze(outputs, axis=0)
 
         # predict
         return outputs
@@ -413,12 +459,13 @@ class Agent(SavableModel):
     def get_config(self):
 
         config = {'observation_space': self.observation_space,
-                  'action_space': self.action_space}
+                  'action_space':      self.action_space,
+                  'force_mlp':         self.force_mlp}
 
         return to_json_serializable(config)
 
 
-class PPO(tf.keras.Model):
+class PPO(SavableModel):
     def __init__(self, env, learning_rate: float = 3e-4, 
                             n_steps:         int = 2048, 
                             batch_size:      int = 64, 
@@ -431,6 +478,7 @@ class PPO(tf.keras.Model):
                             vf_coef:       float = 0.5, 
                             max_grad_norm: float = 0.5,
                             target_kl:     float = None,
+                            force_mlp:      bool = False,
                             verbose:         int = 0, 
                             **kwargs):
         super().__init__(**kwargs)
@@ -449,6 +497,7 @@ class PPO(tf.keras.Model):
         self.vf_coef         = vf_coef
         self.max_grad_norm   = max_grad_norm
         self.target_kl       = target_kl
+        self.force_mlp       = force_mlp
         self.verbose         = verbose  # 0=no, 1=training log, 2=eval log
 
         self.num_timesteps     = 0
@@ -464,17 +513,14 @@ class PPO(tf.keras.Model):
     
     def setup_model(self, observation_space, action_space):
 
-        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
-        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
-
-        self.observation_space = env.observation_space
-        self.action_space      = env.action_space
+        self.observation_space = observation_space
+        self.action_space      = action_space
 
         # --- setup model ---
         self.buffer     = GaeBuffer(gae_lambda=self.gae_lambda, gamma=self.gamma)
-        self.agent      = Agent(self.observation_space, self.action_space)
+        self.agent      = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
         
-        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, epsilon=1e-5, clipnorm=self.max_grad_norm)
+        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, clipnorm=self.max_grad_norm)
 
     def set_env(self, env):
 
@@ -499,19 +545,20 @@ class PPO(tf.keras.Model):
     
     def call(self, inputs, deterministic=False, training=True):
         '''
-        Forward 
+        Forward
 
         return actions, values, log_probs
         '''
         return self.agent(inputs, deterministic=deterministic, training=training)
 
-    def predict(self, inputs, deterministic=True):
+    def predict(self, inputs, clip_action=True, deterministic=True):
         '''
         Predict actions
 
         inputs: observations, shape: (obs.shape) or (batch, obs.shape)
+        return clipped actions
         '''
-        return self.agent.predict(inputs, deterministic=deterministic)
+        return self.agent.predict(inputs, clip_action=clip_action, deterministic=deterministic)
 
     def _run(self, steps, obs=None):
         '''
@@ -532,11 +579,13 @@ class PPO(tf.keras.Model):
             values    = values.numpy()
             log_probs = log_probs.numpy()
 
+            # clip action range (for Continuous action)
+            if isinstance(self.action_space, gym.spaces.Box):
+                actions = np.clip(actions, self.action_space.low, self.action_space.high)
+
             # step environment
             new_obs, rews, dones, infos = self.env.step(actions)
             
-            # if action space is Discrete, reshape
-            actions = actions.reshape(-1, 1)
             self.buffer.add(obs, actions, rews, dones, values, log_probs)
             obs = new_obs
 
@@ -546,6 +595,10 @@ class PPO(tf.keras.Model):
     def policy_loss(self, advantage, log_prob, old_log_prob, clip_range):
         '''
         Compute policy loss (Clipped surrogate loss)
+        
+        advantages: (batch, )
+        log_prob: (batch, )
+        old_log_prob: (batch, )
         '''
         # normalize advantage, stable baselines: ppo2.py#L265
         advantage = (advantage - tf.math.reduce_mean(advantage)) / (tf.math.reduce_std(advantage) + 1e-8)
@@ -562,6 +615,10 @@ class PPO(tf.keras.Model):
     def value_loss(self, values, old_values, returns, clip_range_vf):
         '''
         Compute value loss
+
+        values: (batch, )
+        old_values: (batch, )
+        returns: (batch, )
         '''
         if clip_range_vf is None:
             values_pred = values
@@ -573,23 +630,28 @@ class PPO(tf.keras.Model):
 
     def _train_step(self, obs, actions, old_values, old_log_probs, advantages, returns):
         '''
-        Update PPO (one step gradient)
+        Update networks (one step gradient)
+
+        obs: (batch, obs_space.shape)
+        actions: (batch, act_space.shape)
+        old_values: (batch, )
+        old_log_probs: (batch, )
+        advantages: (batch, )
+        returns: (batch,)
         '''
 
         actions = tf.cast(actions, dtype=tf.int64)
-        actions = tf.reshape(actions, shape=[-1])
         
         with tf.GradientTape() as tape:
             tape.watch(self.trainable_variables)
 
             # forward
             logits, values = self._forward(obs, training=True)
+            distrib   = self.agent.policy_net.get_distribution(logits)
 
-            log_probs = Categorical.log_prob(logits, actions)
-            entropy   = Categorical.entropy(logits)
+            log_probs = distrib.log_prob(actions)
+            entropy   = distrib.entropy()
             kl        = 0.5 * tf.math.reduce_mean(tf.math.square(old_log_probs - log_probs))
-
-            values    = tf.reshape(values, shape=[-1])
 
             # compute policy loss & value loss
             pi_loss   = self.policy_loss(advantages, log_probs, old_log_probs, self.clip_range)
@@ -816,7 +878,7 @@ class PPO(tf.keras.Model):
 
         return self
 
-    def config(self):
+    def get_config(self):
 
         init_config = {'learning_rate':   self.learning_rate,
                         'batch_size':      self.batch_size,
@@ -830,9 +892,10 @@ class PPO(tf.keras.Model):
                         'vf_coef':         self.vf_coef,
                         'max_grad_norm':   self.max_grad_norm,
                         'target_kl':       self.target_kl,
+                        'force_mlp':       self.force_mlp,
                         'verbose':         self.verbose}
 
-        setup_config = {'obervation_space': self.observation_space,
+        setup_config = {'observation_space': self.observation_space,
                         'action_space': self.action_space}
 
         state_config = {'num_timesteps': self.num_timesteps}

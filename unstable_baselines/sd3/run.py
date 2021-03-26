@@ -85,6 +85,7 @@ def parse_args():
     parser.add_argument('--action_noise_clip',   type=float, default=0.5,     help='Target action noise clip range')
     parser.add_argument('--explore_noise',       action='store_true',         help='Enable exploration noise')
     parser.add_argument('--importance_sampling', action='store_true',         help='Enable importance sampling in softmax operator')
+    parser.add_argument('--record_video',        action='store_true',         help='Enable video recording')
     a = parser.parse_args()
 
     a.logdir      = a.logdir.format(env_id=a.env_id, rank=a.rank)
@@ -133,6 +134,7 @@ if __name__ == '__main__':
     LOG.add_row('Env ID',           a.env_id)
     LOG.add_row('Seed',             a.seed)
     LOG.add_row('Eval seed',        a.eval_seed)
+    LOG.add_row('Record video',     a.record_video)
     LOG.add_line()
     LOG.add_row('Num of envs',           a.num_envs)
     LOG.add_row('Num of steps/episode ', a.num_steps)
@@ -161,26 +163,25 @@ if __name__ == '__main__':
 
     # === Make envs ===
     # make pybullet/mujoco env
-    def make_env(env_id, rank, log_path, seed=0):
+    def make_env(rank, a):
         def _init():
             import pybullet_envs
-
-            env = gym.make(env_id)
-            env.seed(seed + rank)
-            env = Monitor(env, directory=log_path, prefix=str(rank),
-                        enable_video_recording=True, force=True,
+            env = gym.make(a.env_id)
+            env.seed(a.seed + rank)
+            env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
+                        enable_video_recording=a.record_video, force=True,
                         video_kwargs={'prefix':'video/train.{}'.format(rank)})
             return env
-        set_global_seeds(seed)
+        set_global_seeds(a.seed)
         return _init
 
-    env = SubprocVecEnv([make_env(a.env_id, i, a.monitor_dir, seed=a.seed) for i in range(a.num_envs)])
+    env = SubprocVecEnv([make_env(i, a) for i in range(a.num_envs)])
 
     # make env for evaluation
     eval_env = gym.make(a.env_id)
     eval_env.seed(a.eval_seed)
     eval_env = Monitor(eval_env, directory=a.monitor_dir, prefix='eval',
-                       enable_video_recording=True, force=True,
+                       enable_video_recording=a.record_video, force=True,
                        video_kwargs={'prefix':'video/eval',
                                      'width': 640,
                                      'height': 480,

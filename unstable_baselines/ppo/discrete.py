@@ -97,12 +97,12 @@ class GaeBuffer():
         '''
         Add samples, (np.array)
         
-        obs: observations, shape: (n_envs, obs size)
-        action: actions, shape: (n_envs, 1)
-        reward: reward, shape: (n_envs)
-        done: done, shape: (n_envs)
-        value: value, shape: (n_envs)
-        log_prob: log pi, shape: (n_envs)
+        obs: observations, shape: (n_envs, obs_space.shape)
+        action: actions, shape: (n_envs,)
+        reward: reward, shape: (n_envs,)
+        done: done, shape: (n_envs,)
+        value: value, shape: (n_envs,)
+        log_prob: log pi, shape: (n_envs,)
         '''
         
 
@@ -111,12 +111,12 @@ class GaeBuffer():
         if len(log_prob.shape) == 0:
             log_prob = log_prob.reshape(-1, 1)
 
-        #LOG.debug('observation shape: {}'.format(np.asarray(obs).shape))
-        #LOG.debug('action shape: {}'.format(np.asarray(action).shape))
-        #LOG.debug('reward shape: {}'.format(np.asarray(reward).shape))
-        #LOG.debug('done shape: {}'.format(np.asarray(done).shape))
-        #LOG.debug('value shape: {}'.format(value.flatten().shape))
-        #LOG.debug('log probs shape: {}'.format(log_prob.shape))
+        LOG.debug('observation shape: {}'.format(np.asarray(obs).shape))
+        LOG.debug('action shape: {}'.format(np.asarray(action).shape))
+        LOG.debug('reward shape: {}'.format(np.asarray(reward).shape))
+        LOG.debug('done shape: {}'.format(np.asarray(done).shape))
+        LOG.debug('value shape: {}'.format(np.asarray(value).shape))
+        LOG.debug('log probs shape: {}'.format(np.asarray(log_prob).shape))
 
         self.observations.append(np.asarray(obs).copy())
         self.actions.append(np.asarray(action).copy())
@@ -352,8 +352,6 @@ class PPOAgent(SavableModel):
     def setup_model(self, observation_space, action_space):
 
         # check observation/action space
-        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
-        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
 
         self.observation_space = observation_space
         self.action_space      = action_space
@@ -432,7 +430,7 @@ class PPOAgent(SavableModel):
         return to_json_serializable(config)
 
 
-class PPO(tf.keras.Model):
+class PPO(SavableModel):
     def __init__(self, env, learning_rate: float = 3e-4, 
                             n_steps:         int = 2048, 
                             batch_size:      int = 64, 
@@ -478,8 +476,6 @@ class PPO(tf.keras.Model):
     
     def setup_model(self, observation_space, action_space):
 
-        assert isinstance(observation_space, gym.spaces.Discrete), 'The observation space must be gym.spaces.Discrete, got {}'.format(type(observation_space))
-        assert isinstance(action_space, gym.spaces.Discrete), 'The action space must be gym.spaces.Discrete, got {}'.format(type(action_space))
 
         self.observation_space = env.observation_space
         self.action_space      = env.action_space
@@ -549,8 +545,6 @@ class PPO(tf.keras.Model):
             # step environment
             new_obs, rews, dones, infos = self.env.step(actions)
             
-            # if action space is Discrete, reshape
-            actions = actions.reshape(-1, 1)
             self.buffer.add(obs, actions, rews, dones, values, log_probs)
             obs = new_obs
 
@@ -830,9 +824,9 @@ class PPO(tf.keras.Model):
 
         return self
 
-    def config(self):
+    def get_config(self):
 
-        init_config = {'learning_rate':   self.learning_rate,
+        init_config = {'learning_rate':    self.learning_rate,
                         'batch_size':      self.batch_size,
                         'n_epochs':        self.n_epochs,
                         'n_steps':         self.n_steps,
