@@ -686,7 +686,7 @@ class PPO(SavableModel):
 
         for _ in range(steps):
             
-            actions, values, log_probs = self(obs)
+            actions, values, log_probs = self(obs, deterministic=False)
 
             actions   = actions.numpy()
             values    = values.numpy()
@@ -797,10 +797,8 @@ class PPO(SavableModel):
             all_ent_loss = []
 
             for replay_data in self.buffer(batch_size):
-                # convert data to tensor object
-                tensor_data = map(tf.convert_to_tensor, replay_data)
                 # update once
-                loss, kl, entropy, pi_loss, vf_loss, ent_loss = self._train_step(*tensor_data)
+                loss, kl, entropy, pi_loss, vf_loss, ent_loss = self._train_step(*replay_data)
                 
                 all_loss.append(loss.numpy())
                 all_kl.append(kl.numpy())
