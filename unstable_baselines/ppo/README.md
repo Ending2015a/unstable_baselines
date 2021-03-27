@@ -22,8 +22,6 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 |-|-|
 |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BeamRiderNoFrameskip-v0.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BreakoutNoFrameskip-v0.eval.gif" height=300px>|
 
-
-
 ### Learning Curve
 
 > Learning curve
@@ -37,50 +35,13 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 
 ## Architecture
 
-|             | `Box` | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
-|:-----------:|:-----:|:------------------:|:---------------:|:-------------:|
-| Observation |       | :heavy_check_mark: | :x:             | :x:           |
-| Action      |       | :heavy_check_mark: | :x:             | :x:           |
+|             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
+|:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
+| Observation | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
+| Action      | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
 
 <br/>
 <br/>
 
 
-![](https://g.gravizo.com/source/svg/ppo_discrete?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Fppo%2FREADME.md)
-
-
-<details>
-<summary></summary>
-ppo_discrete
-digraph D {
-    splines=false;
-    bgcolor=white;
-    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
-    obs[label="Observation"];
-    subgraph cluster_cnn{
-        label="Nature CNN";
-        labeljust="l";
-        graph[style=dotted];
-        nature_cnn [shape=record, label="{Conv2D(32, 8, 4)|ReLU|Conv2D(64, 4, 2)|ReLU|Conv2D(32, 3, 1)|ReLU|Dense(512)|ReLU}"]
-    }
-    subgraph cluster_policy{
-        label="Policy";
-        labeljust="l";
-        graph[style=dashed];
-        policy_net [shape=record, label="Dense(Action space)"];
-    }
-    subgraph cluster_value{
-        label="Value";
-        labeljust="l";
-        graph[style=dashed];
-        value_net [shape=record, label="Dense(1)"];
-    }
-    obs -> nature_cnn;
-    nature_cnn:s->{policy_net, value_net};
-    policy_net -> pi;
-    value_net -> v;
-    pi[label="Action"];
-    v[label="Value"]
-}
-ppo_discrete
-</details>
+![](https://g.gravizo.com/source/svg/ppo_discrete?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fppo.arch.md)

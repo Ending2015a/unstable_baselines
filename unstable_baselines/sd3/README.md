@@ -47,35 +47,7 @@ python -m unstable_baselines.sd3.run \
 <br/>
 <br/>
 
-![](https://g.gravizo.com/source/svg/sd3_arch?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines%2Fmaster%2Funstable_baselines%2Fsd3%2FREADME.md)
+![](https://g.gravizo.com/source/svg/sd3_arch?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fsd3.arch.md)
 
-<details>
-<summary></summary>
-sd3_arch
-digraph D {
-    splines=false;
-    node [shape=box, color=black, fontsize=12, height=0.1, width=0.1];
-    input1[label="Observation"];
-    input2[shape=record, label="Observation|Action"];
-    subgraph cluster_actor{
-        label="Actor";
-        labeljust="l";
-        graph[style=dotted];
-        actor [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(Action space)|Tanh}"]
-    }
-    subgraph cluster_critic{
-        label="Critic";
-        labeljust="l";
-        graph[style=dotted];
-        critic [shape=record, label="{Dense(400)|ReLU|Dense(300)|ReLU|Dense(1)}"]
-    }    
-    input1 -> actor:n;
-    input2 -> critic:n;
-    actor:s -> pi;
-    critic:s -> v;
-    pi[label="Action"];
-    v[label="Value"]
-}
-sd3_arch
-</details>
+
 
