@@ -51,6 +51,7 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.base import SavableModel
+from unstable_baselines.bugs import ReLU
 from unstable_baselines.utils import (normalize,
                                       unnormalize,
                                       to_json_serializable,
@@ -173,13 +174,14 @@ class Actor(tf.keras.Model):
         self._layers = [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(400, name='fc1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Dense(300, name='fc2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
             tf.keras.layers.Dense(action_space.shape[0], name='fc3'),
             tf.keras.layers.Activation(activation='tanh', name='tanh')
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         x = inputs
         for layer in self._layers:
@@ -211,12 +213,13 @@ class Critic(tf.keras.Model):
         self._layers = [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(400, name='fc1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Dense(300, name='fc2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
             tf.keras.layers.Dense(1, name='fc3')
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         # inputs = [observations, actions]
 
@@ -278,6 +281,7 @@ class Agent(SavableModel):
     def _forward(self, inputs):
         return self.actor(inputs)
 
+    @tf.function
     def call(self, inputs, normalized=True):
         '''
         Forward actor
@@ -409,6 +413,7 @@ class TD3(SavableModel):
         '''
         return self.agent._forward(inputs)
 
+    @tf.function
     def call(self, inputs, normalized=True):
         return self.agent(inputs, normalized=normalized)
 
@@ -504,7 +509,7 @@ class TD3(SavableModel):
         self.agent_target.critic_1.update(self.agent.critic_1, polyak=self.tau)
         self.agent_target.critic_2.update(self.agent.critic_2, polyak=self.tau)
 
-
+    @tf.function
     def _train_actor(self, obs):
         '''
         Update actor
@@ -521,6 +526,7 @@ class TD3(SavableModel):
 
         return loss
 
+    @tf.function
     def _train_critic(self, obs, action, next_obs, done, reward):
         '''
         Update critics

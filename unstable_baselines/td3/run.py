@@ -211,6 +211,7 @@ if __name__ == '__main__':
         LOG.info('DONE')
 
         # Save complete model (continue training)
+        LOG.info('Saving model to: {}'.format(a.model_dir))
         model.save(a.model_dir)
         loaded_model = TD3.load(a.model_dir)
 
@@ -225,11 +226,13 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
+        # LOG.info('Saving model to: {}'.format(a.model_dir))
         # model.agent.save(a.model_dir)
         # loaded_model = TD3Agent.load(a.model_dir)
 
 
         # Evaluation
+        LOG.info('Evaluating model')
         eps_rews  = []
         eps_steps = []
         for episode in range(a.eval_episodes):
