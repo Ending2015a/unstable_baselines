@@ -34,7 +34,6 @@ import datetime
 
 # --- 3rd party ---
 import gym
-import cloudpickle
 
 import numpy as np
 import tensorflow as tf
@@ -139,7 +138,6 @@ def make_env(a, eval=False):
     if not eval:
         def _make_env(rank, a):
             def _init():
-                import pybullet_envs
                 env = gym.make(a.env_id)
                 env.seed(a.seed + rank)
                 env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),

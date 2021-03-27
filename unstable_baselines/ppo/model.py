@@ -32,6 +32,7 @@ import datetime
 
 # --- 3rd party ---
 import gym
+import cloudpickle
 
 import numpy as np
 import tensorflow as tf
@@ -39,14 +40,17 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines import logger
 
+
 from unstable_baselines.base import SavableModel
-from unstable_baselines.prob import (Categorical, 
+from unstable_baselines.bugs import ReLU
+from unstable_baselines.prob import (Categorical,
                                      MultiNormal)
 from unstable_baselines.utils import (set_global_seeds,
                                       normalize,
                                       unnormalize,
                                       to_json_serializable,
                                       from_json_serializable)
+
 
 
 # create logger
@@ -189,6 +193,81 @@ class GaeBuffer():
         return v
 
 
+# class Categorical():
+
+#     @staticmethod
+#     @tf.function
+#     def _p(logits):
+#         '''
+#         Probability distribution
+#         '''
+#         return tf.math.exp(Categorical._log_p(logits))
+
+#     @staticmethod
+#     @tf.function
+#     def _log_p(logits):
+#         '''
+#         Log probability distribution
+#         '''
+#         x = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
+#         e = tf.math.exp(x)
+#         z = tf.math.reduce_sum(e, axis=-1, keepdims=True)
+#         return x - tf.math.log(z)
+
+#     @staticmethod
+#     @tf.function
+#     def log_prob(logits, x):
+#         '''
+#         Log probability of given outcomes (x)
+#         '''
+#         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
+#                             labels=x, logits=logits)
+
+#     @staticmethod
+#     @tf.function
+#     def mode(logits):
+#         '''
+#         Mode
+#         '''
+#         return tf.math.argmax(logits, axis=-1)
+
+#     @staticmethod
+#     @tf.function
+#     def sample(logits):
+#         '''
+#         Sample outcomes
+#         '''
+#         e = tf.random.uniform(tf.shape(logits))
+#         it = logits - tf.math.log(-tf.math.log(e))
+#         return tf.math.argmax(it, axis=-1)
+
+#     @staticmethod
+#     @tf.function
+#     def entropy(logits):
+#         '''
+#         Entropy
+#         '''
+#         m = tf.math.reduce_max(logits, axis=-1, keepdims=True)
+#         x = logits - m
+#         z = tf.math.reduce_sum(tf.math.exp(x), axis=-1)
+#         xex = tf.math.multiply_no_nan(logits, tf.math.exp(x))
+#         p = tf.math.reduce_sum(xex, axis=-1) / z
+#         return tf.math.reduce_max(logits, axis=-1) + tf.math.log(z) - p
+
+#     @staticmethod
+#     @tf.function
+#     def kl(q):
+#         '''
+#         KL divergence
+
+#         q: target probability distribution (Categorical)
+#         '''
+#         logp = self._log_p()
+#         logq = q._log_p()
+#         p = tf.math.exp(logp)
+#         return tf.math.reduce_sum(p * (logq-logp), axis=-1)
+
+
 # === Networks ===
 
 # CNN feature extractor
@@ -202,16 +281,17 @@ class NatureCnn(tf.keras.Model):
 
         self._layers = [
             tf.keras.layers.Conv2D(32, 8, 4, name='conv1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Conv2D(64, 4, 2, name='conv2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
             tf.keras.layers.Conv2D(64, 3, 1, name='conv3'),
-            tf.keras.layers.ReLU(name='relu3'),
+            ReLU(name='relu3'),
             tf.keras.layers.Flatten(name='flatten'),
             tf.keras.layers.Dense(512, name='fc'),
-            tf.keras.layers.ReLU(name='relu4')
+            ReLU(name='relu4')
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: observations with shape (batch, obs_space.shape)
@@ -230,10 +310,12 @@ class Mlp(tf.keras.Model):
         self._layers = [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(64, name='fc1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Dense(64, name='fc2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
         ]
+    
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: observations with shape (batch, obs_space.shape)
@@ -253,6 +335,7 @@ class CategoricalPolicyNet(tf.keras.Model):
             tf.keras.layers.Dense(action_space.n)
         ]
     
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: latent with shape (batch, latent_size)
@@ -279,10 +362,10 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         ]
         
         # State-independent std
-        self._logstd = tf.Variable(np.zeros(shape=(action_space.shape[0],), 
-                                            dtype=np.float32),
-                                   dtype=tf.float32)
+        self._logstd = tf.Variable(np.zeros(shape=(action_space.shape[0],),
+                            dtype=np.float32))
 
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: latent with shape (batch, latent_size)
@@ -315,6 +398,7 @@ class PolicyNet(tf.keras.Model):
         else:
             raise NotImplementedError('Action space not supported: {}'.format(type(action_space)))
 
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: latent with shape (batch, latent_size)
@@ -337,6 +421,7 @@ class ValueNet(tf.keras.Model):
             tf.keras.layers.Dense(1)
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         '''
         inputs: latent with shape (batch, latent_size)
@@ -398,9 +483,9 @@ class Agent(SavableModel):
 
         return logits, values
         '''
-
+        
         # cast and normalize non-float32 inputs (e.g. image with uint8)
-        if inputs.dtype != tf.float32:
+        if tf.as_dtype(inputs.dtype) != tf.float32:
             # cast observations to float32
             inputs = tf.cast(inputs, dtype=tf.float32)
             low    = tf.cast(self.observation_space.low, dtype=tf.float32)
@@ -418,6 +503,7 @@ class Agent(SavableModel):
 
         return logits, values
 
+    @tf.function
     def call(self, inputs, deterministic=False, training=True):
         '''
         Predict actions
@@ -430,7 +516,7 @@ class Agent(SavableModel):
                log_probs  shape (batch, )
         '''
 
-        # forward 
+        # forward
         logits, values = self._forward(inputs, training=training)
         distrib = self.policy_net.get_distribution(logits)
 
@@ -561,6 +647,7 @@ class PPO(SavableModel):
         '''
         return self.agent._forward(input, training=training)
     
+    @tf.function
     def call(self, inputs, deterministic=False, training=True):
         '''
         Predict actions
@@ -618,7 +705,7 @@ class PPO(SavableModel):
         return new_obs
 
     @tf.function
-    def policy_loss(self, advantage, log_prob, old_log_prob, clip_range):
+    def policy_loss(self, advantage, log_prob, old_log_prob):
         '''
         Compute policy loss (Clipped surrogate loss)
         
@@ -632,13 +719,13 @@ class PPO(SavableModel):
         ratio = tf.exp(log_prob - old_log_prob)
         # clipped surrogate loss
         policy_loss_1 = advantage * ratio
-        policy_loss_2 = advantage * tf.clip_by_value(ratio, 1-clip_range, 1+clip_range)
+        policy_loss_2 = advantage * tf.clip_by_value(ratio, 1.-self.clip_range, 1.+self.clip_range)
         policy_loss   = -tf.math.reduce_mean(tf.minimum(policy_loss_1, policy_loss_2))
 
         return policy_loss
     
     @tf.function
-    def value_loss(self, values, old_values, returns, clip_range_vf):
+    def value_loss(self, values, old_values, returns):
         '''
         Compute value loss
 
@@ -646,14 +733,14 @@ class PPO(SavableModel):
         old_values: (batch, )
         returns:    (batch, )
         '''
-        if clip_range_vf is None:
+        if self.clip_range_vf is None:
             values_pred = values
         else:
-            # clipping
-            values_pred = old_values + tf.clip_by_value(values-old_values, -clip_range_vf, clip_range_vf)
+            values_pred = old_values + tf.clip_by_value(values-old_values, -self.clip_range_vf, self.clip_range_vf)
         
         return tf.keras.losses.MSE(returns, values_pred)
 
+    @tf.function
     def _train_step(self, obs, actions, old_values, old_log_probs, advantages, returns):
         '''
         Update networks (one step gradient)
@@ -680,8 +767,8 @@ class PPO(SavableModel):
             kl        = 0.5 * tf.math.reduce_mean(tf.math.square(old_log_probs - log_probs))
 
             # compute policy loss & value loss
-            pi_loss   = self.policy_loss(advantages, log_probs, old_log_probs, self.clip_range)
-            vf_loss   = self.value_loss(values, old_values, returns, self.clip_range_vf)
+            pi_loss   = self.policy_loss(advantages, log_probs, old_log_probs)
+            vf_loss   = self.value_loss(values, old_values, returns)
 
             # compute entropy loss
             ent_loss  = -tf.math.reduce_mean(entropy)
@@ -710,8 +797,10 @@ class PPO(SavableModel):
             all_ent_loss = []
 
             for replay_data in self.buffer(batch_size):
+                # convert data to tensor object
+                tensor_data = map(tf.convert_to_tensor, replay_data)
                 # update once
-                loss, kl, entropy, pi_loss, vf_loss, ent_loss = self._train_step(*replay_data)
+                loss, kl, entropy, pi_loss, vf_loss, ent_loss = self._train_step(*tensor_data)
                 
                 all_loss.append(loss.numpy())
                 all_kl.append(kl.numpy())
