@@ -240,6 +240,7 @@ if __name__ == '__main__':
 
 
         # Evaluation
+        LOG.info('Evaluating model')
         eps_rews  = []
         eps_steps = []
         for episode in range(a.eval_episodes):

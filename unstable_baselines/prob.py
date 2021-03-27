@@ -19,8 +19,7 @@ __all__ = [
 
 # === tf probability ===
 
-class Distribution(tf.Module,
-                    metaclass=abc.ABCMeta):
+class Distribution(metaclass=abc.ABCMeta):
     def __init__(self, dtype, **kwargs):
         super().__init__(**kwargs)
         self.dtype = dtype
@@ -76,7 +75,7 @@ class Categorical(Distribution):
 
         super().__init__(dtype=self._logits.dtype,
                         **kwargs)
-        
+
     @property
     def logits(self):
         return self._logits
