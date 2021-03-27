@@ -51,7 +51,8 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 from unstable_baselines.base import SavableModel
-from unstable_baselines.prob import Normal
+from unstable_baselines.bugs import ReLU
+from unstable_baselines.prob import MultiNormal
 from unstable_baselines.utils import (normalize,
                                       unnormalize,
                                       to_json_serializable,
@@ -174,13 +175,14 @@ class Actor(tf.keras.Model):
         self._layers = [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(400, name='fc1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Dense(300, name='fc2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
             tf.keras.layers.Dense(action_space.shape[0], name='fc3'),
             tf.keras.layers.Activation(activation='tanh', name='tanh')
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         x = inputs
         for layer in self._layers:
@@ -212,12 +214,13 @@ class Critic(tf.keras.Model):
         self._layers = [
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(400, name='fc1'),
-            tf.keras.layers.ReLU(name='relu1'),
+            ReLU(name='relu1'),
             tf.keras.layers.Dense(300, name='fc2'),
-            tf.keras.layers.ReLU(name='relu2'),
+            ReLU(name='relu2'),
             tf.keras.layers.Dense(1, name='fc3')
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
         # inputs = [observations, actions]
 
@@ -279,6 +282,7 @@ class Agent(SavableModel):
     def _forward(self, inputs):
         return self.actor(inputs)
 
+    @tf.function
     def call(self, inputs, normalized=True):
         '''
         Forward actor
@@ -290,7 +294,9 @@ class Agent(SavableModel):
         action = self._forward(inputs)
 
         if not normalized:
-            action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
+            low    = tf.cast(self.action_space.low, tf.float32)
+            high   = tf.cast(self.action_space.high, tf.float32)
+            action = unnormalize(action, high=high, low=low)
         
         return action
 
@@ -416,6 +422,7 @@ class SD3(SavableModel):
         '''
         return self.agent._forward(inputs)
 
+    @tf.function
     def call(self, inputs, normalized=True):
         return self.agent(inputs, normalized=normalized)
 
@@ -507,8 +514,7 @@ class SD3(SavableModel):
         noise_mean   = tf.constant(0., dtype=tf.float32)
         noise_scale  = tf.constant(self.action_noise, dtype=tf.float32)
         noise        = tf.random.normal(shape=dup_act_shape) * noise_scale
-        noise_prob   = Normal(noise_mean, noise_scale).prob(noise)            # (batch, action_samples, act_space.shape)
-        noise_prob   = tf.math.reduce_prod(noise_prob, axis=-1)               # (batch, action_samples)
+        noise_prob   = MultiNormal(noise_mean, noise_scale).prob(noise)       # (batch, action_samples)
         noise        = tf.clip_by_value(noise, -self.action_noise_clip, self.action_noise_clip)
         dup_next_act = tf.clip_by_value(dup_next_act + noise, -1., 1.)
 
@@ -550,6 +556,7 @@ class SD3(SavableModel):
         self.agent_target.critic_2.update(self.agent.critic_2, polyak=self.tau)
 
 
+    @tf.function
     def _train_actor(self, obs):
         '''
         Update actor
@@ -566,6 +573,7 @@ class SD3(SavableModel):
 
         return loss
 
+    @tf.function
     def _train_critic(self, obs, action, next_obs, done, reward):
         '''
         Update critics

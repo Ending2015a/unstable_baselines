@@ -34,6 +34,7 @@ import datetime
 
 # --- 3rd party ---
 import gym
+import cloudpickle
 
 import numpy as np
 import tensorflow as tf
@@ -218,6 +219,7 @@ if __name__ == '__main__':
         LOG.info('DONE')
 
         # Save complete model (continue training)
+        LOG.info('Saving model to: {}'.format(a.model_dir))
         model.save(a.model_dir)
         loaded_model = SD3.load(a.model_dir)
 
@@ -232,6 +234,7 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
+        # LOG.info('Saving model to: {}'.format(a.model_dir))
         # model.agent.save(a.model_dir)
         # loaded_model = SD3Agent.load(a.model_dir)
 
