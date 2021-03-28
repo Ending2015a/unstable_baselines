@@ -19,7 +19,8 @@ __all__ = [
 
 # === tf probability ===
 
-class Distribution(metaclass=abc.ABCMeta):
+class Distribution(tf.Module, 
+                    metaclass=abc.ABCMeta):
     def __init__(self, dtype, **kwargs):
         super().__init__(**kwargs)
         self.dtype = dtype
@@ -112,7 +113,7 @@ class Categorical(Distribution):
         '''
         Sample outcomes
         '''
-        e = tf.random.uniform(tf.shape(self.logits))
+        e  = tf.random.uniform(tf.shape(self.logits))
         it = self.logits - tf.math.log(-tf.math.log(e))
         return tf.math.argmax(it, axis=-1)
 
@@ -120,11 +121,11 @@ class Categorical(Distribution):
         '''
         Entropy
         '''
-        m = tf.math.reduce_max(self.logits, axis=-1, keepdims=True)
-        x = self.logits - m
-        z = tf.math.reduce_sum(tf.math.exp(x), axis=-1)
+        m   = tf.math.reduce_max(self.logits, axis=-1, keepdims=True)
+        x   = self.logits - m
+        z   = tf.math.reduce_sum(tf.math.exp(x), axis=-1)
         xex = tf.math.multiply_no_nan(self.logits, tf.math.exp(x))
-        p = tf.math.reduce_sum(xex, axis=-1) / z
+        p   = tf.math.reduce_sum(xex, axis=-1) / z
         return m[..., 0] + tf.math.log(z) - p
 
     def kl(self, q):
@@ -135,7 +136,7 @@ class Categorical(Distribution):
         '''
         logp = self._log_p()
         logq = q._log_p()
-        p = tf.math.exp(logp)
+        p    = tf.math.exp(logp)
         return tf.math.reduce_sum(p * (logq-logp), axis=-1)
 
 
