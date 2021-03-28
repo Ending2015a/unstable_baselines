@@ -142,8 +142,8 @@ class GaeBuffer():
 
     def make(self):
 
-        self.observations = np.asarray(self.observations, dtype=np.float32) # (steps, n_envs, obs_space.shape)
-        self.actions      = np.asarray(self.actions,      dtype=np.float32) # (steps, n_envs, act_space.shape)
+        self.observations = np.asarray(self.observations) # (steps, n_envs, obs_space.shape)
+        self.actions      = np.asarray(self.actions)      # (steps, n_envs, act_space.shape)
         self.rewards      = np.asarray(self.rewards,      dtype=np.float32) # (steps, n_envs)
         self.dones        = np.asarray(self.dones,        dtype=np.float32) # (steps, n_envs)
         self.values       = np.asarray(self.values,       dtype=np.float32) # (steps, n_envs)
@@ -191,82 +191,6 @@ class GaeBuffer():
             v = v.swapaxes(0, 1).reshape(shape[0]*shape[1], *shape[2:])
 
         return v
-
-
-# class Categorical():
-
-#     @staticmethod
-#     @tf.function
-#     def _p(logits):
-#         '''
-#         Probability distribution
-#         '''
-#         return tf.math.exp(Categorical._log_p(logits))
-
-#     @staticmethod
-#     @tf.function
-#     def _log_p(logits):
-#         '''
-#         Log probability distribution
-#         '''
-#         x = logits - tf.math.reduce_max(logits, axis=-1, keepdims=True)
-#         e = tf.math.exp(x)
-#         z = tf.math.reduce_sum(e, axis=-1, keepdims=True)
-#         return x - tf.math.log(z)
-
-#     @staticmethod
-#     @tf.function
-#     def log_prob(logits, x):
-#         '''
-#         Log probability of given outcomes (x)
-#         '''
-#         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
-#                             labels=x, logits=logits)
-
-#     @staticmethod
-#     @tf.function
-#     def mode(logits):
-#         '''
-#         Mode
-#         '''
-#         return tf.math.argmax(logits, axis=-1)
-
-#     @staticmethod
-#     @tf.function
-#     def sample(logits):
-#         '''
-#         Sample outcomes
-#         '''
-#         e = tf.random.uniform(tf.shape(logits))
-#         it = logits - tf.math.log(-tf.math.log(e))
-#         return tf.math.argmax(it, axis=-1)
-
-#     @staticmethod
-#     @tf.function
-#     def entropy(logits):
-#         '''
-#         Entropy
-#         '''
-#         m = tf.math.reduce_max(logits, axis=-1, keepdims=True)
-#         x = logits - m
-#         z = tf.math.reduce_sum(tf.math.exp(x), axis=-1)
-#         xex = tf.math.multiply_no_nan(logits, tf.math.exp(x))
-#         p = tf.math.reduce_sum(xex, axis=-1) / z
-#         return tf.math.reduce_max(logits, axis=-1) + tf.math.log(z) - p
-
-#     @staticmethod
-#     @tf.function
-#     def kl(q):
-#         '''
-#         KL divergence
-
-#         q: target probability distribution (Categorical)
-#         '''
-#         logp = self._log_p()
-#         logq = q._log_p()
-#         p = tf.math.exp(logp)
-#         return tf.math.reduce_sum(p * (logq-logp), axis=-1)
-
 
 # === Networks ===
 
@@ -485,13 +409,14 @@ class Agent(SavableModel):
         '''
         
         # cast and normalize non-float32 inputs (e.g. image with uint8)
+        # TODO: a better way to decide if normalization is needed?
         if tf.as_dtype(inputs.dtype) != tf.float32:
             # cast observations to float32
             inputs = tf.cast(inputs, dtype=tf.float32)
             low    = tf.cast(self.observation_space.low, dtype=tf.float32)
             high   = tf.cast(self.observation_space.high, dtype=tf.float32)
-            # normalize observations
-            inputs = normalize(inputs, low=low, high=high)
+            # normalize observations [0, 1]
+            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
 
         # forward network
         latent = self.net(inputs, training=training)
@@ -750,7 +675,7 @@ class PPO(SavableModel):
         old_values:    (batch, )
         old_log_probs: (batch, )
         advantages:    (batch, )
-        returns:       (batch,)
+        returns:       (batch, )
         '''
 
         actions = tf.cast(actions, dtype=tf.int64)

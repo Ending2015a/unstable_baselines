@@ -34,6 +34,7 @@ import datetime
 
 # --- 3rd party ---
 import gym
+import cloudpickle
 
 import numpy as np
 import tensorflow as tf
