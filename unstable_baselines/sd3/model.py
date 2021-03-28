@@ -296,7 +296,7 @@ class Agent(SavableModel):
         if not normalized:
             low    = tf.cast(self.action_space.low, tf.float32)
             high   = tf.cast(self.action_space.high, tf.float32)
-            action = unnormalize(action, high=high, low=low)
+            action = unnormalize(action, high=high, low=low, nlow=-1., nhigh=1.)
         
         return action
 
@@ -448,7 +448,7 @@ class SD3(SavableModel):
             if len(self.buffer) < self.min_buffer:
                 # random sample (collecting rollouts)
                 action = np.array([self.action_space.sample() for n in range(self.n_envs)])
-                action = normalize(action, high=self.action_space.high, low=self.action_space.low)
+                action = normalize(action, high=self.action_space.high, low=self.action_space.low, nlow=-1., nhigh=1.)
             else:
                 # sample from policy (normalized)
                 action = self(obs, normalized=True)
@@ -458,7 +458,7 @@ class SD3(SavableModel):
                 action = np.clip(action + self.explore_noise(shape=action.shape), -1, 1)
 
             # step environment
-            raw_action = unnormalize(action, high=self.action_space.high, low=self.action_space.low)
+            raw_action = unnormalize(action, high=self.action_space.high, low=self.action_space.low, nlow=-1., nhigh=1.)
             new_obs, reward, done, infos = self.env.step(raw_action)
             
             # add to buffer

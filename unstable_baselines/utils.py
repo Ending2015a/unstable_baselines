@@ -58,12 +58,17 @@ def set_global_seeds(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+def normalize(x, low, high, nlow=0.0, nhigh=1.0):
+    '''
+    Normalize x from [low, high] to [nlow, nhigh]
+    '''
+    return ((nhigh-nlow)/(high-low)) * (x-low) + nlow
 
-def normalize(x, high, low):
-    return 2.0 * ((x-low)/(high-low)) - 1.0
-
-def unnormalize(x, high, low):
-    return low + (0.5 * (x + 1.0) * (high - low))
+def unnormalize(x, low, high, nlow=0.0, nhigh=1.0):
+    '''
+    Unnormalize x from [nlow, nhigh] to [low, high]
+    '''
+    return ((high-low)/(nhigh-nlow)) * (x-nlow) + low
 
 def flatten_obs(obs, space):
     assert isinstance(obs, (list, tuple)), "expected list or tuple of observations per environment"
