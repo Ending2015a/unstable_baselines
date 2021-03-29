@@ -57,6 +57,10 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 ### Atari-like environment
 ![](https://g.gravizo.com/source/svg/ppo_discrete?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fppo.arch.md)
+<br/>
 <sup>`shared_net=True`</sup><br/>
 
+### Continuous control environment
 ![](https://g.gravizo.com/source/svg/ppo_continuous?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fppo.arch.md)
+<br/>
+<sup>`shared_net=False`</sup><br/>
