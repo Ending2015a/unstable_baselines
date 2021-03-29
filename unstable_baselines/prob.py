@@ -101,7 +101,8 @@ class Categorical(Distribution):
         Log probability of given outcomes (x)
         '''
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
-                            labels=x, logits=self.logits)
+                                labels=tf.cast(x, dtype=tf.int64), 
+                                logits=self.logits)
 
     def mode(self):
         '''
