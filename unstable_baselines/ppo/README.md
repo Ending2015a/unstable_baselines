@@ -4,15 +4,27 @@
 
 
 ## How to use
+
+### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v0" --num_envs=8 --num_episodes=20000 \
-               --num_steps=128 --num_epochs=4 --batch_size=256 --verbose=2
+               --num_steps=128 --num_epochs=4 --batch_size=256 --verbose=2 \
+               --shared_net --record_video
 ```
+<sup>Enable `shared_net` shares the CNN between policy and value function.</sup><br/>
+<sup>Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this case)</sup><br>
 
-Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this case)
-
+### Continuous control environment
+```python
+python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
+               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_episodes=1000 \
+               --num_steps=1024 --num_epochs=10 --batch_size=256 --verbose=2 \
+               --ent_coef=0.0 --record_video
+```
+<sup>Total timesteps (Samples) = num_envs * num_steps * num_episodes (~1M in this case)</sup><br>
 
 ## Atari 2600
 
@@ -43,5 +55,8 @@ Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this ca
 <br/>
 <br/>
 
-
+### Atari-like environment
 ![](https://g.gravizo.com/source/svg/ppo_discrete?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fppo.arch.md)
+<sup>`shared_net=True`</sup><br/>
+
+![](https://g.gravizo.com/source/svg/ppo_continuous?https%3A%2F%2Fraw.githubusercontent.com%2FEnding2015a%2Funstable_baselines_assets%2Fmaster%2Fscripts%2Farch%2Fppo.arch.md)

@@ -16,14 +16,6 @@ A TensorFlow 2.0 implementation of some Reinforcement Learning algorithms.
 | **Easy to trace, customize**   | :heavy_check_mark:                | :x: <sup>(3)</sup>  | :x: <sup>(3)</sup> |
 | **Standalone implementations for each algo** | :heavy_check_mark:  | :heavy_minus_sign:  | :x: <sup>(4)</sup> |
 
-
-<!--| Custom environments            | :heavy_check_mark:                | :heavy_check_mark:  | :heavy_check_mark: |
-| Custom policies                | :heavy_minus_sign:                | :heavy_check_mark:  | :heavy_minus_sign: |
-| Common interface               | :heavy_check_mark:                | :heavy_check_mark:  | :heavy_minus_sign: |
-| Tensorboard support            | :heavy_check_mark:                | :heavy_check_mark:  | :heavy_minus_sign: |
-| Ipython / Notebook friendly    | :x:                               | :heavy_check_mark:  | :x:                |
-| PEP8 code style                | :x:                               | :heavy_check_mark:  | :heavy_check_mark: |-->
-
 <sup>(1) Currently only support PPO, TD3, SD3. We are still working on other algorithms.</sup><br>
 <sup>(2) Do we really need this? </sup><br>
 <sup>(3) If you have traced Stable-baselines or OpenAI/baselines once, you'll never do that again.</sup><br>
@@ -38,11 +30,7 @@ We don't have any documentation yet.
 * Python >= 3.6
 * TensorFlow (CPU/[GPU](https://www.tensorflow.org/install/source#gpu)) >= 2.1.0
 
-Recommand
-* TensorFlow (GPU) < 2.4.0
-* CUDA < 11
-
-### Clone repo
+### Clone repository
 
 ```
 git clone --recursive https://github.com/Ending2015a/unstable_baselines.git
