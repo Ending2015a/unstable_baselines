@@ -141,7 +141,6 @@ class Categorical(Distribution):
         return tf.math.reduce_sum(p * (logq-logp), axis=-1)
 
 
-
 class Normal(Distribution):
     def __init__(self, mean, scale, dtype=tf.float32, **kwargs):
 

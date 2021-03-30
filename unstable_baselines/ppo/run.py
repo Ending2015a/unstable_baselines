@@ -79,6 +79,7 @@ def parse_args():
     parser.add_argument('--vf_coef',          type=float, default=0.5,  help='Value loss ratio')
     parser.add_argument('--max_grad_norm',    type=float, default=0.5,  help='Max gradient norm')
     parser.add_argument('--target_kl',        type=float, default=None, help='Target kl (early stop)')
+    parser.add_argument('--shared_net',       action='store_true',      help='Share backbone network')
     parser.add_argument('--force_mlp',        action='store_true',      help='Use MLP network')
     parser.add_argument('--record_video',     action='store_true',      help='Enable video recording')
 
@@ -145,7 +146,6 @@ def make_env(a, eval=False):
                 env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
                             enable_video_recording=a.record_video, force=True,
                             video_kwargs={'prefix':'video/train.{}'.format(rank)})
-                env = ClipRewardEnv(env)
                 return env
             set_global_seeds(a.seed)
             return _init
@@ -199,6 +199,7 @@ if __name__ == '__main__':
     LOG.add_row('Batch size',            a.batch_size)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
+    LOG.add_row('Shared network',        a.shared_net)
     LOG.add_row('Force MLP',             a.force_mlp)
     LOG.add_row('Learning rate',         a.lr)
     LOG.add_row('Gamma',                 a.gamma)
@@ -240,6 +241,7 @@ if __name__ == '__main__':
                          vf_coef         = a.vf_coef,
                          max_grad_norm   = a.max_grad_norm,
                          target_kl       = a.target_kl,
+                         shared_net      = a.shared_net,
                          force_mlp       = a.force_mlp,
                          verbose         = a.verbose)
         
@@ -282,7 +284,7 @@ if __name__ == '__main__':
             obs = eval_env.reset()
             total_rews = 0
 
-            for steps in range(10000):
+            for steps in range(a.eval_max_steps):
                 # predict action
                 acts = loaded_model.predict(obs)
                 # step environment
@@ -300,7 +302,7 @@ if __name__ == '__main__':
             LOG.flush('INFO')
         
             eps_rews.append(total_rews)
-            eps_steps.append(steps)
+            eps_steps.append(steps+1)
 
         max_idx    = np.argmax(eps_rews)
         max_rews   = eps_rews[max_idx]

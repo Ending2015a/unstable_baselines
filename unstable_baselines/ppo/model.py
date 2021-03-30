@@ -163,6 +163,7 @@ class GaeBuffer():
             
             self.advantages[step] = last_gae_lam
             
+            # prepare for next step
             next_non_terminal = 1.0 - self.dones[step]
             next_value = self.values[step]
         
@@ -227,7 +228,7 @@ class NatureCnn(tf.keras.Model):
 
 
 # Mlp feature extractor
-class Mlp(tf.keras.Model):
+class MlpNet(tf.keras.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -299,7 +300,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         for layer in self._layers:
             x = layer(x)
         
-        std = tf.expand_dims(tf.math.exp(self._logstd), axis=0)
+        std = tf.ones_like(x) * tf.math.exp(self._logstd)
         return x, std
 
     def get_distribution(self, logits):
@@ -314,7 +315,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
 class PolicyNet(tf.keras.Model):
     def __init__(self, action_space, **kwargs):
         super().__init__(**kwargs)
-
+        
         if isinstance(action_space, gym.spaces.Discrete):
             self._net = CategoricalPolicyNet(action_space)
         elif isinstance(action_space, gym.spaces.Box):
@@ -327,7 +328,6 @@ class PolicyNet(tf.keras.Model):
         '''
         inputs: latent with shape (batch, latent_size)
         '''
-        
         return self._net(inputs, training=training)
 
     def get_distribution(self, logits):
@@ -359,20 +359,22 @@ class ValueNet(tf.keras.Model):
 # ==== Agent, Model ===
 
 class Agent(SavableModel):
-    def __init__(self, observation_space, action_space, force_mlp=False, **kwargs):
+    def __init__(self, observation_space, action_space, shared_net=False, force_mlp=False, **kwargs):
         '''
         force_mlp: Force to use mlp network
         '''
         super().__init__(**kwargs)
 
-        self.force_mlp = force_mlp
+        self.shared_net = shared_net
+        self.force_mlp  = force_mlp
 
         # --- Initialize ---
         self.observation_space = None
-        self.action_space = None
-        self.net = None
-        self.policy_net = None
-        self.value_net = None
+        self.action_space      = None
+        self.net               = None
+        self.net2              = None
+        self.policy_net        = None
+        self.value_net         = None
 
         if observation_space is not None and action_space is not None:
             self.setup_model(observation_space, action_space)
@@ -384,18 +386,25 @@ class Agent(SavableModel):
 
         # --- setup model ---
         if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
-            # Image observation and not force to use mlp
             self.net = NatureCnn()
         else:
-            self.net = Mlp()
-            
+            self.net = MlpNet()
+        
         self.policy_net = PolicyNet(self.action_space)
+        
+        if not self.shared_net:
+            self.net2 = type(self.net)()
+        
         self.value_net  = ValueNet()
 
         # construct networks
         inputs  = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        
         outputs = self.net(inputs)
         self.policy_net(outputs)
+
+        if self.net2 is not None:
+            outputs = self.net2(inputs)
         self.value_net(outputs)
 
     @tf.function
@@ -409,7 +418,7 @@ class Agent(SavableModel):
         '''
         
         # cast and normalize non-float32 inputs (e.g. image with uint8)
-        # TODO: a better way to decide if normalization is needed?
+        # TODO: a better way to perform normalization?
         if tf.as_dtype(inputs.dtype) != tf.float32:
             # cast observations to float32
             inputs = tf.cast(inputs, dtype=tf.float32)
@@ -422,7 +431,10 @@ class Agent(SavableModel):
         latent = self.net(inputs, training=training)
         # forward policy net
         logits = self.policy_net(latent, training=training)
+
         # forward value net
+        if self.net2 is not None:
+            latent = self.net2(inputs, training=training)
         values = self.value_net(latent, training=training) # (batch, 1)
         values = tf.squeeze(values, axis=-1)               # (batch, )
 
@@ -487,6 +499,7 @@ class Agent(SavableModel):
 
         config = {'observation_space': self.observation_space,
                   'action_space':      self.action_space,
+                  'shared_net':        self.shared_net,
                   'force_mlp':         self.force_mlp}
 
         return to_json_serializable(config)
@@ -505,6 +518,7 @@ class PPO(SavableModel):
                             vf_coef:       float = 0.5, 
                             max_grad_norm: float = 0.5,
                             target_kl:     float = None,
+                            shared_net:     bool = False,
                             force_mlp:      bool = False,
                             verbose:         int = 0, 
                             **kwargs):
@@ -524,6 +538,7 @@ class PPO(SavableModel):
         self.vf_coef         = vf_coef
         self.max_grad_norm   = max_grad_norm
         self.target_kl       = target_kl
+        self.shared_net      = shared_net
         self.force_mlp       = force_mlp
         self.verbose         = verbose  # 0=no, 1=training log, 2=eval log
 
@@ -545,9 +560,10 @@ class PPO(SavableModel):
 
         # --- setup model ---
         self.buffer     = GaeBuffer(gae_lambda=self.gae_lambda, gamma=self.gamma)
-        self.agent      = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
+        self.agent      = Agent(self.observation_space, self.action_space, shared_net=self.shared_net, force_mlp=self.force_mlp)
         
-        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, clipnorm=self.max_grad_norm)
+        self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, epsilon=1e-5,
+                                                   clipnorm=self.max_grad_norm)
 
     def set_env(self, env):
 
@@ -611,20 +627,22 @@ class PPO(SavableModel):
 
         for _ in range(steps):
             
-            actions, values, log_probs = self(obs, deterministic=False)
+            raw_actions, values, log_probs = self(obs)
 
-            actions   = actions.numpy()
-            values    = values.numpy()
-            log_probs = log_probs.numpy()
+            raw_actions  = raw_actions.numpy()
+            values       = values.numpy()
+            log_probs    = log_probs.numpy()
 
             # clip action to a valid range (Continuous action)
             if isinstance(self.action_space, gym.spaces.Box):
-                actions = np.clip(actions, self.action_space.low, self.action_space.high)
+                actions = np.clip(raw_actions, self.action_space.low, self.action_space.high)
+            else:
+                actions = raw_actions
 
             # step environment
             new_obs, rews, dones, infos = self.env.step(actions)
             
-            self.buffer.add(obs, actions, rews, dones, values, log_probs)
+            self.buffer.add(obs, raw_actions, rews, dones, values, log_probs)
             obs = new_obs
 
         return new_obs
@@ -677,8 +695,6 @@ class PPO(SavableModel):
         advantages:    (batch, )
         returns:       (batch, )
         '''
-
-        actions = tf.cast(actions, dtype=tf.int64)
         
         with tf.GradientTape() as tape:
             tape.watch(self.trainable_variables)
@@ -930,6 +946,7 @@ class PPO(SavableModel):
                         'vf_coef':         self.vf_coef,
                         'max_grad_norm':   self.max_grad_norm,
                         'target_kl':       self.target_kl,
+                        'shared_net':      self.shared_net,
                         'force_mlp':       self.force_mlp,
                         'verbose':         self.verbose}
 
