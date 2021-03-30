@@ -40,10 +40,35 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 
 ### Hyperparametrs
-| `env_id` | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` |
-|-|:-:|:-:|:-:|:-:|:-:|
-| `BeamRiderNoFrameskip-v0`| 1 | 1000 | 1000 | 1000 | 256 |
-| `BreakoutNoFrameskip-v0` | 1 | 1000 | 1000 | 1000 | 256 |
+| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`       |
+| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:------------------:|
+|`BeamRiderNoFrameskip-v0`| 8          | 20000          | 128         | 4            | 256          | 0.01       | 0.5       | :heavy_check_mark: |
+|`BreakoutNoFrameskip-v0` | 8          | 20000          | 128         | 4            | 256          | 0.01       | 0.5       | :heavy_check_mark: |
+
+
+## Pybullet
+
+### Video
+
+| Environment | Video |
+|-|-|
+|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>
+| `AntBulletEnv-v0`|
+|`Walker2DBulletEnv-v0`|
+|`HumanoidBulletEnv-v0`|
+
+### Learning Curve
+
+> Learning curve
+
+
+### Hyperparametrs
+| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`       |
+| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:------------------:|
+|`HalfCheetahBulletEnv-v0`| 1          | 1000           | 2048        | 10           | 256          | 0.0        | 0.5       | :x:                |
+|`AntBulletEnv-v0`        | 1          | 1000           | 2048        | 10           | 256          | 0.0        | 0.5       | :x:                |
+|`Walker2DBulletEnv-v0`   | 1          | 1000           | 2048        | 10           | 256          | 0.0        | 0.5       | :x:                |
+|`HumanoidBulletEnv-v0`   | 1          | 1000           | 2048        | 10           | 256          | 0.0        | 0.5       | :x:                |
 
 ## Architecture
 
