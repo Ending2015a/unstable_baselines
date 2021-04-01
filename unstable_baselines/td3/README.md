@@ -32,12 +32,13 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 > Learning curve
 
 ### Hyperparameters
+
 | `env_id`                  | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`explore_noise` |
 |---------------------------|------------|----------------|-------------|------------------|--------------|----------------|----------------|
-| `HalfCheetahBulletEnv-v0` | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `AntBulletEnv-v0`         | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `HopperBulletEnv-v0`      | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `Walker2DBulletEnv-v0`    | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
+| `HalfCheetahBulletEnv-v0` | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | N(0, 0.1)      |
+| `AntBulletEnv-v0`         | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | N(0, 0.1)      |
+| `HopperBulletEnv-v0`      | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | N(0, 0.1)      |
+| `Walker2DBulletEnv-v0`    | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | N(0, 0.1)      |
 | `HumanoidBulletEnv-v0`    | 4          | 2500           | 1000        | 1000             | 256          | 3e-4           | `None`         |
 
 
