@@ -70,7 +70,7 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 |`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
 |`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
 |`Walker2DBulletEnv-v0`   | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`HumanoidBulletEnv-v0`   | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
+|`HumanoidBulletEnv-v0`   | 4          | 1000           | 500         | 15           | 200          | 0.0        | 0.5       | :x:                |
 
 ## Architecture
 

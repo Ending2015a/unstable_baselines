@@ -20,19 +20,26 @@ python -m unstable_baselines.sd3.run \
 
 ### Video
 
-> Best video
+| Environment | Video |
+|-|-|
+|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>|
+| `AntBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.AntBulletEnv-v0.eval.gif" width=300px/>|
+|`HopperBulletEnv-v0`  |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HopperBulletEnv-v0.eval.gif" width=300px/>|
+|`Walker2DBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.Walker2DBulletEnv-v0.eval.gif" width=300px/>|
+|`HumanoidBulletEnv-v0`||
 
 ### Learning Curve
 
 > Learning curve
 
 ### Hyperparameters
-|                           | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`action_noise` |
+| `env_id`                  | `num_envs` | `num_episodes` | `num_steps` | `gradient_steps` | `batch_size` | `learing_rate` |`explore_noise` |
 |---------------------------|------------|----------------|-------------|------------------|--------------|----------------|----------------|
-| `HalfCheetahBulletEnv-v0` | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `AntBulletEnv-v0`         | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `Walker2DBulletEnv-v0`    | 1          | 1000           | 1000        | 1000             | 100          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
-| `HumanoidBulletEnv-v0`    | 4          | 2500           | 1000        | 1000             | 256          | 3e-4           | $\mathcal{N}(0, 0.1)$ |
+| `HalfCheetahBulletEnv-v0` | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
+| `AntBulletEnv-v0`         | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
+| `HopperBulletEnv-v0`      | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
+| `Walker2DBulletEnv-v0`    | 1          | 1000           | 2000        | 1000             | 200          | 1e-3           | $\mathcal{N}(0, 0.1)$ |
+| `HumanoidBulletEnv-v0`    | 4          | 2500           | 1000        | 1000             | 256          | 3e-4           | `None`         |
 
 
 
