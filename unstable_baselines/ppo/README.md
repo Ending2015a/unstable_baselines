@@ -56,7 +56,7 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 | `AntBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.AntBulletEnv-v0.eval.gif" width=300px/>|
 |`HopperBulletEnv-v0`  |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HopperBulletEnv-v0.eval.gif" width=300px/>|
 |`Walker2DBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.Walker2DBulletEnv-v0.eval.gif" width=300px/>|
-|`HumanoidBulletEnv-v0`||
+|`HumanoidBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HumanoidBulletEnv-v0.eval.gif" width=300px/>|
 
 ### Learning Curve
 
@@ -70,7 +70,7 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 |`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
 |`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
 |`Walker2DBulletEnv-v0`   | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`HumanoidBulletEnv-v0`   | 4          | 1000           | 500         | 15           | 200          | 0.0        | 0.5       | :x:                |
+|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:                |
 
 ## Architecture
 
