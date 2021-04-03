@@ -64,13 +64,13 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 
 ### Hyperparametrs
-| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`       |
-| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:------------------:|
-|`HalfCheetahBulletEnv-v0`| 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`Walker2DBulletEnv-v0`   | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:                |
-|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:                |
+| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`  |
+| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:-------------:|
+|`HalfCheetahBulletEnv-v0`| 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
+|`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
+|`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
+|`Walker2DBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           |
+|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           |
 
 ## Architecture
 
