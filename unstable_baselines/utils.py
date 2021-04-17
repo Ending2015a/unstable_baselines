@@ -52,6 +52,14 @@ class NormalActionNoise():
     def reset(self):
         pass
 
+# === State object ===
+class StateObject(dict):
+    def __new__(cls, *args, **kwargs):
+        self = super().__new__(cls, *args, **kwargs)
+        self.__dict__ = self
+        return self
+    
+
 # === utils ===
 def set_global_seeds(seed):
     tf.random.set_seed(seed)
