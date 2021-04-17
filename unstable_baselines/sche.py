@@ -5,6 +5,7 @@ import abc
 import cv2
 import csv
 import sys
+import enum
 import glob
 import json
 import time
@@ -56,7 +57,16 @@ _RegisteredScheduler = _RegisteredSchedulerClass()
 
 
 class Scheduler(StateObject):
-    __slots__ = ['state_object']
+    __slots__ = ['state_object', 'timestep',
+                 'epoch', 'gradstep', 'progress']
+    
+    @enum.unique
+    class unit(str, enum.Enum):
+        timestep = 'timestep'
+        epoch    = 'epoch'
+        gradstep = 'gradstep'
+        progress = 'progress'
+
     
     def __new__(cls, *args, **kwargs):
 
@@ -67,6 +77,9 @@ class Scheduler(StateObject):
 
     def __init__(self, unit='timestep', state_object=None, **kwargs):
 
+        if isinstance(unit, str):
+            unit = type(self).unit[unit]
+        
         self.unit = unit
         self.state_object = None
 
@@ -179,7 +192,7 @@ class ConstantScheduler(Scheduler):
         '''Constant scheduler
 
         Args:
-            value (int, float, np.ndarray): variable values.
+            value (float): variable values.
         '''
         super().__init__(**kwargs)
         self.value = value
@@ -193,7 +206,16 @@ Constant = ConstantScheduler
 
 @Scheduler.register(['linear', 'Linear'])
 class LinearScheduler(Scheduler):
-    def __init__(self, start_value, decay_steps, stop_value, **kwargs):
+    def __init__(self, start_value, decay_steps, stop_value=0., **kwargs):
+        '''LinearScheduler
+
+        Perform linear decay
+
+        Args:
+            start_value (float): Initial value.
+            decay_steps (int, float): total steps to stop decay.
+            stop_value (float, optional): Final value. Defaults to 0.0.
+        '''        
         super().__init__(**kwargs)
 
         self.start_value = start_value
@@ -212,6 +234,14 @@ Linear = LinearScheduler
                     'Exponential'])
 class ExponentialScheduler(Scheduler):
     def __init__(self, start_value, decay_steps, decay_rate, stop_value=None, **kwargs):
+        '''[summary]
+
+        Args:
+            start_value ([type]): [description]
+            decay_steps ([type]): [description]
+            decay_rate ([type]): [description]
+            stop_value ([type], optional): [description]. Defaults to None.
+        '''        
         super().__init__(**kwargs)
 
         self.start_value = start_value
