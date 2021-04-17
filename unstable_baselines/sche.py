@@ -100,7 +100,7 @@ class Scheduler(StateObject):
             elif self.unit == 'epoch':
                 steps = self.state_object.num_epochs
             elif self.unit == 'gradstep':
-                steps = self.state_object.num_gradients
+                steps = self.state_object.num_gradsteps
             elif self.unit == 'progress':
                 steps = self.state_object.progress
             else:
