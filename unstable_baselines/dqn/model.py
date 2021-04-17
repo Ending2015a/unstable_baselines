@@ -389,9 +389,9 @@ class Agent(SavableModel):
 class DQN(TrainableModel):
     def __init__(self, env, learning_rate:        float = 3e-4,
                             buffer_size:            int = int(1e6),
-                            min_buffer:             int = 1000,
+                            min_buffer:             int = 50000,
                             n_steps:                int = 100,
-                            gradient_steps:         int = 200,
+                            n_gradsteps:            int = 200,
                             batch_size:             int = 128,
                             gamma:                float = 0.99,
                             tau:                  float = 1.0,
@@ -415,10 +415,10 @@ class DQN(TrainableModel):
             learning_rate (float, optional): Learning rate. Defaults to 3e-4.
             buffer_size (int, optional): Maximum size of the replay buffer. Defaults to 1000000.
             min_buffer (int, optional): Minimum size of the replay buffer before training. 
-                Defaults to 1000.
+                Defaults to 50000.
             n_steps (int, optional): number of steps of rollouts to collect for every epoch. 
                 Defaults to 100.
-            gradient_steps (int, optional): number of gradient steps in one epoch. 
+            n_gradsteps (int, optional): number of gradient steps in one epoch. 
                 Defaults to 200.
             batch_size (int, optional): Training batch size. Defaults to 128.
             gamma (float, optional): Decay rate. Defaults to 0.99.
@@ -438,7 +438,7 @@ class DQN(TrainableModel):
         self.buffer_size      = buffer_size
         self.min_buffer       = min_buffer
         self.n_steps          = n_steps
-        self.gradient_steps   = gradient_steps
+        self.n_gradsteps      = n_gradsteps
         self.batch_size       = batch_size
         self.gamma            = gamma
         self.tau              = tau
@@ -737,8 +737,8 @@ class DQN(TrainableModel):
                     eval_episodes:    int = 5,
                     eval_max_steps:   int = 10000,
                     save_interval:    int = 5,
-                    save_dir:         str = None,
-                    target_update:    int = 10000,
+                    save_path:        str = None,
+                    target_update:    int = 2500,
                     tb_logdir:        str = None,
                     reset_timesteps: bool = False):
         '''Train DQN
@@ -757,7 +757,7 @@ class DQN(TrainableModel):
                 Defaults to 10000.
             save_interval (int, optional): Save model every ``save_interval``
                 epochs. Default to None.
-            save_dir (str, optional): Model saving path. Default to None.
+            save_path (str, optional): Model saving path. Default to None.
             target_update (int, optional): Frequency of updating target network.
                 update every ``target_update`` gradient steps. Defaults to 10000.
             tb_logdir (str, optional): tensorboard log directory. Defaults to None.
@@ -801,7 +801,7 @@ class DQN(TrainableModel):
             if len(self.buffer) > self.min_buffer:
 
                 # training
-                loss = self.train(self.gradient_steps, 
+                loss = self.train(self.n_gradsteps, 
                                 batch_size=self.batch_size, 
                                 policy_delay=self.policy_delay)
 
@@ -886,10 +886,10 @@ class DQN(TrainableModel):
                 LOG.flush('INFO')
 
             # save model
-            if ((save_dir is not None) and (save_interval is not None)
+            if ((save_path is not None) and (save_interval is not None)
                     and (self.s.num_epochs % save_interval) == 0):
                 
-                self.save(save_dir, checkpoint_numberself.s.num_epochs)
+                self.save(save_path, checkpoint_numberself.s.num_epochs)
 
         return self
 
@@ -899,7 +899,7 @@ class DQN(TrainableModel):
         self.buffer_size      = buffer_size
         self.min_buffer       = min_buffer
         self.n_steps          = n_steps
-        self.gradient_steps   = gradient_steps
+        self.n_gradsteps      = n_gradsteps
         self.batch_size       = batch_size
         self.gamma            = gamma
         self.tau              = tau
@@ -913,7 +913,7 @@ class DQN(TrainableModel):
                         'buffer_size':         self.buffer_size,
                         'min_buffer':          self.min_buffer,
                         'n_steps':             self.n_steps,
-                        'gradient_steps':      self.gradient_steps,
+                        'n_gradsteps':         self.n_gradsteps,
                         'batch_size':          self.batch_size,
                         'gamma':               self.gamma,
                         'tau':                 self.tau,
