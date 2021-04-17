@@ -44,8 +44,7 @@ from unstable_baselines.base import (SavableModel,
                                      TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils import (set_global_seeds,
-                                      normalize,
+from unstable_baselines.utils import (normalize,
                                       to_json_serializable,
                                       from_json_serializable,
                                       tf_soft_update_params,
@@ -168,8 +167,15 @@ class NatureCnn(tf.keras.Model):
     
     @tf.function
     def call(self, inputs, training=False):
-        '''
-        inputs: observations with shape (batch, obs_space.shape)
+        '''Forward network
+
+        Args:
+            inputs (tf.Tensor): Expecting 4-D batch observations, shape 
+                (batch, height, width, channel)
+            training (bool, optional): Training mode. Defaults to False.
+
+        Returns:
+            tf.Tensor: Latent vectors.
         '''
         x = inputs
         for layer in self._layers:
@@ -178,7 +184,9 @@ class NatureCnn(tf.keras.Model):
 
 # Mlp feature extractor
 class MlpNet(tf.keras.Model):
+    '''MLP feature extractor'''
     def __init__(self, **kwargs):
+        
         super().__init__(**kwargs)
 
         self._layers = [
@@ -191,8 +199,15 @@ class MlpNet(tf.keras.Model):
     
     @tf.function
     def call(self, inputs, training=False):
-        '''
-        inputs: observations with shape (batch, obs_space.shape)
+        '''Forward network
+
+        Args:
+            inputs (tf.Tensor): Expecting batch observations, shape 
+                (batch, obs_space.shape)
+            training (bool, optional): Training mode. Defaults to False.
+
+        Returns:
+            tf.Tensor: Latent vectors.
         '''
         x = inputs
         for layer in self._layers:
@@ -210,8 +225,15 @@ class QNet(tf.keras.Model):
 
     @tf.function
     def call(self, inputs, training=False):
-        '''
-        inputs: latent with shape (batch, latent_size)
+        '''Forward network
+
+        Args:
+            inputs (tf.Tensor): Expecting a latent vector in shape 
+                (batch, latent_size), tf.float32.
+            training (bool, optional): Training mode. Defaults to False.
+
+        Returns:
+            tf.Tensor: Predicted Q values in shape (batch, act_space.n)
         '''
         x = inputs
         for layer in self._layers:
@@ -222,6 +244,16 @@ class QNet(tf.keras.Model):
 
 class Agent(SavableModel):
     def __init__(self, observation_space, action_space, force_mlp=False, **kwargs):
+        '''DQN Agent
+
+        Args:
+            observation_space (gym.Spaces): The observation space of the environment.
+                Can be None for delayed setup.
+            action_space (gym.Spaces): The action space of the environment.
+                Can be None for delayed setup.
+            force_mlp (bool, optional): Force to use MLP feature extractor. 
+                Defaults to False.
+        '''
         super().__init__(**kwargs)
 
         self.force_mlp = force_mlp
@@ -232,10 +264,17 @@ class Agent(SavableModel):
         self.net               = None
         self.q_net             = None
 
-        if observation_space is not None and action_space is not None:
+        if (observation_space is not None) and (action_space is not None):
             self.setup_model(observation_space, action_space)
 
     def setup_model(self, observation_space, action_space):
+        '''Setup model and networks
+
+        Args:
+            observation_space (gym.Spaces): The observation space of the
+                environment.
+            action_space (gym.Spaces): The action space of the environment.
+        '''
         
         self.observation_space = observation_space
         self.action_space      = action_space
@@ -256,12 +295,18 @@ class Agent(SavableModel):
 
     @tf.function
     def _forward(self, inputs, training=True):
-        '''
-        Forwrd network
+        '''Forward actor
 
-        inputs: observations, only accepts shape (batch, obs_space.shape)
-        
-        return values
+        Args:
+            inputs (tf.Tensor): batch observations in shape (batch, obs_space.shape).
+                tf.uint8 for image observations and tf.float32 for non-image 
+                observations.
+            training (bool, optional): Determine whether in training mode. Default
+                to True.
+
+        Return:
+            tf.Tensor: predicted state-action values in shape (batch, act_space.n),
+                tf.float32
         '''
 
         # cast and normalize non-float32 inputs (e.g. image with uint8)
@@ -283,10 +328,19 @@ class Agent(SavableModel):
 
     @tf.function
     def call(self, inputs, training=True):
-        '''
-        Batch predict actions
+        '''Batch predict actions
 
-        inputs: observations, only accepts shape (batch, obs_space.shape)
+        Args:
+            inputs (tf.Tensor): batch observations in shape (batch, obs_space.shape).
+                tf.uint8 for image observations and tf.float32 for non-image 
+                observations.
+            training (bool, optional): Determine whether in training mode. Default
+                to True.
+
+        Returns:
+            tf.Tensor: predicted actions in shape (batch, ), tf.int64
+            tf.Tensor: predicted state-action values in shape (batch, act_space.n),
+                tf.float32
         '''
 
         # forward
@@ -297,10 +351,15 @@ class Agent(SavableModel):
         return actions, values
     
     def predict(self, inputs):
-        '''
-        Predict actions
+        '''Predict actions
 
-        inputs: observations, only accepts shape (batch, obs_space.shape)
+        Args:
+            inputs (np.ndarray): batch observations in shape (batch, obs_space.shape)
+                or a single observation in shape (obs_space.shape). np.uint8 for image
+                observations and np.float32 for non-image observations.
+
+        Returns:
+            np.ndarray: predicted actions in shape (batch, ) or (), np.int64
         '''
 
         one_sample = (len(inputs.shape) == len(self.observation_space.shape))
@@ -328,37 +387,48 @@ class Agent(SavableModel):
 
 
 class DQN(TrainableModel):
-    def __init__(self, env, learning_rate:       float = 3e-4,
-                            buffer_size:           int = int(1e6),
-                            min_buffer:            int = 1000,
-                            n_steps:               int = 100,
-                            gradient_steps:        int = 200,
-                            batch_size:            int = 128,
-                            gamma:               float = 0.99,
-                            tau:                 float = 1.0,
-                            max_grad_norm:       float = 0.5,
-                            huber:                bool = True,
-                            force_mlp:            bool = False,
-                            explore_schedule           = None,
-                            verbose:               int = 0,
+    def __init__(self, env, learning_rate:        float = 3e-4,
+                            buffer_size:            int = int(1e6),
+                            min_buffer:             int = 1000,
+                            n_steps:                int = 100,
+                            gradient_steps:         int = 200,
+                            batch_size:             int = 128,
+                            gamma:                float = 0.99,
+                            tau:                  float = 1.0,
+                            max_grad_norm:        float = 0.5,
+                            huber:                 bool = True,
+                            force_mlp:             bool = False,
+                            explore_schedule: Scheduler = 0.3,
+                            verbose:                int = 0,
                             **kwargs):
         '''Double DQN
 
+        The implementation mainly follows its originated paper
+        `Deep Reinforcement Learning with Double Q-learning` by Hasselt et al.
+
+        The first argument `env` can be `None` for delayed model setup. You 
+        should call `set_env()` then call `setup_model()` to manually setup 
+        the model.
+
         Args:
-            env (gym.Env): environment
-            learning_rate (float, optional): learning rate. Defaults to 3e-4.
-            buffer_size (int, optional): maximum size of the replay buffer. Defaults to int(1e6).
-            min_buffer (int, optional): minimum size of the replay buffer before training. Defaults to 1000.
-            n_steps (int, optional): number of steps of rollouts to collect every epoch. Defaults to 100.
-            gradient_steps (int, optional): [description]. Defaults to 200.
-            batch_size (int, optional): [description]. Defaults to 128.
-            gamma (float, optional): [description]. Defaults to 0.99.
-            tau (float, optional): [description]. Defaults to 1.0.
-            max_grad_norm (float, optional): [description]. Defaults to 0.5.
-            huber (bool, optional): [description]. Defaults to True.
-            force_mlp (bool, optional): [description]. Defaults to False.
-            explore_schedule ([type], optional): [description]. Defaults to None.
-            verbose (int, optional): [description]. Defaults to 0.
+            env (gym.Env): Training environment. Can be `None`.
+            learning_rate (float, optional): Learning rate. Defaults to 3e-4.
+            buffer_size (int, optional): Maximum size of the replay buffer. Defaults to 1000000.
+            min_buffer (int, optional): Minimum size of the replay buffer before training. 
+                Defaults to 1000.
+            n_steps (int, optional): number of steps of rollouts to collect for every epoch. 
+                Defaults to 100.
+            gradient_steps (int, optional): number of gradient steps in one epoch. 
+                Defaults to 200.
+            batch_size (int, optional): Training batch size. Defaults to 128.
+            gamma (float, optional): Decay rate. Defaults to 0.99.
+            tau (float, optional): Polyak update parameter. Defaults to 1.0.
+            max_grad_norm (float, optional): Gradient clip range. Defaults to 0.5.
+            huber (bool, optional): whether to use huber loss. Set to `False`
+            Defaults to True.
+            force_mlp (bool, optional): Force to use MLP feature extractor. Defaults to False.
+            explore_schedule (Sheduler, optional): Epsilon greedy scheduler. Defaults to 0.3.
+            verbose (int, optional): More training log. Defaults to 0.
         '''
         super().__init__(**kwargs)
 
@@ -408,6 +478,15 @@ class DQN(TrainableModel):
         return self.s.num_gradsteps
 
     def set_env(self, env):
+        '''Set environment
+
+        If the environment is already set, you can call this function
+        to change the environment. But the observation space and action
+        space must be consistent with the original one.
+
+        Args:
+            env (gym.Env): Training environment.
+        '''
 
         if self.observation_space is not None:
             assert env.observation_space == self.observation_space, 'Observation space mismatch, expect {}, got {}'.format(
@@ -421,6 +500,13 @@ class DQN(TrainableModel):
         self.n_envs = env.n_envs
 
     def setup_model(self, observation_space, action_space):
+        '''Setup model, optimizer and scheduler for training
+
+        Args:
+            observation_space (gym.Spaces): The observation space of the
+                environment.
+            action_space (gym.Spaces): The action space of the environment.
+        '''
         
         self.observation_space = observation_space
         self.action_space = action_space
@@ -442,40 +528,62 @@ class DQN(TrainableModel):
 
     @tf.function
     def _forward(self, inputs, training=True):
-        '''
-        Forward actor
+        '''Forward actor
+
+        Args:
+            inputs (tf.Tensor): batch observations in shape (batch, obs_space.shape).
+                tf.uint8 for image observations and tf.float32 for non-image 
+                observations.
+            training (bool, optional): Determine whether in training mode. Default
+                to True.
 
         Return:
-            values: q values (batch, act_space.n)
+            tf.Tensor: predicted state-action values in shape (batch, act_space.n),
+                tf.float32
         '''
         return self.agent._forward(inputs, training=training)
 
     @tf.function
     def call(self, inputs, training=True):
-        '''
-        Batch predict actions
+        '''Batch predict actions
+
+        Args:
+            inputs (tf.Tensor): batch observations in shape (batch, obs_space.shape).
+                tf.uint8 for image observations and tf.float32 for non-image 
+                observations.
+            training (bool, optional): Determine whether in training mode. Default
+                to True.
 
         Returns:
-            actions: actions (batch, )
-            values: q values (batch, act_space.n)
+            tf.Tensor: predicted actions in shape (batch, ), tf.int64
+            tf.Tensor: predicted state-action values in shape (batch, act_space.n),
+                tf.float32
         '''
         return self.agent(inputs, training=training)
 
     def predict(self, inputs):
-        '''
-        Predict actions
+        '''Predict actions
+
+        Args:
+            inputs (np.ndarray): batch observations in shape (batch, obs_space.shape)
+                or a single observation in shape (obs_space.shape). np.uint8 for image
+                observations and np.float32 for non-image observations.
 
         Returns:
-            actions: actions (batch, )
+            np.ndarray: predicted actions in shape (batch, ) or (), np.int64
         '''
         return self.agent.predict(inputs)
 
     def _run(self, steps, obs=None):
-        '''
-        Run environments, collect rollouts
+        '''Run environments, collect rollouts
 
-        steps: number of timesteps
-        obs: initial observations, if None, reset env
+        Args:
+            steps (int): number of timesteps
+            obs (np.ndarray, optional): the last observations. If `None`, 
+                reset the environment.
+
+        Returns:
+            np.ndarray: the last observations.
         '''
 
         if obs is None:
@@ -508,15 +616,20 @@ class DQN(TrainableModel):
 
     @tf.function
     def value_loss(self, obs, action, next_obs, done, reward):
-        '''
-        Compute value loss
+        '''Compute loss
 
         Args:
-            obs: observation (batch, obs_space.shape)
-            action: action (batch, )
-            next_obs: next observation (batch, obs_space.shape)
-            done: done (batch, )
-            reward: reward (batch, )
+            obs (tf.Tensor): batch observations, shape (batch, obs_space.shape),
+                tf.uint8 for image observations, tf.float32 for non-image observations
+            action (tf.Tensor): batch actions, shape (batch, ),
+                tf.int32 or tf.int64 for discrete action space
+            next_obs (tf.Tensor): batch next observations, shape (batch, obs_space.shape),
+                tf.uint8 for image observations, tf.float32 for non-image observations
+            done (tf.Tensor): batch done, shape (batch, ), tf.bool or tf.float32
+            reward (tf.Tensor): batch reward, shape (batch, ), tf.float32
+
+        Returns:
+            tf.Tensor: loss, tf.float32
         '''
 
         action = tf.cast(action, dtype=tf.int64)
@@ -538,8 +651,20 @@ class DQN(TrainableModel):
 
     @tf.function
     def _train_step(self, obs, action, next_obs, done, reward):
-        '''
-        Update q value
+        '''Perform one gradient update
+
+        Args:
+            obs (tf.Tensor): batch observations, shape (batch, obs_space.shape),
+                tf.uint8 for image observations, tf.float32 for non-image observations
+            action (tf.Tensor): batch actions, shape (batch, ),
+                tf.int32 or tf.int64 for discrete action space
+            next_obs (tf.Tensor): batch next observations, shape (batch, obs_space.shape),
+                tf.uint8 for image observations, tf.float32 for non-image observations
+            done (tf.Tensor): batch done, shape (batch, ), tf.bool or tf.float32
+            reward (tf.Tensor): batch reward, shape (batch, ), tf.float32
+
+        Returns:
+            tf.Tensor: loss, tf.float32
         '''
 
         variables = self.agent.trainable_variables
@@ -592,8 +717,10 @@ class DQN(TrainableModel):
 
         Args:
             env (gym.Env): the environment for evaluation
-            n_episodes (int, optional): number of episodes to evaluate. Defaults to 5.
-            max_steps (int, optional): maximum steps. Defaults to 10000.
+            n_episodes (int, optional): number of episodes to evaluate. 
+                Defaults to 5.
+            max_steps (int, optional): maximum steps in one episode. 
+                Defaults to 10000.
 
         Returns:
             list: episode rewards
@@ -609,10 +736,12 @@ class DQN(TrainableModel):
                     eval_interval:    int = 1,
                     eval_episodes:    int = 5,
                     eval_max_steps:   int = 10000,
+                    save_interval:    int = 5,
+                    save_dir:         str = None,
                     target_update:    int = 10000,
                     tb_logdir:        str = None,
                     reset_timesteps: bool = False):
-        '''[summary]
+        '''Train DQN
 
         Args:
             total_timesteps (int): Total timesteps to train agent.
@@ -626,6 +755,9 @@ class DQN(TrainableModel):
                 for every evaluation. Defaults to 5.
             eval_max_steps (int, optional): maximum steps every evaluation. 
                 Defaults to 10000.
+            save_interval (int, optional): Save model every ``save_interval``
+                epochs. Default to None.
+            save_dir (str, optional): Model saving path. Default to None.
             target_update (int, optional): Frequency of updating target network.
                 update every ``target_update`` gradient steps. Defaults to 10000.
             tb_logdir (str, optional): tensorboard log directory. Defaults to None.
@@ -683,7 +815,7 @@ class DQN(TrainableModel):
                     self.tb_writer.flush()
 
             # print training log
-            if (log_interval is not None) and (self.s.num_epochs % log_interval) == 0:
+            if (log_interval is not None) and (self.s.num_epochs % log_interval == 0):
                 # current time
                 time_now       = time.time()
                 # execution time (one epoch)
@@ -719,8 +851,12 @@ class DQN(TrainableModel):
                 LOG.add_line()
                 LOG.flush('INFO')
 
-            if (eval_env is not None) and (self.s.num_epochs % eval_interval) == 0:
-                eps_rews, eps_steps = self.eval(env=eval_env, n_episodes=eval_episodes, max_steps=eval_max_steps)
+            # evaluate model
+            if (eval_env is not None) and (self.s.num_epochs % eval_interval == 0):
+
+                eps_rews, eps_steps = self.eval(env=eval_env, 
+                                                n_episodes=eval_episodes, 
+                                                max_steps=eval_max_steps)
                 
                 max_idx    = np.argmax(eps_rews)
                 max_rews   = eps_rews[max_idx]
@@ -748,6 +884,12 @@ class DQN(TrainableModel):
                 LOG.add_row(' Mean length', mean_steps)
                 LOG.add_line()
                 LOG.flush('INFO')
+
+            # save model
+            if ((save_dir is not None) and (save_interval is not None)
+                    and (self.s.num_epochs % save_interval) == 0):
+                
+                self.save(save_dir, checkpoint_numberself.s.num_epochs)
 
         return self
 
