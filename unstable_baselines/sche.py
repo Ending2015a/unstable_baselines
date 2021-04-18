@@ -57,11 +57,10 @@ _RegisteredScheduler = _RegisteredSchedulerClass()
 
 
 class Scheduler(StateObject):
-    __slots__ = ['state_object', 'timestep',
-                 'epoch', 'gradstep', 'progress']
+    __slots__ = ['state_object']
     
     @enum.unique
-    class unit(str, enum.Enum):
+    class Unit(str, enum.Enum):
         timestep = 'timestep'
         epoch    = 'epoch'
         gradstep = 'gradstep'
@@ -75,10 +74,10 @@ class Scheduler(StateObject):
 
         return sche
 
-    def __init__(self, unit='timestep', state_object=None, **kwargs):
+    def __init__(self, unit='timestep', state_object=None):
 
         if isinstance(unit, str):
-            unit = type(self).unit[unit]
+            unit = self.Unit[unit]
         
         self.unit = unit
         self.state_object = None
@@ -96,30 +95,37 @@ class Scheduler(StateObject):
         '''Calculate variables
 
         Args:
-            steps ([type]): [description]
+            steps (int, float): timestep, epoch, gradstep or progress
 
-        Raises:
-            NotImplementedError: [description]
+        Returns:
+            float: interpolated value
         '''
         raise NotImplementedError('Method not implemented')
+
+    def get_steps(self):
+        if self.state_object is None:
+            raise RuntimeError('The state object is empty, call '
+                                    'attach() to set state object.')
+        
+        if self.unit == self.Unit.timestep:
+            steps = self.state_object.num_timesteps
+        elif self.unit == self.Unit.epoch:
+            steps = self.state_object.num_epochs
+        elif self.unit == self.Unit.gradstep:
+            steps = self.state_object.num_gradsteps
+        elif self.unit == self.Unit.progress:
+            steps = self.state_object.progress
+        else:
+            raise RuntimeError('Unknown unit, unit must be either of '
+                        '["timestep", "epoch", "gradstep", "progress"]'
+                        ', got {}'.format(self.unit))
+
+        return steps
 
     def __call__(self, steps=None):
         
         if steps is None:
-            assert self.state_object is not None
-
-            if self.unit == 'timestep':
-                steps = self.state_object.num_timesteps
-            elif self.unit == 'epoch':
-                steps = self.state_object.num_epochs
-            elif self.unit == 'gradstep':
-                steps = self.state_object.num_gradsteps
-            elif self.unit == 'progress':
-                steps = self.state_object.progress
-            else:
-                raise RuntimeError('Unknown unit, unit must be either of '
-                        '["timestep", "epoch", "gradstep", "progress"]'
-                        ', got {}'.format(self.unit))
+            steps = self.get_steps()
 
         return self.calc(steps)
 

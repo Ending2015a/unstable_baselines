@@ -188,7 +188,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         If `model/` is given, the latest checkpoint is loaded
         acccording to the `checkpoint` file (*), which, in this case,
         is `weights-15`. If `model/weights-10` is given, then 
-        `model.weights-10` is loaded.
+        `model/weights-10` is loaded.
 
         Args:
             filepath (str): path to load weights and config. 
@@ -320,7 +320,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
 
 
 class TrainableModel(SavableModel):
-    @abs.abstractmethod
+    @abc.abstractmethod
     def predict(self, inputs):
         '''Predict actions
 
@@ -371,14 +371,6 @@ class TrainableModel(SavableModel):
                     break
 
             total_steps = steps +1
-
-            if self.verbose > 1:
-                LOG.set_header('Eval {}/{}'.format(episode+1, n_episodes))
-                LOG.add_line()
-                LOG.add_row('Rewards', total_rews)
-                LOG.add_row(' Length', total_steps)
-                LOG.add_line()
-                LOG.flush('INFO')
         
             eps_info.append([total_rews, total_steps])
 
