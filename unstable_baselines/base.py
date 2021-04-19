@@ -326,6 +326,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
 
 class TrainableModel(SavableModel):
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         
         # Initialize state object
         #  store training states
