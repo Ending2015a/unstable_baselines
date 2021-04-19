@@ -13,7 +13,8 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines import logger
 from unstable_baselines.utils import (from_json_serializable,
-                                      tf_soft_update_params)
+                                      tf_soft_update_params,
+                                      StateObject)
 
 __all__ = ['SavableModel']
 
@@ -324,6 +325,19 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
 
 
 class TrainableModel(SavableModel):
+    def __init__(self, **kwargs):
+        
+        # Initialize state object
+        #  store training states
+        s = StateObject()
+        s.num_timesteps = 0
+        s.num_epochs    = 0
+        s.num_subepochs = 0
+        s.num_gradsteps = 0
+        s.progress      = 0
+        
+        self._state = s
+
     @abc.abstractmethod
     def predict(self, inputs):
         '''Predict actions
@@ -394,3 +408,82 @@ class TrainableModel(SavableModel):
         '''        
         
         raise NotImplementedError('Method not implemented')
+
+    def save_config(self, filepath):
+        '''Save model config to `filepath`
+
+        Args:
+            filepath (str): path to save configuration
+        '''
+        _config = self.get_config()
+
+        config = {
+            'state': self.state,
+            'config': _config
+        }
+
+        _dump_json_dict(filepath, config)
+
+    @classmethod
+    def load_config(cls, filepath):
+        '''Load config file and reconstruct model
+
+        Args:
+            filepath (str): path to load config file
+
+        Returns:
+            TrainableModel: reconstrcted model
+        '''
+        config = _load_json_dict(filepath)
+
+        _config = config.get('config', {})
+        state   = config.get('state', {})
+
+        self = cls.from_config(_config)
+        self.state.update(state)
+
+        return self
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def num_timesteps(self):
+        return self._state.num_timesteps
+
+    @property
+    def num_epochs(self):
+        return self._state.num_epochs
+
+    @property
+    def num_subepochs(self):
+        return self._state.num_subepochs
+
+    @property
+    def num_gradsteps(self):
+        return self._state.num_gradsteps
+
+    @property
+    def progress(self):
+        return self._state.progress
+
+    @num_timesteps.setter
+    def num_timesteps(self, value):
+        self._state.num_timesteps = value
+
+    @num_epochs.setter
+    def num_epochs(self, value):
+        self._state.num_epochs = value
+
+    @num_subepochs.setter
+    def num_subepochs(self, value):
+        self._state.num_subepochs = value
+
+    @num_gradsteps.setter
+    def num_gradsteps(self, value):
+        self._state.num_gradsteps = value
+
+    @progress.setter
+    def progress(self, value):
+        self._state.progress = value
