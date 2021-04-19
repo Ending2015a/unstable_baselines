@@ -18,6 +18,8 @@ from unstable_baselines.utils import (from_json_serializable,
 __all__ = ['SavableModel']
 
 
+LOG = logger.getLogger()
+
 # === Const params ===
 DEFAULT_WEIGHTS_NAME='weights'
 CONFIG_SUFFIX='.config.json'
@@ -152,6 +154,9 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         latest_checkpoint = manager.latest_checkpoint
         latest_checkpoint_number = _get_latest_checkpoint_number(latest_checkpoint)
 
+        if latest_checkpoint_number is None:
+            latest_checkpoint_number = 0
+
         if checkpoint_number is None:
             checkpoint_number = latest_checkpoint_number + 1
 
@@ -165,7 +170,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         return manager.latest_checkpoint
 
     @classmethod
-    def load(self, filepath: str):
+    def load(cls, filepath: str):
         '''Restore model
 
         Restore model from the given `filepath`. `filepath` can 
@@ -207,8 +212,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             latest_checkpoint = tf.train.latest_checkpoint(filepath)
         else:
             # get latest checkpoint (full checkpoint name)
-            if latest_checkpoint is None:
-                latest_checkpoint = filepath
+            latest_checkpoint = filepath
 
         # determines whether the file exists
         config_path = latest_checkpoint + CONFIG_SUFFIX
@@ -217,10 +221,10 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             raise RuntimeError('Failed to restore model, config file not '
                     'found: {}'.format(config_path))
         
-        logger.debug('Restore weights from: {}'.format(latest_checkpoint))
+        LOG.debug('Restore weights from: {}'.format(latest_checkpoint))
 
         # restore config & reconstruct model
-        self   = cls.from_config(config_path)
+        self   = cls.load_config(config_path)
 
         # restore weights
         status = tf.train.Checkpoint(model=self).restore(latest_checkpoint)
@@ -344,33 +348,36 @@ class TrainableModel(SavableModel):
         Args:
             env (gym.Env): Environment for evaluation.
             n_episodes (int): number of episodes to evaluate.
-            max_steps (int): Maximum steps in one episode.
+            max_steps (int): Maximum steps in one episode. Set to -1 
+                to run episodes until done.
 
         Return:
             eps_rews: (list) episode rewards.
             eps_steps: (list) episode length.
         '''
 
-        if n_episodes == 0:
+        if n_episodes <= 0:
             return [], []
 
         eps_info = []
 
         for episode in range(n_episodes):
             obs = env.reset()
-            total_rews = 0
+            total_rews  = 0
+            total_steps = 0
 
-            for steps in range(max_steps):
+            while total_steps != max_steps:
                 # predict action
                 acts = self.predict(obs)
 
                 # step environment
-                obs, rew, done, info= env.step(acts)
+                obs, rew, done, info = env.step(acts)
+                
                 total_rews += rew
+                total_steps += 1
+
                 if done:
                     break
-
-            total_steps = steps +1
         
             eps_info.append([total_rews, total_steps])
 
