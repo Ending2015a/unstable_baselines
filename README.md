@@ -16,7 +16,7 @@ A TensorFlow 2.0 implementation of some Reinforcement Learning algorithms.
 | **Easy to trace, customize**   | :heavy_check_mark:                | :x: <sup>(3)</sup>  | :x: <sup>(3)</sup> |
 | **Standalone implementations for each algo** | :heavy_check_mark:  | :heavy_minus_sign:  | :x: <sup>(4)</sup> |
 
-<sup>(1) Currently only support PPO, TD3, SD3. We are still working on other algorithms.</sup><br>
+<sup>(1) Currently only support DQN, PPO, TD3, SD3. We are still working on other algorithms.</sup><br>
 <sup>(2) Do we really need this? </sup><br>
 <sup>(3) If you have traced Stable-baselines or OpenAI/baselines once, you'll never do that again.</sup><br>
 <sup>(4) Many cross-dependencies across all algos make the code very hard to trace, for example [baselines/common/policies.py](https://github.com/openai/baselines/blob/master/baselines/common/policies.py#L3), [baselines/a2c/a2c.py](https://github.com/openai/baselines/blob/master/baselines/a2c/a2c.py#L14).... Great job! OpenAI!:cat:</sup><br>
@@ -54,10 +54,13 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 | Algorithm                     | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
 |:-----------------------------:|:------------------:|:------------------:|:------------------:|:------------------:|
+| [DQN](unstable_baselines/dqn) | :x:                | :heavy_check_mark: | :x:                | :x:                |
 | [PPO](unstable_baselines/ppo) | :heavy_check_mark: | :heavy_check_mark: | :x:                | :x:                |
 | [TD3](unstable_baselines/td3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
 | [SD3](unstable_baselines/sd3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
 
+* 2021.04.19: Implement [DQN](unstable_baselines/dqn)
+  * From paper: [Deep Reinforcement Learning with Double Q-learning](https://arxiv.org/abs/1509.06461)
 * 2021.03.27: [PPO](unstable_baselines/ppo) support continuous (Box) action space
 * 2021.03.23: Implement [SD3](unstable_baselines/sd3)
   * From paper: [Softmax Deep Double Deterministic Policy Gradients](https://arxiv.org/abs/2010.09177)
