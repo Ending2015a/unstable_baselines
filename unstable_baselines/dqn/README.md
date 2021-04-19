@@ -36,7 +36,7 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 | `BeamRiderNoFrameskip-v4` | 10000         | 6011.5       | 1796.79      | 10M          | 20         |
 | `BreakoutNoFrameskip-v4`  | 412           | 366          | 32.35        | 10M          | 20         |
 | `PongNoFrameskip-v4`      | 21            | 20           | 0.64         | 10M          | 20         |
-| `SeaquestNoFrameskip-v4`  |               |              |              |              |            |
+| `SeaquestNoFrameskip-v4`  | 5030          | 3555         | 1393.45      | 10M          | 20         |
 
 <sup>M = million (1e6)</sup><br>
 
