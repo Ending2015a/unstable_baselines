@@ -27,41 +27,38 @@ __license__ = 'MIT'
 import os
 import sys
 import time
-import random
 import logging
 import argparse
-import datetime
 
 # --- 3rd party ---
 import gym
-import cloudpickle
 
 import numpy as np
-import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import logger
 
 from unstable_baselines.envs import *
 from unstable_baselines.utils import set_global_seeds
-from unstable_baselines.sche import Scheduler, LinearScheduler
+from unstable_baselines.sche import LinearScheduler
 
 from unstable_baselines.dqn.model import DQN
 from unstable_baselines.dqn.model import Agent as DQNAgent
 
 def parse_args():
 
-    parser = argparse.ArgumentParser(description='Double Deep Q-learning (DQN)')
+    parser = argparse.ArgumentParser(description='Deep Q-learning')
     parser.add_argument('--logdir',           type=str, default='log/{env_id}/dqn/{rank}',help='Root dir             (args: {env_id}, {rank})')
     parser.add_argument('--logging',          type=str, default='train.log',              help='Log path             (args: {env_id}, {rank})')
+    parser.add_argument('--log_level',        type=str, default='INFO',                   help='Log level')
     parser.add_argument('--monitor_dir',      type=str, default='monitor',                help='Monitor dir          (args: {env_id}, {rank})')
     parser.add_argument('--tb_logdir',        type=str, default='',                       help='Tensorboard log name (args: {env_id}, {rank})')
     parser.add_argument('--model_path',       type=str, default='model/weights',          help='Model save path      (args: {env_id}, {rank})')
     parser.add_argument('--env_id',           type=str, default='BeamRiderNoFrameskip-v0',help='Environment ID')
     parser.add_argument('--num_envs',         type=int, default=4,      help='Number of environments')
-    parser.add_argument('--num_epochs',       type=int, default=10000,  help='Number of training epochs')
-    parser.add_argument('--num_steps',        type=int, default=100,    help='Number of timesteps per epoch (interact with envs)')
-    parser.add_argument('--num_gradsteps',    type=int, default=400,    help='Number of gradient steps per epoch (perform gradient update)')
+    parser.add_argument('--num_epochs',       type=int, default=625000, help='Number of training epochs')
+    parser.add_argument('--num_steps',        type=int, default=4,      help='Number of timesteps per epoch (interact with envs)')
+    parser.add_argument('--num_gradsteps',    type=int, default=1,      help='Number of gradient steps per epoch (perform gradient update)')
     parser.add_argument('--target_update',    type=int, default=2500,   help='Target network update frequency (gradsteps)')
     parser.add_argument('--batch_size',       type=int, default=64,     help='Training batch size')
     parser.add_argument('--buffer_size',      type=int, default=1000000,help='Replay buffer capacity')
@@ -69,12 +66,12 @@ def parse_args():
     parser.add_argument('--verbose',          type=int, default=1,      help='Print more message, 0=less, 1=more train log, 2=more eval log')
     parser.add_argument('--rank',             type=int, default=0,      help='Optional arguments for parallel training')
     parser.add_argument('--seed',             type=int, default=0,      help='Random seed')
-    parser.add_argument('--log_interval',     type=int, default=1,      help='Logging interval (epochs)')
-    parser.add_argument('--eval_interval',    type=int, default=1000,   help='Evaluation interval (epochs)')
+    parser.add_argument('--log_interval',     type=int, default=1000,   help='Logging interval (epochs)')
+    parser.add_argument('--eval_interval',    type=int, default=10000,  help='Evaluation interval (epochs)')
     parser.add_argument('--eval_episodes',    type=int, default=5,      help='Number of episodes each evaluation')
     parser.add_argument('--eval_max_steps',   type=int, default=3000,   help='Maximum timesteps in each evaluation episode')
     parser.add_argument('--eval_seed',        type=int, default=0,      help='Environment seed for evaluation')
-    parser.add_argument('--save_interval',    type=int, default=5,      help='Model checkpoint interval (epochs)')
+    parser.add_argument('--save_interval',    type=int, default=10000,  help='Model checkpoint interval (epochs)')
     parser.add_argument('--lr',               type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma',            type=float, default=0.99, help='Gamma decay rate')
     parser.add_argument('--tau',              type=float, default=1.0,  help='Polyak update rate')
@@ -103,6 +100,8 @@ def make_atari(a, eval=False):
     if not eval:
         def _make_env(rank, a):
             def _init():
+                logger.Config.use(filename=a.logging, level=a.log_level, 
+                                  colored=True, reset=True)
                 env = gym.make(a.env_id)
                 env.seed(a.seed + rank)
                 env = NoopResetEnv(env, noop_max=30)
@@ -132,25 +131,19 @@ def make_atari(a, eval=False):
     
     return env
 
-def make_qwop(a, eval=False):
-    '''
-    Make QWOP environment
-    '''
-
-    pass
 
 
 if __name__ == '__main__':
 
     a = parse_args()
 
-   # === Reset logger ===
-    logger.Config.use(filename=a.logging, level='DEBUG', colored=True, reset=True)
-    LOG = logger.getLogger()
+    # === Reset logger ===
+    logger.Config.use(filename=a.logging, level=a.log_level, colored=True, reset=True)
+    LOG = logger.getLogger('DQN')
 
     # === Print welcome message ===
     LOG.add_row('')
-    LOG.add_rows('DDQN', fmt='{:@f:ANSI_Shadow}', align='center')
+    LOG.add_rows('DQN', fmt='{:@f:ANSI_Shadow}', align='center')
     LOG.add_line()
     LOG.add_rows('{}'.format(__copyright__))
     LOG.flush('INFO')
@@ -196,25 +189,22 @@ if __name__ == '__main__':
 
     # === Make envs ===
 
-    if 'NoFrameskip' in a.env_id:
-        # Atari env
-        env      = make_atari(a, eval=False)
-        eval_env = make_atari(a, eval=True)
-    else:
-        raise NotImplementedError('Method not implemented')
+    # Atari env
+    env      = make_atari(a, eval=False)
+    eval_env = make_atari(a, eval=True)
     
     LOG.debug('Action space: {}'.format(env.action_space))
     LOG.debug('Observation space: {}'.format(env.observation_space))
 
     # === Create scheduler ===
-    explore_schedule = LinearScheduler(start_value = a.explore_rate, 
-                                       end_value   = a.explore_final, 
+    Unit = LinearScheduler.Unit
+    explore_schedule = LinearScheduler(start_value = a.explore_rate,
+                                       stop_value  = a.explore_final,
                                        decay_steps = a.explore_progress,
-                                       unit        = Scheduler.unit.progress)
+                                       unit        = Unit.progress)
 
     # === Create model ===
     try:
-
         model = DQN(env, learning_rate    = a.lr,
                          buffer_size      = a.buffer_size,
                          min_buffer       = a.min_buffer,
@@ -238,16 +228,16 @@ if __name__ == '__main__':
                     eval_episodes  = a.eval_episodes, 
                     eval_max_steps = a.eval_max_steps,
                     save_interval  = a.save_interval,
-                    save_path      = a.model_dir,
+                    save_path      = a.model_path,
                     target_update  = a.target_update)
         
         LOG.info('DONE')
 
         # Save complete model (continue training)
-        saved_path = model.save(a.model_dir)
+        saved_path = model.save(a.model_path)
         LOG.info('Saving model to: {}'.format(saved_path))
 
-        loaded_model = PPO.load(a.model_dir)
+        loaded_model = DQN.load(saved_path)
 
         # set env to continue training
         # loaded_model.set_env(env)
@@ -260,15 +250,14 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        # LOG.info('Saving model to: {}'.format(a.model_dir))
-        # model.agent.save(a.model_dir)
-        # loaded_model = DQNAgent.load(a.model_dir)
+        # saved_path = model.agent.save(a.model_path)
+        # LOG.info('Saving model to: {}'.format(saved_path))
+        # loaded_model = DQNAgent.load(saved_path)
 
         # Evaluate model
         LOG.info('Evaluating model')
         
-        eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=a.eval_episodes,
-                                                          max_steps=a.eval_max_steps)
+        eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=20)
 
         max_idx    = np.argmax(eps_rews)
         max_rews   = eps_rews[max_idx]
@@ -278,7 +267,7 @@ if __name__ == '__main__':
         mean_steps = np.mean(eps_steps)
 
         # === Print evaluation results ===
-        LOG.set_header('Evaluate')
+        LOG.set_header('Final Evaluation Results')
         LOG.add_line()
         LOG.add_row('Max rewards',  max_rews)
         LOG.add_row('  Length',     max_steps)

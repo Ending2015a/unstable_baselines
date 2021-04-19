@@ -53,10 +53,10 @@ from unstable_baselines.utils import (normalize,
 
 
 # create logger
-logger.Config.use(level='DEBUG', colored=True, reset=False)
 LOG = logger.getLogger('DQN')
 
 # === Buffers ===
+
 class ReplayBuffer():
     '''
     Replay buffer
@@ -76,14 +76,19 @@ class ReplayBuffer():
         self.dones     = None
 
     def add(self, observations, next_observations, actions, rewards, dones):
-        '''
-        Add new samples
+        '''Add new samples into replay buffer
 
-        observations: (np.ndarray) shape: (n_envs, obs_space.shape)
-        next_observations: (np.ndarray) shape: (n_envs, obs_space.shape)
-        actions: (np.ndarray) shape: (n_envs, action_space.shape)
-        rewards: (np.ndarray) shape: (n_envs,)
-        dones: (np.ndarray) shape: (n_envs,)
+        Args:
+            observations (np.ndarray): numpy array of type np.uint8,
+                shape (n_envs, obs_space.shape).
+            next_observations (np.ndarray): numpy array of type np.uint8,
+                shape (n_envs, obs_space.shape).
+            actions (np.ndarray): discrete actions, numpy array of type 
+                np.int32 or np.int64, shape (n_envs, act_space.n)
+            rewards (np.ndarray): numpy array of type np.float32 or 
+                np.float64, shape (n_envs,)
+            dones (np.ndarray): numpy array of type np.float32 or
+                np.bool, shape (n_envs,)
         '''
 
         obss      = np.asarray(observations)
@@ -96,11 +101,11 @@ class ReplayBuffer():
 
         if self.obss is None:
             # create spaces
-            self.obss      = np.zeros((self.buffer_size, ) + obss.shape[1:],    dtype=np.float32)
-            self.acts      = np.zeros((self.buffer_size, ) + actions.shape[1:], dtype=np.float32)
-            self.next_obss = np.zeros((self.buffer_size, ) + obss.shape[1:],    dtype=np.float32)
-            self.rews      = np.zeros((self.buffer_size, ) + rewards.shape[1:], dtype=np.float32)
-            self.dones     = np.zeros((self.buffer_size, ) + dones.shape[1:],   dtype=np.float32)
+            self.obss      = np.zeros((self.buffer_size, ) + obss.shape[1:],    dtype=obss.dtype)
+            self.acts      = np.zeros((self.buffer_size, ) + actions.shape[1:], dtype=actions.dtype)
+            self.next_obss = np.zeros((self.buffer_size, ) + obss.shape[1:],    dtype=obss.dtype)
+            self.rews      = np.zeros((self.buffer_size, ) + rewards.shape[1:], dtype=rewards.dtype)
+            self.dones     = np.zeros((self.buffer_size, ) + dones.shape[1:],   dtype=dones.dtype)
 
         idx = np.arange(self.pos, self.pos+n_env) % self.buffer_size
 
@@ -124,8 +129,17 @@ class ReplayBuffer():
             return self.pos
 
     def __call__(self, batch_size=None):
-        '''
-        Sample batch
+        '''Randomly sample a batch from replay buffer
+
+        Args:
+            batch_size (int, optional): Batch size. Defaults to None.
+
+        Returns:
+            np.ndarray: observations, shape (batch_size, obs_space.shape)
+            np.ndarray: actions, shape (batch_size, act_space.n)
+            np.ndarray: next observations, shape (batch_size, obs_space.shape)
+            np.ndarray: dones, shape (batch_size,)
+            np.ndarray: rewards, shape (batch_size,)
         '''
         if batch_size is None:
             batch_size = len(self)
@@ -140,6 +154,9 @@ class ReplayBuffer():
                 self.next_obss[batch_inds],
                 self.dones[batch_inds],
                 self.rews[batch_inds])
+
+
+
 
 # === Networks ===
 
@@ -285,7 +302,7 @@ class Agent(SavableModel):
         else:
             self.net = MlpNet()
 
-        self.q_net = QNet()
+        self.q_net = QNet(action_space)
 
         # construct networks
         inputs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
@@ -310,7 +327,6 @@ class Agent(SavableModel):
         '''
 
         # cast and normalize non-float32 inputs (e.g. image with uint8)
-        # TODO: a better way to perform normalization?
         if tf.as_dtype(inputs.dtype) != tf.float32:
             # cast observations to float32
             inputs = tf.cast(inputs, dtype=tf.float32)
@@ -320,7 +336,7 @@ class Agent(SavableModel):
             inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
 
         # forward network
-        latest = self.net(inputs, training=training)
+        latent = self.net(inputs, training=training)
         # forward policy net
         values = self.q_net(latent, training=training)
 
@@ -344,8 +360,7 @@ class Agent(SavableModel):
         '''
 
         # forward
-        values = self._forward(inputs, training=training)
-
+        values  = self._forward(inputs, training=training)
         actions = tf.math.argmax(values, axis=-1)
         
         return actions, values
@@ -369,7 +384,7 @@ class Agent(SavableModel):
 
         # predict
         outputs, *_ = self(inputs, training=False)
-        outputs = outputs.numpy()
+        outputs     = outputs.numpy()
 
         if one_sample:
             outputs = np.squeeze(outputs, axis=0)
@@ -390,9 +405,9 @@ class DQN(TrainableModel):
     def __init__(self, env, learning_rate:        float = 3e-4,
                             buffer_size:            int = int(1e6),
                             min_buffer:             int = 50000,
-                            n_steps:                int = 100,
-                            n_gradsteps:            int = 200,
-                            batch_size:             int = 128,
+                            n_steps:                int = 4,
+                            n_gradsteps:            int = 1,
+                            batch_size:             int = 64,
                             gamma:                float = 0.99,
                             tau:                  float = 1.0,
                             max_grad_norm:        float = 0.5,
@@ -449,12 +464,6 @@ class DQN(TrainableModel):
         self.verbose          = verbose
 
         # initialize states
-        self.s = StateObject()
-        self.s.num_timesteps   = 0
-        self.s.num_epochs      = 0
-        self.s.num_gradsteps   = 0
-        self.s.progress        = 0
-
         self.buffer            = None
         self.tb_writer         = None
         self.observation_space = None
@@ -465,17 +474,6 @@ class DQN(TrainableModel):
             self.set_env(env)
             self.setup_model(env.observation_space, env.action_space)
 
-    @property
-    def num_timesteps(self):
-        return self.s.num_timesteps
-
-    @property
-    def num_epochs(self):
-        return self.s.num_epochs
-
-    @property
-    def num_gradsteps(self):
-        return self.s.num_gradsteps
 
     def set_env(self, env):
         '''Set environment
@@ -496,7 +494,7 @@ class DQN(TrainableModel):
             assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
                                                                 self.action_space, env.action_space)
         
-        self.env = env
+        self.env    = env
         self.n_envs = env.n_envs
 
     def setup_model(self, observation_space, action_space):
@@ -509,14 +507,14 @@ class DQN(TrainableModel):
         '''
         
         self.observation_space = observation_space
-        self.action_space = action_space
+        self.action_space      = action_space
 
         # --- setup model ---
-        self.buffer = ReplayBuffer(buffer_size=self.buffer_size)
-        self.agent = Agent(self.observation_space, self.action_space, force_mlp=force_mlp)
-        self.agent_target = Agent(self.observation_space, self.action_space, force_mlp=force_mlp)
+        self.buffer       = ReplayBuffer(buffer_size=self.buffer_size)
+        self.agent        = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
+        self.agent_target = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
 
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
+        self.optimizer    = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
                                                   clipnorm=self.max_grad_norm)
 
         # initialize target
@@ -524,7 +522,7 @@ class DQN(TrainableModel):
 
         # setup scheduler
         self.explore_schedule = Scheduler.get_scheduler(self.explore_schedule, 
-                                                        state_object=self.s)
+                                                        state_object=self.state)
 
     @tf.function
     def _forward(self, inputs, training=True):
@@ -574,46 +572,6 @@ class DQN(TrainableModel):
         '''
         return self.agent.predict(inputs)
 
-    def _run(self, steps, obs=None):
-        '''Run environments, collect rollouts
-
-        Args:
-            steps (int): number of timesteps
-            obs (np.ndarray, optional): the last observations. If `None`, 
-                reset the environment.
-
-        Returns:
-            np.ndarray: the last observations.
-        '''
-
-        if obs is None:
-            obs = self.env.reset()
-
-        for _ in range(steps):
-
-            if (len(self.buffer) < self.min_buffer or
-                    np.random.rand() < self.explore_schedule()):
-                
-                # random action
-                action = np.asarray([self.action_space.sample() 
-                                        for n in range(self.n_envs)])
-
-            else:
-                # predict action
-                action, _ = self(obs)
-
-            # step environment
-            new_obs, reward, done, infos = self.env.step(action)
-
-            # add to buffer
-            self.buffer.add(obs, new_obs, action, reward, done)
-            obs = new_obs
-
-            # update state
-            self.s.num_timesteps += self.n_envs
-
-        return new_obs
-
     @tf.function
     def value_loss(self, obs, action, next_obs, done, reward):
         '''Compute loss
@@ -633,14 +591,16 @@ class DQN(TrainableModel):
         '''
 
         action = tf.cast(action, dtype=tf.int64)
+        reward = tf.cast(reward, dtype=tf.float32)
+        done   = tf.cast(done, dtype=tf.float32)
 
-        next_qs = self.agent_target._forward(next_obs)
+        next_qs  = self.agent_target._forward(next_obs)
         target_q = tf.math.reduce_max(next_qs, axis=-1)
 
-        y = reward + tf.stop_gradient((1.-done) * self.gamma * target_q)
+        y  = reward + tf.stop_gradient((1.-done) * self.gamma * target_q)
 
         qs = self._forward(obs)
-        q = tf.gather(qs, indices=action, batch_dims=1)
+        q  = tf.gather(qs, indices=action, batch_dims=1)
 
         if self.huber:
             loss = tf.keras.losses.Huber()(q, y)
@@ -679,6 +639,46 @@ class DQN(TrainableModel):
 
         return loss
 
+    def _run(self, steps, obs=None):
+        '''Run environments, collect rollouts
+
+        Args:
+            steps (int): number of timesteps
+            obs (np.ndarray, optional): the last observations. If `None`, 
+                reset the environment.
+
+        Returns:
+            np.ndarray: the last observations.
+        '''
+
+        if obs is None:
+            obs = self.env.reset()
+
+        for _ in range(steps):
+
+            if (len(self.buffer) < self.min_buffer or
+                    np.random.rand() < self.explore_schedule()):
+                
+                # random action
+                action = np.asarray([self.action_space.sample() 
+                                        for n in range(self.n_envs)])
+
+            else:
+                # predict action
+                action, _ = self(obs)
+
+            # step environment
+            new_obs, reward, done, infos = self.env.step(action)
+
+            # add to buffer
+            self.buffer.add(obs, new_obs, action, reward, done)
+            obs = new_obs
+
+            # update state
+            self.num_timesteps += self.n_envs
+
+        return new_obs
+
     def train(self, steps, batch_size, target_update):
         '''Train one epoch
 
@@ -696,23 +696,21 @@ class DQN(TrainableModel):
         for _step in range(steps):
             (obs, action, next_obs, done, reward) = self.buffer(batch_size)
 
-            loss = self._train_step(obs, action_next_obs, done, reward)
+            loss = self._train_step(obs, action, next_obs, done, reward)
 
             all_loss.append(loss)
 
-            self.s.num_gradsteps += 1
+            self.num_gradsteps += 1
 
             # update target networks
-            if self.s.num_gradsteps % target_update == 0:
+            if self.num_gradsteps % target_update == 0:
                 self.agent_target.update(self.agent, polyak=self.tau)
 
         m_loss = np.mean(np.hstack(np.asarray(all_loss)))
-        
-        self.s.num_epochs += 1
 
         return m_loss
 
-    def eval(self, env, n_episodes=5, max_steps=10000):
+    def eval(self, env, n_episodes=5, max_steps=-1):
         '''Evaluate model (use default evaluation method)
 
         Args:
@@ -720,23 +718,23 @@ class DQN(TrainableModel):
             n_episodes (int, optional): number of episodes to evaluate. 
                 Defaults to 5.
             max_steps (int, optional): maximum steps in one episode. 
-                Defaults to 10000.
+                Defaults to 10000. Set to -1 to run episodes until done.
 
         Returns:
-            list: episode rewards
-            list: episode length
+            list: total rewards for each episode
+            list: episode length for each episode
         '''
 
-        return super().eval(env, n_episodes=n_episodes, 
+        return super().eval(env, n_episodes=n_episodes,
                                  max_steps=max_steps)
 
     def learn(self, total_timesteps:  int,
-                    log_interval:     int = 1,
+                    log_interval:     int = 1000,
                     eval_env:     gym.Env = None,
-                    eval_interval:    int = 1,
+                    eval_interval:    int = 10000,
                     eval_episodes:    int = 5,
-                    eval_max_steps:   int = 10000,
-                    save_interval:    int = 5,
+                    eval_max_steps:   int = 3000,
+                    save_interval:    int = 10000,
                     save_path:        str = None,
                     target_update:    int = 2500,
                     tb_logdir:        str = None,
@@ -773,12 +771,12 @@ class DQN(TrainableModel):
         if tb_logdir is not None:
             self.tb_writer = tf.summary.create_file_writer(tb_logdir)
 
-        # initialize
+        # initialize state
         if reset_timesteps:
-            self.s.num_timesteps = 0
-            self.s.num_gradsteps = 0
-            self.s.num_epochs    = 0
-            self.s.progress      = 0
+            self.num_timesteps = 0
+            self.num_gradsteps = 0
+            self.num_epochs    = 0
+            self.progress      = 0
             # reset buffer
             self.buffer.reset()
 
@@ -786,36 +784,37 @@ class DQN(TrainableModel):
         time_start = time.time()
         time_spent = 0
         timesteps_per_epoch = self.n_steps * self.n_envs
-        total_epochs = int(float(total_timesteps-self.s.num_timesteps) /
+        total_epochs = int(float(total_timesteps-self.num_timesteps) /
                                         float(timesteps_per_epoch) + 0.5)
         
 
-        while self.s.num_timesteps < total_timesteps:
+        while self.num_timesteps < total_timesteps:
+
             # collect rollouts
             obs = self._run(steps=self.n_steps, obs=obs)
 
             # update state
-            self.s.num_epochs += 1
-            self.s.progress = float(self.s.num_timesteps) / float(total_timesteps)
+            self.num_epochs += 1
+            self.progress = float(self.num_timesteps) / float(total_timesteps)
 
             if len(self.buffer) > self.min_buffer:
 
                 # training
                 loss = self.train(self.n_gradsteps, 
-                                batch_size=self.batch_size, 
-                                policy_delay=self.policy_delay)
+                                  batch_size=self.batch_size, 
+                                  target_update=target_update)
 
                 # write tensorboard
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
-                        tf.summary.scalar('loss', loss, step=self.s.num_timesteps)
+                        tf.summary.scalar('loss', loss, step=self.num_timesteps)
                         tf.summary.scalar('explore_rate', self.explore_schedule(),
-                                                        step=self.s.num_timesteps)
+                                                        step=self.num_timesteps)
 
                     self.tb_writer.flush()
 
             # print training log
-            if (log_interval is not None) and (self.s.num_epochs % log_interval == 0):
+            if (log_interval is not None) and (self.num_epochs % log_interval == 0):
                 # current time
                 time_now       = time.time()
                 # execution time (one epoch)
@@ -823,17 +822,17 @@ class DQN(TrainableModel):
                 # total time spent
                 time_spent     = (time_now - time_start)
                 # remaining time
-                remaining_time = (time_spent / self.s.progress)*(1.0-self.s.progress)
+                remaining_time = (time_spent / self.progress)*(1.0-self.progress)
                 # eta
                 eta            = (datetime.datetime.now() + datetime.timedelta(seconds=remaining_time)).strftime('%Y-%m-%d %H:%M:%S')
                 # average steps per second
-                fps            = float(self.s.num_timesteps) / time_spent
+                fps            = float(self.num_timesteps) / time_spent
 
-                LOG.set_header('Epoch {}/{}'.format(self.s.num_epochs, total_epochs))
+                LOG.set_header('Epoch {}/{}'.format(self.num_epochs, total_epochs))
                 LOG.add_line()
-                LOG.add_row('Timesteps', self.s.num_timesteps, total_timesteps, fmt='{}: {}/{}')
-                LOG.add_row('Steps/sec', fps,                                   fmt='{}: {:.2f}')
-                LOG.add_row('Progress',  self.s.progress*100.0,                 fmt='{}: {:.2f}%')
+                LOG.add_row('Timesteps', self.num_timesteps, total_timesteps, fmt='{}: {}/{}')
+                LOG.add_row('Steps/sec', fps,                                 fmt='{}: {:.2f}')
+                LOG.add_row('Progress',  self.progress*100.0,                 fmt='{}: {:.2f}%')
 
                 if self.verbose > 0:
                     LOG.add_row('Execution time', datetime.timedelta(seconds=execution_time))
@@ -852,7 +851,7 @@ class DQN(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
-            if (eval_env is not None) and (self.s.num_epochs % eval_interval == 0):
+            if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
                                                 n_episodes=eval_episodes, 
@@ -867,14 +866,24 @@ class DQN(TrainableModel):
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
-                        tf.summary.scalar('max_rewards',  max_rews,   step=self.s.num_timesteps)
-                        tf.summary.scalar('mean_rewards', mean_rews,  step=self.s.num_timesteps)
-                        tf.summary.scalar('std_rewards',  std_rews,   step=self.s.num_timesteps)
-                        tf.summary.scalar('mean_length',  mean_steps, step=self.s.num_timesteps)
+                        tf.summary.scalar('max_rewards',  max_rews,   step=self.num_timesteps)
+                        tf.summary.scalar('mean_rewards', mean_rews,  step=self.num_timesteps)
+                        tf.summary.scalar('std_rewards',  std_rews,   step=self.num_timesteps)
+                        tf.summary.scalar('mean_length',  mean_steps, step=self.num_timesteps)
 
                     self.tb_writer.flush()
 
-                LOG.set_header('Evaluate {}/{}'.format(self.s.num_epochs, total_epochs))
+                if self.verbose > 1:
+
+                    for ep in range(eval_episodes):
+                        LOG.set_header('Eval episode {}/{}'.format(ep+1, eval_episodes))
+                        LOG.add_line()
+                        LOG.add_row('Rewards', eps_rews[ep])
+                        LOG.add_row(' Length', eps_steps[ep])
+                        LOG.add_line()
+                        LOG.flush('INFO')
+
+                LOG.set_header('Evaluate {}/{}'.format(self.num_epochs, total_epochs))
                 LOG.add_line()
                 LOG.add_row('Max rewards',  max_rews)
                 LOG.add_row('     Length',  max_steps)
@@ -887,27 +896,16 @@ class DQN(TrainableModel):
 
             # save model
             if ((save_path is not None) and (save_interval is not None)
-                    and (self.s.num_epochs % save_interval) == 0):
+                    and (self.num_epochs % save_interval) == 0):
                 
-                self.save(save_path, checkpoint_numberself.s.num_epochs)
+                saved_path = self.save(save_path, checkpoint_number=self.num_epochs)
+
+                if self.verbose > 0:
+                    LOG.info('Checkpoint saved to: {}'.format(saved_path))
 
         return self
 
     def get_config(self):
-
-        self.learning_rate    = learning_rate
-        self.buffer_size      = buffer_size
-        self.min_buffer       = min_buffer
-        self.n_steps          = n_steps
-        self.n_gradsteps      = n_gradsteps
-        self.batch_size       = batch_size
-        self.gamma            = gamma
-        self.tau              = tau
-        self.max_grad_norm    = max_grad_norm
-        self.huber            = huber
-        self.force_mlp        = force_mlp
-        self.explore_schedule = explore_schedule
-        self.verbose          = verbose
         
         init_config = { 'learning_rate':       self.learning_rate,
                         'buffer_size':         self.buffer_size,
@@ -926,14 +924,10 @@ class DQN(TrainableModel):
         setup_config = {'observation_space': self.observation_space,
                         'action_space':      self.action_space}
 
-        state_config = dict(self.s)
-
         init_config  = to_json_serializable(init_config)
         setup_config = to_json_serializable(setup_config)
-        state_config = to_json_serializable(state_config)
 
         return {'init_config': init_config,
-                'state_config': state_config,
                 'setup_config': setup_config}
     
     @classmethod
@@ -941,16 +935,12 @@ class DQN(TrainableModel):
 
         assert 'init_config' in config, 'Failed to load {} config, init_config not found'.format(cls.__name__)
         assert 'setup_config' in config, 'Failed to load {} config, setup_config not found'.format(cls.__name__)
-        assert 'state_config' in config, 'Failed to load {} config, state_config not found'.format(cls.__name__)
 
         init_config = from_json_serializable(config['init_config'])
         setup_config = from_json_serializable(config['setup_config'])
-        state_config = from_json_serializable(config['state_config'])
 
         # construct model
         self = cls(env=None, **init_config)
         self.setup_model(**setup_config)
-
-        self.s.update(state_config)
 
         return self
