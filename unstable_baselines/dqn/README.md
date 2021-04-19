@@ -31,10 +31,10 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 > Learning curve
 
-| `env_id`                  | Max rewards   | Mean rewards | std          | Total frames | Eval times |
+| `env_id`                  | Max rewards   | Mean rewards | Std rewards  | Total frames | Eval times |
 | ------------------------- | -------------:| ------------:| ------------:| ------------:| ----------:|
 | `BeamRiderNoFrameskip-v4` | 10000         | 6011.5       | 1796.79      | 10M          | 20         |
-| `BreakoutNoFrameskip-v4`  | 402           | 366          | 32.35        | 10M          | 20         |
+| `BreakoutNoFrameskip-v4`  | 412           | 366          | 32.35        | 10M          | 20         |
 | `PongNoFrameskip-v4`      | 21            | 20           | 0.64         | 10M          | 20         |
 | `SeaquestNoFrameskip-v4`  |               |              |              |              |            |
 
