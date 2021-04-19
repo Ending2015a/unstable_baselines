@@ -45,13 +45,7 @@ __all__ = [
     'VecFrameStack',
 ]
 
-LOG = logger
-
-def set_env_logger(name='envs', level='DEBUG'):
-    global LOG
-    LOG = logger.getLogger(name=name, level=level)
-
-
+LOG = logger.getLogger()
 
 
 # === Env wrappers ---
