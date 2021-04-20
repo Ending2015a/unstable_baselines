@@ -718,7 +718,7 @@ class DQN(TrainableModel):
             n_episodes (int, optional): number of episodes to evaluate. 
                 Defaults to 5.
             max_steps (int, optional): maximum steps in one episode. 
-                Defaults to 10000. Set to -1 to run episodes until done.
+                Set to -1 to run episodes until done. Defaults to -1.
 
         Returns:
             list: total rewards for each episode
@@ -744,20 +744,20 @@ class DQN(TrainableModel):
         Args:
             total_timesteps (int): Total timesteps to train agent.
             log_interval (int, optional): Print log every ``log_interval`` 
-                epochs. Defaults to 1.
+                epochs. Defaults to 1000.
             eval_env (gym.Env, optional): Environment for evaluation. 
                 Defaults to None.
             eval_interval (int, optional): Evaluate every ``eval_interval``
-                epochs. Defaults to 1.
+                epochs. Defaults to 10000.
             eval_episodes (int, optional): Evaluate ``eval_episodes`` episodes. 
                 for every evaluation. Defaults to 5.
             eval_max_steps (int, optional): maximum steps every evaluation. 
-                Defaults to 10000.
+                Defaults to 3000.
             save_interval (int, optional): Save model every ``save_interval``
-                epochs. Default to None.
+                epochs. Default to 10000.
             save_path (str, optional): Model saving path. Default to None.
             target_update (int, optional): Frequency of updating target network.
-                update every ``target_update`` gradient steps. Defaults to 10000.
+                update every ``target_update`` gradient steps. Defaults to 2500.
             tb_logdir (str, optional): tensorboard log directory. Defaults to None.
             reset_timesteps (bool, optional): reset timesteps. Defaults to False.
 
