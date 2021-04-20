@@ -2,7 +2,7 @@
 
 # Unstable Baselines
 
-A TensorFlow 2.0 implementation of some Reinforcement Learning algorithms.
+A Deep Reinforcement Learning codebase in TensorFlow 2.0.
 
 
 
@@ -49,7 +49,6 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 ## Algorithms
 
 ### Model-free RL
-
 
 
 |           Algorithm           |        `Box`       |     `Discrete`     | `MultiDiscrete` | `MultiBinary` |
