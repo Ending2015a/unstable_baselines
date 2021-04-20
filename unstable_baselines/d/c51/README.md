@@ -45,7 +45,7 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Total frames | Eval episodes |
 |---------------------------|-------------|--------------|-------------|--------------|---------------|
 | `AsteroidsNoFrameskip-v4` |             |              |             | 10M          | 20            |
-| `BeamRiderNoFrameskip-v4` | 108666      | 7142.6       | 2482.67     | 10M          | 20            |
+| `BeamRiderNoFrameskip-v4` | 10866       | 7142.6       | 2482.67     | 10M          | 20            |
 | `BreakoutNoFrameskip-v4`  | 381         | 372.3        | 8.0         | 10M          | 20            |
 | `EnduroNoFrameskip-v4`    |             |              |             | 10M          | 20            |
 | `MsPacmanNoFrameskip-v4`  |             |              |             | 10M          | 20            |
