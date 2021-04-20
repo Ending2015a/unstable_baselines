@@ -5,11 +5,21 @@
 
 ## How to use
 
+### Run with default arguments
+```python
+./train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4"
+```
+
+### Run multiple environments with default arguments
+```python
+./train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4" "SeaquestNoFrameskip-v4"
+```
+
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="BreakoutNoFrameskip-v0" --num_envs=8 --num_episodes=20000 \
+               --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_episodes=20000 \
                --num_steps=128 --num_epochs=4 --batch_size=256 --verbose=2 \
                --shared_net --record_video
 ```
