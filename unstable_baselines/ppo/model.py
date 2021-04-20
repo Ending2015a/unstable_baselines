@@ -880,11 +880,10 @@ class PPO(TrainableModel):
 
         Returns:
             tf.Tensor: total loss, tf.float32
-            tf.Tensor: policy KL divergence, tf.float32
-            tf.Tensor: policy entropy, tf.float32
             tf.Tensor: policy loss, tf.float32
             tf.Tensor: value loss, tf.float32
             tf.Tensor: entropy loss, tf.float32
+            tf.Tensor: policy KL divergence, tf.float32
         '''
         
         with tf.GradientTape() as tape:
@@ -912,7 +911,7 @@ class PPO(TrainableModel):
         gradients = tape.gradient(loss, self.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         
-        return loss, kl, entropy, pi_loss, vf_loss, ent_loss
+        return loss, pi_loss, vf_loss, ent_loss, kl
 
     def _run(self, steps, obs=None):
         '''Run environments, collect rollouts
@@ -964,27 +963,24 @@ class PPO(TrainableModel):
 
         Returns:
             float: mean total loss of the last subepoch, tf.float32
-            float: mean policy KL divergence of the last subepoch, tf.float32
-            float: mean policy entropy of the last subepoch, tf.float32
             float: mean policy loss of the last subepoch, tf.float32
             float: mean value loss of the last subepoch, tf.float32
             float: mean entropy loss of the last subepoch, tf.float32
+            float: mean policy KL divergence of the last subepoch, tf.float32
             float: mean explained variation of the last subepoch, tf.float32
         '''
         assert self.buffer.ready_for_sampling, "Buffer is not ready for sampling, please call buffer.make() before sampling"
 
         for epoch in range(n_subepochs):
             all_losses = []
+            all_kl     = []
 
             for replay_data in self.buffer(batch_size):
                 # update once
-                losses = self._train_step(*replay_data)
-                
-                # convert to tuple
-                if not isinstance(losses, (tuple)):
-                    losses = (losses, )
+                *losses, kl = self._train_step(*replay_data)
                 
                 all_losses.append(losses)
+                all_kl.append(kl)
 
                 # update state
                 self.num_gradsteps += 1
@@ -1006,9 +1002,9 @@ class PPO(TrainableModel):
 
         m_losses = []
         for loss in zip(*all_losses):
-            m_losses.append(np.mean(np.hstack(np.asarray(losses, dtype=np.float32))))
+            m_losses.append(np.mean(np.hstack(np.asarray(loss, dtype=np.float32))))
 
-        return (*m_losses, exp_var)
+        return (*m_losses, m_kl, exp_var)
 
     def eval(self, env, n_episodes=5, max_steps=-1):
         '''Evaluate model (use default evaluation method)
@@ -1096,7 +1092,7 @@ class PPO(TrainableModel):
 
             # update state
             self.num_epochs += 1
-            self.progess = float(self.num_timesteps) / float(total_timesteps)
+            self.progress = float(self.num_timesteps) / float(total_timesteps)
 
             # make buffer
             self.buffer.make()
@@ -1106,13 +1102,12 @@ class PPO(TrainableModel):
             log_info = {}
             tb_info  = {}
 
-            loss, kl, ent, pi_loss, vf_loss, ent_loss, exp_var = losses
+            loss, pi_loss, vf_loss, ent_loss, kl, exp_var = losses
             tb_info['loss']          = log_info['Loss']          = loss
-            tb_info['approx_kl']     = log_info['Approx KL']     = kl
-            tb_info['entropy']       = log_info['Entropy']       = ent
             tb_info['policy_loss']   = log_info['Policy loss']   = pi_loss
             tb_info['value_loss']    = log_info['Value loss']    = vf_loss
             tb_info['entropy_loss']  = log_info['Entropy loss']  = ent_loss
+            tb_info['approx_kl']     = log_info['Approx KL']     = kl
             tb_info['explained_var'] = log_info['Explained var'] = exp_var
 
             # write tensorboard
@@ -1158,7 +1153,7 @@ class PPO(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
-            if (eval_env is not None) (and self.num_epochs % eval_interval == 0):
+            if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
                                                 n_episodes=eval_episodes, 
@@ -1190,7 +1185,7 @@ class PPO(TrainableModel):
                         LOG.add_line()
                         LOG.flush('INFO')
 
-                LOG.set_header('Evaluate {}/{}'.format(episode, total_episode))
+                LOG.set_header('Evaluate {}/{}'.format(self.num_epochs, total_epochs))
                 LOG.add_line()
                 LOG.add_row('Max rewards',  max_rews)
                 LOG.add_row('  Length',     max_steps)
