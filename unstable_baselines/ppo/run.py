@@ -53,14 +53,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Proximal Policy Optimization')
     parser.add_argument('--logdir',           type=str, default='log/{env_id}/ppo/{rank}',help='Root dir             (args: {env_id}, {rank})')
     parser.add_argument('--logging',          type=str, default='train.log',              help='Log path             (args: {env_id}, {rank})')
+    parser.add_argument('--log_level',        type=str, default='INFO',                   help='Log level')
     parser.add_argument('--monitor_dir',      type=str, default='monitor',                help='Monitor dir          (args: {env_id}, {rank})')
     parser.add_argument('--tb_logdir',        type=str, default='',                       help='Tensorboard log name (args: {env_id}, {rank})')
-    parser.add_argument('--model_dir',        type=str, default='model',                  help='Model export path    (args: {env_id}, {rank})')
+    parser.add_argument('--model_path',       type=str, default='model/weights',          help='Model save path      (args: {env_id}, {rank})')
     parser.add_argument('--env_id',           type=str, default='BeamRiderNoFrameskip-v0',help='Environment ID')
     parser.add_argument('--num_envs',         type=int, default=4,      help='Number of environments')
-    parser.add_argument('--num_episodes',     type=int, default=10000,  help='Number of training episodes (not environment episodes)')
-    parser.add_argument('--num_steps',        type=int, default=256,    help='Number of timesteps per episode (interact with envs)')
-    parser.add_argument('--num_epochs',       type=int, default=10,     help='Number of epochs per episode (perform gradient update)')
+    parser.add_argument('--num_epochs',       type=int, default=10000,  help='Number of training epochs')
+    parser.add_argument('--num_steps',        type=int, default=256,    help='Number of timesteps per epoch (interact with envs)')
+    parser.add_argument('--num_subepochs',    type=int, default=10,     help='Number of subepochs per epoch (perform gradient update)')
     parser.add_argument('--batch_size',       type=int, default=64,     help='Training batch size')
     parser.add_argument('--verbose',          type=int, default=1,      help='Print more message, 0=less, 1=more train log, 2=more eval log')
     parser.add_argument('--rank',             type=int, default=0,      help='Optional arguments for parallel training')
@@ -70,6 +71,7 @@ def parse_args():
     parser.add_argument('--eval_episodes',    type=int, default=5,      help='Number of episodes each evaluation')
     parser.add_argument('--eval_max_steps',   type=int, default=3000,   help='Maximum timesteps in each evaluation episode')
     parser.add_argument('--eval_seed',        type=int, default=0,      help='Environment seed for evaluation')
+    parser.add_argument('--save_interval',    type=int, default=1000,   help='Model checkpoint interval (epochs)')
     parser.add_argument('--lr',               type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma',            type=float, default=0.99, help='Gamma decay rate')
     parser.add_argument('--gae_lambda',       type=float, default=0.95, help='GAE lambda decay rate')
@@ -89,7 +91,7 @@ def parse_args():
     a.logging     = os.path.join(a.logdir, a.logging).format(env_id=a.env_id, rank=a.rank)
     a.monitor_dir = os.path.join(a.logdir, a.monitor_dir).format(env_id=a.env_id, rank=a.rank)
     a.tb_logdir   = os.path.join(a.logdir, a.tb_logdir).format(env_id=a.env_id, rank=a.rank)
-    a.model_dir   = os.path.join(a.logdir, a.model_dir).format(env_id=a.env_id, rank=a.rank)
+    a.model_path  = os.path.join(a.logdir, a.model_path).format(env_id=a.env_id,  rank=a.rank)
 
     return a
 
@@ -101,6 +103,8 @@ def make_atari(a, eval=False):
     if not eval:
         def _make_env(rank, a):
             def _init():
+                logger.Config.use(filename=a.logging, level=a.log_level, 
+                                  colored=True, reset=True)
                 env = gym.make(a.env_id)
                 env.seed(a.seed + rank)
                 env = NoopResetEnv(env, noop_max=30)
@@ -140,6 +144,8 @@ def make_env(a, eval=False):
     if not eval:
         def _make_env(rank, a):
             def _init():
+                logger.Config.use(filename=a.logging, level=a.log_level, 
+                                  colored=True, reset=True)
                 import pybullet_envs
                 env = gym.make(a.env_id)
                 env.seed(a.seed + rank)
@@ -165,8 +171,8 @@ if __name__ == '__main__':
     a = parse_args()
 
     # === Reset logger ===
-    logger.Config.use(filename=a.logging, level='DEBUG', colored=True, reset=True)
-    LOG = logger.getLogger()
+    logger.Config.use(filename=a.logging, level=a.log_level, colored=True, reset=True)
+    LOG = logger.getLogger('PPO')
 
     # === Print welcome message ===
     LOG.add_row('')
@@ -182,20 +188,21 @@ if __name__ == '__main__':
     LOG.add_row('Logging path',          a.logging)
     LOG.add_row('Monitor path',          a.monitor_dir)
     LOG.add_row('Tensorboard path',      a.tb_logdir)
-    LOG.add_row('Model path',            a.model_dir)
+    LOG.add_row('Model path',            a.model_path)
     LOG.add_row('Env ID',                a.env_id)
     LOG.add_row('Seed',                  a.seed)
     LOG.add_row('Eval seed',             a.eval_seed)
     LOG.add_row('Record video',          a.record_video)
     LOG.add_line()
     LOG.add_row('Num of envs',           a.num_envs)
-    LOG.add_row('Num of steps/episode ', a.num_steps)
-    LOG.add_row('Num of epochs/episode', a.num_epochs)
-    LOG.add_row('Num of episodes',       a.num_episodes)
+    LOG.add_row('Num of steps/epoch',    a.num_steps)
+    LOG.add_row('Num of epochs',         a.num_epochs)
+    LOG.add_row('Num of subepochs',      a.num_subepochs)
     LOG.add_row('Log interval',          a.log_interval)
     LOG.add_row('Eval interval',         a.eval_interval)
     LOG.add_row('Eval episodes',         a.eval_episodes)
     LOG.add_row('Eval max steps',        a.eval_max_steps)
+    LOG.add_row('Save interval',         a.save_interval)
     LOG.add_row('Batch size',            a.batch_size)
     LOG.add_row('Verbose',               a.verbose)
     LOG.add_line()
@@ -232,7 +239,7 @@ if __name__ == '__main__':
         model = PPO(env, learning_rate   = a.lr,
                          n_steps         = a.num_steps,
                          batch_size      = a.batch_size,
-                         n_epochs        = a.num_epochs, 
+                         n_subepochs     = a.num_subepochs, 
                          gamma           = a.gamma,
                          gae_lambda      = a.gae_lambda,
                          clip_range      = a.clip_range,
@@ -245,21 +252,24 @@ if __name__ == '__main__':
                          force_mlp       = a.force_mlp,
                          verbose         = a.verbose)
         
-        # Total timesteps = num_steps * num_envs * num_episodes (default ~ 10M)
-        model.learn(a.num_steps *    a.num_envs * a.num_episodes, 
+        # Total timesteps = num_steps * num_envs * num_epochs (default ~ 10M)
+        model.learn(a.num_steps *    a.num_envs * a.num_epochs, 
                     tb_logdir      = a.tb_logdir, 
                     log_interval   = a.log_interval,
                     eval_env       =   eval_env, 
                     eval_interval  = a.eval_interval, 
                     eval_episodes  = a.eval_episodes, 
-                    eval_max_steps = a.eval_max_steps)
+                    eval_max_steps = a.eval_max_steps,
+                    save_interval  = a.save_interval,
+                    save_path      = a.model_path)
         
         LOG.info('DONE')
 
         # Save complete model (continue training)
-        LOG.info('Saving model to: {}'.format(a.model_dir))
-        model.save(a.model_dir)
-        loaded_model = PPO.load(a.model_dir)
+        saved_path = model.save(a.model_path)
+        LOG.info('Saving model to: {}'.format(saved_path))
+
+        loaded_model = PPO.load(saved_path)
 
         # set env to continue training
         # loaded_model.set_env(env)
@@ -272,37 +282,14 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        # LOG.info('Saving model to: {}'.format(a.model_dir))
-        # model.agent.save(a.model_dir)
-        # loaded_model = PPOAgent.load(a.model_dir)
+        # saved_path = model.agent.save(a.model_path)
+        # LOG.info('Saving model to: {}'.format(saved_path))
+        # loaded_model = PPOAgent.load(saved_path)
 
         # Evaluation
         LOG.info('Evaluating model')
-        eps_rews  = []
-        eps_steps = []
-        for episode in range(a.eval_episodes):
-            obs = eval_env.reset()
-            total_rews = 0
-
-            for steps in range(a.eval_max_steps):
-                # predict action
-                acts = loaded_model.predict(obs)
-                # step environment
-                obs, rew, done, info = eval_env.step(acts)
-                total_rews += rew
-                if done:
-                    break
-
-            # === Print episode result ===
-            LOG.set_header('Eval {}/{}'.format(episode+1, a.eval_episodes))
-            LOG.add_line()
-            LOG.add_row('Rewards', total_rews)
-            LOG.add_row('Steps', steps+1)
-            LOG.add_line()
-            LOG.flush('INFO')
         
-            eps_rews.append(total_rews)
-            eps_steps.append(steps+1)
+        eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=20)
 
         max_idx    = np.argmax(eps_rews)
         max_rews   = eps_rews[max_idx]
@@ -312,7 +299,7 @@ if __name__ == '__main__':
         mean_steps = np.mean(eps_steps)
 
         # === Print evaluation results ===
-        LOG.set_header('Evaluate')
+        LOG.set_header('Final Evaluation Results')
         LOG.add_line()
         LOG.add_row('Max rewards',  max_rews)
         LOG.add_row('  Length',     max_steps)
