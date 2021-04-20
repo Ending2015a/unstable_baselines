@@ -59,25 +59,27 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 | [TD3](unstable_baselines/td3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
 | [SD3](unstable_baselines/sd3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
 
-* 2021.04.19: Implement [DQN](unstable_baselines/dqn)
+* 2021.04.19: Implemented [DQN](unstable_baselines/dqn)
   * From paper: [Deep Reinforcement Learning with Double Q-learning](https://arxiv.org/abs/1509.06461)
 * 2021.03.27: [PPO](unstable_baselines/ppo) support continuous (Box) action space
-* 2021.03.23: Implement [SD3](unstable_baselines/sd3)
+* 2021.03.23: Implemented [SD3](unstable_baselines/sd3)
   * From paper: [Softmax Deep Double Deterministic Policy Gradients](https://arxiv.org/abs/2010.09177)
-* 2021.03.20: Implement [TD3](unstable_baselines/td3)
+* 2021.03.20: Implemented [TD3](unstable_baselines/td3)
   * From paper: [Addressing Function Approximation Error in Actor-Critic Methods](https://arxiv.org/abs/1802.09477)
-* 2021.03.10: Implement [PPO](unstable_baselines/ppo)
+* 2021.03.10: Implemented [PPO](unstable_baselines/ppo)
   * From paper: [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)
 
-<!---
+
 ### Distributional RL
 
-| Algorithm | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
-|:-----------:|:--------------------:|:--------------------:|:--------------------:|:--------------------:|
-| C51 |   |   | :x: | :x: |
-| IQN |   |   | :x: | :x: |
+|            Algorithm            | `Box` |     `Discrete`     | `MultiDiscrete` | `MultiBinary` |
+|:-------------------------------:|:-----:|:------------------:|:---------------:|:-------------:|
+| [C51](unstable_baselines/d/c51) | :x:   | :heavy_check_mark: | :x:             | :x:           |
 
+* 2021.04.20: Implemented [C51](unstable_baselines/d/c51)
+  * From paper: [A Distributional Perspective on Reinforcement Learning](https://arxiv.org/abs/1707.06887)
 
+<!---
 ### Hierarchical RL
 
 | Algorithm | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
