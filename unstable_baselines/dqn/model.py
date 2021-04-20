@@ -436,7 +436,7 @@ class DQN(TrainableModel):
             n_gradsteps (int, optional): number of gradient steps in one epoch. 
                 Defaults to 200.
             batch_size (int, optional): Training batch size. Defaults to 128.
-            gamma (float, optional): Decay rate. Defaults to 0.99.
+            gamma (float, optional): Discount factor. Defaults to 0.99.
             tau (float, optional): Polyak update parameter. Defaults to 1.0.
             max_grad_norm (float, optional): Gradient clip range. Defaults to 0.5.
             huber (bool, optional): whether to use huber loss. Set to `False`
