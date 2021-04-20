@@ -52,12 +52,12 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 
 
-| Algorithm                     | `Box`              | `Discrete`         | `MultiDiscrete`    | `MultiBinary`      |
-|:-----------------------------:|:------------------:|:------------------:|:------------------:|:------------------:|
-| [DQN](unstable_baselines/dqn) | :x:                | :heavy_check_mark: | :x:                | :x:                |
-| [PPO](unstable_baselines/ppo) | :heavy_check_mark: | :heavy_check_mark: | :x:                | :x:                |
-| [TD3](unstable_baselines/td3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
-| [SD3](unstable_baselines/sd3) | :heavy_check_mark: | :x:                | :x:                | :x:                |
+|           Algorithm           |        `Box`       |     `Discrete`     | `MultiDiscrete` | `MultiBinary` |
+|:-----------------------------:|:------------------:|:------------------:|:---------------:|:-------------:|
+| [DQN](unstable_baselines/dqn) | :x:                | :heavy_check_mark: | :x:             | :x:           |
+| [PPO](unstable_baselines/ppo) | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
+| [TD3](unstable_baselines/td3) | :heavy_check_mark: | :x:                | :x:             | :x:           |
+| [SD3](unstable_baselines/sd3) | :heavy_check_mark: | :x:                | :x:             | :x:           |
 
 * 2021.04.19: Implemented [DQN](unstable_baselines/dqn)
   * From paper: [Deep Reinforcement Learning with Double Q-learning](https://arxiv.org/abs/1509.06461)
