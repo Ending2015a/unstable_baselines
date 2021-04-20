@@ -2,7 +2,7 @@
 
 # Unstable Baselines
 
-A Deep Reinforcement Learning codebase in TensorFlow 2.0.
+A Deep Reinforcement Learning codebase in TensorFlow 2.0 with an unified, flexible and highly customizable structure for fast prototyping.
 
 
 
