@@ -1,59 +1,82 @@
 # Proximal Policy Optimization (PPO)
 
-> [Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal Policy Optimization Algorithms. *arXiv:1707.06347*, 2017.](https://arxiv.org/abs/1707.06347)
+> [John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, & Oleg Klimov. (2017). Proximal Policy Optimization Algorithms.](https://arxiv.org/abs/1707.06347)
 
 
 ## How to use
 
 ### Run with default arguments
 ```python
-./train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4"
+./unstable_baselines/ppo/train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4"
 ```
 
 ### Run multiple environments with default arguments
 ```python
-./train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4" "SeaquestNoFrameskip-v4"
+./unstable_baselines/ppo/train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4" "SeaquestNoFrameskip-v4"
 ```
 
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_episodes=20000 \
-               --num_steps=128 --num_epochs=4 --batch_size=256 --verbose=2 \
+               --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=10000 \
+               --num_steps=125 --num_subepochs=4 --batch_size=128 --verbose=2 \
                --shared_net --record_video
 ```
 <sup>Enable `shared_net` shares the CNN between policy and value function.</sup><br/>
-<sup>Total timesteps (Samples) = num_envs * num_steps * num_episodes (~20M in this case)</sup><br>
+<sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~10M in this case)</sup><br>
 
 ### Continuous control environment
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_episodes=1000 \
-               --num_steps=1024 --num_epochs=10 --batch_size=256 --verbose=2 \
+               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 \
+               --num_steps=1024 --num_subepochs=10 --batch_size=256 --verbose=2 \
                --ent_coef=0.0 --record_video
 ```
-<sup>Total timesteps (Samples) = num_envs * num_steps * num_episodes (~1M in this case)</sup><br>
+<sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
 
 ## Atari 2600
 
 ### Video
 
-| `BeamRiderNoFrameskip-v0` | `BreakoutNoFrameskip-v0` |
-|-|-|
-|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BeamRiderNoFrameskip-v0.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BreakoutNoFrameskip-v0.eval.gif" height=300px>|
 
-### Learning Curve
+| `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `PongNoFrameskip-v4`  | `SeaquestNoFrameskip-v4` |
+|---------------------------|--------------------------|-----------------------|--------------------------|
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BeamRiderNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.BreakoutNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.PongNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.SeaquestNoFrameskip-v4.eval.gif" height=300px>|
+| `AsteroidsNoFrameskip-v4` | `EnduroNoFrameskip-v4`   | `QbertNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` |
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.AsteroidsNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.EnduroNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.QbertNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.MsPacmanNoFrameskip-v4.eval.gif" height=300px>|
+
+
+### Results
 
 > Learning curve
 
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Total frames | Eval episodes |
+|---------------------------|------------:|-------------:|------------:|-------------:|--------------:|
+| `AsteroidsNoFrameskip-v4` |             |              |             | 10M          | 20            |
+| `BeamRiderNoFrameskip-v4` |             |              |             | 10M          | 20            |
+| `BreakoutNoFrameskip-v4`  |             |              |             | 10M          | 20            |
+| `EnduroNoFrameskip-v4`    |             |              |             | 10M          | 20            |
+| `MsPacmanNoFrameskip-v4`  |             |              |             | 10M          | 20            |
+| `PongNoFrameskip-v4`      |             |              |             | 10M          | 20            |
+| `QbertNoFrameskip-v4`     |             |              |             | 10M          | 20            |
+| `SeaquestNoFrameskip-v4`  |             |              |             | 10M          | 20            |
+
+<sup>M = million (1e6)</sup><br>
 
 ### Hyperparametrs
-| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`       |
-| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:------------------:|
-|`BeamRiderNoFrameskip-v0`| 8          | 20000          | 128         | 4            | 256          | 0.01       | 0.5       | :heavy_check_mark: |
-|`BreakoutNoFrameskip-v0` | 8          | 20000          | 128         | 4            | 256          | 0.01       | 0.5       | :heavy_check_mark: |
+
+| `env_id`        | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
+|-----------------|:-------------------------:|:-------------------------:|:------------------------:|:----------------------:|:------------------------:|:--------------------:|:---------------------:|:------------------------:|
+| `num_envs`      |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
+| `num_epochs`    |           10000           |           10000           |           10000          |          10000         |           10000          |         10000        |         10000         |           10000          |
+| `num_steps`     |            125            |            125            |            125           |           125          |            125           |          125         |          125          |            125           |
+| `num_subepochs` |             4             |             4             |             4            |            4           |             4            |           4          |           4           |             4            |
+| `batch_size`    |            128            |            128            |            128           |           128          |            128           |          128         |          128          |            128           |
+| `ent_coef`      |            0.01           |            0.01           |           0.01           |          0.01          |           0.01           |         0.01         |          0.01         |           0.01           |
+| `vf_coef`       |            0.5            |            0.5            |            0.5           |           0.5          |            0.5           |          0.5         |          0.5          |            0.5           |
+| `shared_net`    |     :heavy_check_mark:    |     :heavy_check_mark:    |    :heavy_check_mark:    |   :heavy_check_mark:   |    :heavy_check_mark:    |  :heavy_check_mark:  |   :heavy_check_mark:  |    :heavy_check_mark:    |
 
 
 ## Pybullet

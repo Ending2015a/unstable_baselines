@@ -21,11 +21,11 @@ function train() {
                    --logging='training.log' \
                    --monitor_dir='monitor' \
                    --tb_logdir='' \
-                   --model_dir='model/weights' \
+                   --model_path='model/weights' \
                    --env_id=$3 \
                    --num_envs=8 \
-                   --num_epochs=20000 \
-                   --num_steps=128 \
+                   --num_epochs=10000 \
+                   --num_steps=125 \
                    --num_subepochs=4 \
                    --batch_size=128 \
                    --log_interval=1 \
@@ -34,6 +34,7 @@ function train() {
                    --eval_max_steps=3000 \
                    --save_interval=1000 \
                    --verbose=2 \
+                   --shared_net \
                    --record_video
 }
 
