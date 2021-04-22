@@ -20,13 +20,13 @@
 python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id}/dqn/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=312500 \
-               --num_steps=4 --num_gradsteps=1 --batch_size=128 --target_update=625 \
+               --num_steps=4 --num_gradsteps=1 --batch_size=256 --target_update=625 \
                --explore_rate=1.0 --explore_final=0.05 --explore_progress=0.1 \
                --v_min=-10 --v_max=10 --num_atoms=51 --record_video
 ```
 
-<sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~10M in this case)</sup><br>
-
+<sup>Total timesteps (Samples) ≈ num_envs * num_steps * num_epochs (~10M in this case)</sup><br>
+<sup>Number of times each sample reused ≈ batch_size/num_steps * num_gradsteps/num_envs (~8 in this case)</sup><br>
 
 ## Atari 2600
 
@@ -43,15 +43,15 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 > Learning curve
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Total frames | Eval episodes |
-|---------------------------|-------------|--------------|-------------|--------------|---------------|
-| `AsteroidsNoFrameskip-v4` |             |              |             | 10M          | 20            |
-| `BeamRiderNoFrameskip-v4` | 10866       | 7142.6       | 2482.67     | 10M          | 20            |
-| `BreakoutNoFrameskip-v4`  | 381         | 372.3        | 8.0         | 10M          | 20            |
-| `EnduroNoFrameskip-v4`    |             |              |             | 10M          | 20            |
-| `MsPacmanNoFrameskip-v4`  |             |              |             | 10M          | 20            |
-| `PongNoFrameskip-v4`      | 21          | 20.8         | 0.6         | 10M          | 20            |
-| `QbertNoFrameskip-v4`     |             |              |             | 10M          | 20            |
-| `SeaquestNoFrameskip-v4`  |             |              |             | 10M          | 20            |
+|---------------------------|------------:|-------------:|------------:|-------------:|--------------:|
+| `AsteroidsNoFrameskip-v4` |             |              |             |          10M |            20 |
+| `BeamRiderNoFrameskip-v4` |       11500 |       7791.1 |     2570.17 |          10M |            20 |
+| `BreakoutNoFrameskip-v4`  |         424 |       393.05 |       25.72 |          10M |            20 |
+| `EnduroNoFrameskip-v4`    |        2229 |       1726.1 |      310.23 |          10M |            20 |
+| `MsPacmanNoFrameskip-v4`  |        3060 |       2796.5 |      316.31 |          10M |            20 |
+| `PongNoFrameskip-v4`      |          21 |         20.8 |         0.6 |          10M |            20 |
+| `QbertNoFrameskip-v4`     |       16550 |     15978.75 |      373.35 |          10M |            20 |
+| `SeaquestNoFrameskip-v4`  |        9660 |         8307 |      665.29 |          10M |            20 |
 
 <sup>M = million (1e6)</sup><br>
 
@@ -64,7 +64,7 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 | `num_epochs`       |           312500          |           312500          |          312500          |         312500         |          312500          |        312500        |         312500        |          312500          |
 | `num_steps`        |             4             |             4             |             4            |            4           |             4            |           4          |           4           |             4            |
 | `num_gradsteps`    |             1             |             1             |             1            |            1           |             1            |           1          |           1           |             1            |
-| `batch_size`       |            128            |            128            |            128           |           128          |            128           |          128         |          128          |            128           |
+| `batch_size`       |            256            |            256            |            256           |           256          |            256           |          256         |          256          |            256           |
 | `target_update`    |            625            |            625            |            625           |           625          |            625           |          625         |          625          |            625           |
 | `exploration`      |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)    |    Linear(1.0, 0.05)   |     Linear(1.0, 0.05)    |   Linear(1.0, 0.05)  |   Linear(1.0, 0.05)   |     Linear(1.0, 0.05)    |
 | `explore_progress` |            0.1            |            0.1            |            0.1           |           0.1          |            0.1           |          0.1         |          0.1          |            0.1           |
@@ -76,7 +76,7 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 |             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
 |:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :x:                | :heavy_check_mark: | :x:             | :x:           |
+| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
 | Action      | :x:                | :heavy_check_mark: | :x:             | :x:           |
 
 <br/>
