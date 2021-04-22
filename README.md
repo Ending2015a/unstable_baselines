@@ -71,10 +71,13 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 ### Distributional RL
 
-|            Algorithm            | `Box` |     `Discrete`     | `MultiDiscrete` | `MultiBinary` |
-|:-------------------------------:|:-----:|:------------------:|:---------------:|:-------------:|
-| [C51](unstable_baselines/d/c51) | :x:   | :heavy_check_mark: | :x:             | :x:           |
+|              Algorithm              | `Box` |     `Discrete`     | `MultiDiscrete` | `MultiBinary` |
+|:-----------------------------------:|:-----:|:------------------:|:---------------:|:-------------:|
+| [C51](unstable_baselines/d/c51)     |  :x:  | :heavy_check_mark: |       :x:       |      :x:      |
+| [QRDQN](unstable_baselines/d/qrdqn) |  :x:  | :heavy_check_mark: |       :x:       |      :x:      |
 
+* 2021.04.21: Implemented [QRDQN](unstable_baselines/d/qrdqn)
+  * From paper: [Distributional Reinforcement Learning with Quantile Regression](https://arxiv.org/abs/1710.10044)
 * 2021.04.20: Implemented [C51](unstable_baselines/d/c51)
   * From paper: [A Distributional Perspective on Reinforcement Learning](https://arxiv.org/abs/1707.06887)
 
