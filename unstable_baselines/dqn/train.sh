@@ -31,7 +31,7 @@ function train() {
                    --num_epochs=312500 \
                    --num_steps=4 \
                    --num_gradsteps=1 \
-                   --batch_size=128 \
+                   --batch_size=256 \
                    --buffer_size=1000000 \
                    --min_buffer=50000 \
                    --lr=3e-4 \
