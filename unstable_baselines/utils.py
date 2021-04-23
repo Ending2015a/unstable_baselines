@@ -30,7 +30,7 @@ __all__ = [
     'NormalActionNoise',
     'set_global_seeds',
     'normalize',
-    'unnormalize',
+    'denormalize',
     'to_json_serializable',
     'from_json_serializable',
     'tf_soft_update_params'
@@ -72,9 +72,9 @@ def normalize(x, low, high, nlow=0.0, nhigh=1.0):
     '''
     return ((nhigh-nlow)/(high-low)) * (x-low) + nlow
 
-def unnormalize(x, low, high, nlow=0.0, nhigh=1.0):
+def denormalize(x, low, high, nlow=0.0, nhigh=1.0):
     '''
-    Unnormalize x from [nlow, nhigh] to [low, high]
+    Denormalize x from [nlow, nhigh] to [low, high]
     '''
     return ((high-low)/(nhigh-nlow)) * (x-nlow) + low
 
