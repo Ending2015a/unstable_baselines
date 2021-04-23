@@ -12,29 +12,31 @@
 
 ### Run multiple environments with default arguments
 ```python
-./unstable_baselines/ppo/train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4" "SeaquestNoFrameskip-v4"
+./unstable_baselines/ppo/train.sh --rank 0 --seed 1 "BreakoutNoFrameskip-v4" "SeaquestNoFrameskip-v4" "PongNoFrameskip-v4"
 ```
 
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=10000 \
-               --num_steps=125 --num_subepochs=4 --batch_size=128 --verbose=2 \
+               --num_steps=125 --num_subepochs=8 --batch_size=256 --verbose=2 \
                --shared_net --record_video
 ```
 <sup>Enable `shared_net` shares the CNN between policy and value function.</sup><br/>
-<sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~10M in this case)</sup><br>
+<sup>Total timesteps (Samples) ≈ num_envs * num_steps * num_epochs (~10M in this case)</sup><br>
+<sup>Number of times each sample reused ≈ num_subepochs (~8 in this case)</sup><br>
 
 ### Continuous control environment
-```python
+<!-- ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
                --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 \
                --num_steps=1024 --num_subepochs=10 --batch_size=256 --verbose=2 \
                --ent_coef=0.0 --record_video
 ```
 <sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
+<sup>Number of times each sample reused = num_subepochs (~10 in this case)</sup><br> -->
 
 ## Atari 2600
 
@@ -52,16 +54,16 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 > Learning curve
 
-| `env_id`                  | Max rewards | Mean rewards | Std rewards | Total frames | Eval episodes |
-|---------------------------|------------:|-------------:|------------:|-------------:|--------------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             | 10M          | 20            |
-| `BeamRiderNoFrameskip-v4` |             |              |             | 10M          | 20            |
-| `BreakoutNoFrameskip-v4`  |             |              |             | 10M          | 20            |
-| `EnduroNoFrameskip-v4`    |             |              |             | 10M          | 20            |
-| `MsPacmanNoFrameskip-v4`  |             |              |             | 10M          | 20            |
-| `PongNoFrameskip-v4`      |             |              |             | 10M          | 20            |
-| `QbertNoFrameskip-v4`     |             |              |             | 10M          | 20            |
-| `SeaquestNoFrameskip-v4`  |             |              |             | 10M          | 20            |
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
+|---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
+| `AsteroidsNoFrameskip-v4` |             |              |             |           20M |        1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |             |              |             |           20M |        1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |             |              |             |           20M |        1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |             |              |             |           20M |        1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |             |              |             |           20M |        1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 
@@ -72,8 +74,8 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 | `num_envs`      |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
 | `num_epochs`    |           10000           |           10000           |           10000          |          10000         |           10000          |         10000        |         10000         |           10000          |
 | `num_steps`     |            125            |            125            |            125           |           125          |            125           |          125         |          125          |            125           |
-| `num_subepochs` |             4             |             4             |             4            |            4           |             4            |           4          |           4           |             4            |
-| `batch_size`    |            128            |            128            |            128           |           128          |            128           |          128         |          128          |            128           |
+| `num_subepochs` |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
+| `batch_size`    |            256            |            256            |            256           |           256          |            256           |          256         |          256          |            256           |
 | `ent_coef`      |            0.01           |            0.01           |           0.01           |          0.01          |           0.01           |         0.01         |          0.01         |           0.01           |
 | `vf_coef`       |            0.5            |            0.5            |            0.5           |           0.5          |            0.5           |          0.5         |          0.5          |            0.5           |
 | `shared_net`    |     :heavy_check_mark:    |     :heavy_check_mark:    |    :heavy_check_mark:    |   :heavy_check_mark:   |    :heavy_check_mark:    |  :heavy_check_mark:  |   :heavy_check_mark:  |    :heavy_check_mark:    |
@@ -97,19 +99,21 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 
 ### Hyperparametrs
-| `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`  |
+
+
+<!-- | `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`  |
 | ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:-------------:|
 |`HalfCheetahBulletEnv-v0`| 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
 |`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
 |`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
 |`Walker2DBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           |
-|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           |
+|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           | -->
 
 ## Architecture
 
 |             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
 |:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
+| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
 | Action      | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
 
 <br/>

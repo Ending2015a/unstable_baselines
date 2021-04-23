@@ -137,8 +137,10 @@ class GaeBuffer():
 
         start_idx = 0
         while start_idx < buffer_size:
+            # circular indexing (prevent truncated minibatch)
+            batch_indices = np.take(indices, range(start_idx, start_idx+batch_size), mode='wrap')
             # return generator
-            yield self._get_samples(indices[start_idx:start_idx + batch_size])
+            yield self._get_samples(batch_indices)
             start_idx += batch_size
 
     def _get_samples(self, indices):
@@ -163,8 +165,8 @@ class GaeBuffer():
         self.log_probs    = np.asarray(self.log_probs)    # (steps, n_envs)
         self.advantages   = np.zeros(self.values.shape,   dtype=np.float32) # (steps, n_envs)
 
-        # convert type bool to float32
-        self.dones        = self.dones.astype(np.float32)
+        # cast bool to float32
+        self.dones = self.dones.astype(np.float32)
 
         # compute GAE
         last_gae_lam = 0

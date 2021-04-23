@@ -26,8 +26,8 @@ function train() {
                    --num_envs=8 \
                    --num_epochs=10000 \
                    --num_steps=125 \
-                   --num_subepochs=4 \
-                   --batch_size=128 \
+                   --num_subepochs=8 \
+                   --batch_size=256 \
                    --log_interval=1 \
                    --eval_interval=1000 \
                    --eval_episodes=5 \
