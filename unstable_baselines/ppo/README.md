@@ -18,7 +18,7 @@
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=10000 \
                --num_steps=125 --num_subepochs=8 --batch_size=256 --verbose=2 \
                --shared_net --record_video
@@ -30,7 +30,7 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 ### Continuous control environment
 <!-- ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 \
                --num_steps=1024 --num_subepochs=10 --batch_size=256 --verbose=2 \
                --ent_coef=0.0 --record_video
