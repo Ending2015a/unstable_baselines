@@ -33,8 +33,12 @@ __all__ = [
     'denormalize',
     'to_json_serializable',
     'from_json_serializable',
-    'tf_soft_update_params'
+    'tf_soft_update_params',
+    'soft_update'
 ]
+
+
+SERIALIZATION_KEY='#serialized'
 
 
 # === Action noises ===
@@ -58,7 +62,6 @@ class StateObject(dict):
         self = super().__new__(cls, *args, **kwargs)
         self.__dict__ = self
         return self
-    
 
 # === utils ===
 def set_global_seeds(seed):
@@ -147,7 +150,6 @@ def from_json_serializable(json_dict):
     return deserialized_data
 
 
-# === tf utils ===
 @tf.function
 def tf_soft_update_params(target_vars, current_vars, polyak=0.005):
     '''

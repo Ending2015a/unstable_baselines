@@ -40,6 +40,7 @@ def _load_json_dict(filepath):
 
     return json_dict
 
+
 def _get_checkpoint_manager(checkpoint, filepath, checkpoint_name='weights', max_to_keep=None):
 
     manager = tf.train.CheckpointManager(
@@ -122,7 +123,9 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
 
         return cls.from_config(config)
 
-    def save(self, filepath: str, checkpoint_number: int=None):
+
+    def save(self, filepath: str, 
+                    checkpoint_number: int=None):
         '''Save model weights and config
 
         The weights are saved to `{filepath}-{checkpoint_number}.xxxxxx`
