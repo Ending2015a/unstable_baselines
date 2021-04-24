@@ -22,7 +22,7 @@ function train() {
                    --logging='training.log' \
                    --monitor_dir='monitor' \
                    --tb_logdir='' \
-                   --model_path='model/weights' \
+                   --model_dir='model' \
                    --env_id="$3" \
                    --log_interval=1000 \
                    --eval_interval=10000 \

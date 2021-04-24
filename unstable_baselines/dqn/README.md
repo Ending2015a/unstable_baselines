@@ -18,7 +18,7 @@
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/dqn/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=312500 \
                --num_steps=4 --num_gradsteps=1 --batch_size=256 --target_update=625 \
                --explore_rate=1.0 --explore_final=0.05 --explore_progress=0.1 \
@@ -44,14 +44,14 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |           10M |        1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |       10000 |       6011.5 |     1796.79 |           10M |        1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |         412 |          366 |       32.35 |           10M |        1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |             |              |             |           10M |        1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |             |              |             |           10M |        1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |          21 |           20 |        0.64 |           10M |        1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |             |              |             |           10M |        1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |        5030 |         3555 |     1393.45 |           10M |        1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |         460 |          306 |       81.69 |           10M |        1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |       10408 |       6806.6 |     1689.98 |           10M |        1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         413 |        250.4 |       76.65 |           10M |        1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |        1354 |       838.95 |      276.42 |           10M |        1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        2700 |       2109.5 |      295.82 |           10M |        1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |         20.9 |         0.3 |           10M |        1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |       11450 |         9575 |     1633.19 |           10M |        1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |       11660 |         9434 |     2410.74 |           10M |        1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 

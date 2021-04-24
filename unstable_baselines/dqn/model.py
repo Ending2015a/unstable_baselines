@@ -40,15 +40,12 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 
-from unstable_baselines.base import (SavableModel, 
+from unstable_baselines.base_v2 import (SavableModel, 
                                      TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils import (normalize,
-                                      to_json_serializable,
-                                      from_json_serializable,
-                                      tf_soft_update_params,
-                                      StateObject)
+from unstable_baselines.utils_v2 import (normalize,
+                                         StateObject)
 
 
 
@@ -398,7 +395,7 @@ class Agent(SavableModel):
                   'action_space':      self.action_space,
                   'force_mlp':         self.force_mlp}
 
-        return to_json_serializable(config)
+        return config
 
 
 class DQN(TrainableModel):
@@ -851,6 +848,7 @@ class DQN(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
+            eval_metrics = None
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
@@ -863,6 +861,9 @@ class DQN(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
+
+                # eval metrics to select the best model
+                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
@@ -903,6 +904,11 @@ class DQN(TrainableModel):
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))
 
+                    # find the best model path
+                    best_path = self._preload(save_path, best=True)
+                    if best_path == os.path.abspath(saved_path):
+                        LOG.debug(' (Current the best)')
+
         return self
 
     def get_config(self):
@@ -924,9 +930,6 @@ class DQN(TrainableModel):
         setup_config = {'observation_space': self.observation_space,
                         'action_space':      self.action_space}
 
-        init_config  = to_json_serializable(init_config)
-        setup_config = to_json_serializable(setup_config)
-
         return {'init_config': init_config,
                 'setup_config': setup_config}
     
@@ -936,8 +939,8 @@ class DQN(TrainableModel):
         assert 'init_config' in config, 'Failed to load {} config, init_config not found'.format(cls.__name__)
         assert 'setup_config' in config, 'Failed to load {} config, setup_config not found'.format(cls.__name__)
 
-        init_config = from_json_serializable(config['init_config'])
-        setup_config = from_json_serializable(config['setup_config'])
+        init_config  = config['init_config']
+        setup_config = config['setup_config']
 
         # construct model
         self = cls(env=None, **init_config)
