@@ -82,7 +82,7 @@ class NoopResetEnv(gym.Wrapper):
         return self.env.step(action)
 
 class MaxAndSkipEnv(gym.Wrapper):
-    def __init__(self, env, skip=4):
+    def __init__(self, env, skip=4, blend=4):
         """
         Return only every `skip`-th frame (frameskipping)
         :param env: (Gym Environment) the environment
@@ -90,8 +90,30 @@ class MaxAndSkipEnv(gym.Wrapper):
         """
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
-        self._obs_buffer = np.zeros((2,) + env.observation_space.shape, dtype=env.observation_space.dtype)
+        self._obs_buffer = np.zeros((blend,) + env.observation_space.shape, dtype=env.observation_space.dtype)
         self._skip = skip
+        self._blend = blend
+        self._render_buf = None
+        self._render_buf_flag = False
+        self._render_buf_mode = 'rgb_array'
+
+    def set_render_buf_flag(self, flag):
+        self._render_buf_flag = True if flag else False
+
+        if self._render_buf_flag is False:
+            self.render_buf = None
+
+    def set_render_buf_mode(self, type):
+        self._render_buf_mode = str(type)
+
+    def render(self, mode='human'):
+        if (self._render_buf_flag 
+                and (self._render_buf is not None) 
+                and (mode == self._render_buf_mode)):
+            img = self._render_buf.max(axis=0)
+            return img
+        else:
+            return self.env.render(mode=mode)
 
     def step(self, action):
         """
@@ -104,10 +126,18 @@ class MaxAndSkipEnv(gym.Wrapper):
         done = None
         for i in range(self._skip):
             obs, reward, done, info = self.env.step(action)
-            if i == self._skip - 2:
-                self._obs_buffer[0] = obs
-            if i == self._skip - 1:
-                self._obs_buffer[1] = obs
+
+            # store observations to buffer
+            self._obs_buffer[i % self._blend] = obs
+            # store rendered image to buffer
+            if self._render_buf_flag:
+                img = self.env.render(self._render_buf_mode)
+
+                if self._render_buf is None:
+                    self._render_buf = np.zeros((self._blend,) + img.shape, dtype=img.dtype)
+
+                self._render_buf[i % self._blend] = img
+
             total_reward += reward
             if done:
                 break
@@ -840,6 +870,13 @@ class Monitor(gym.Wrapper):
         prefix = os.path.basename(path)
 
         if enabled:
+            # enable frame blending
+            if hasattr(self.env, 'set_render_buf_flag'):
+                self.env.set_render_buf_flag(True)
+            
+            if hasattr(self.env, 'set_render_buf_type'):
+                self.env.set_render_buf_mode('rgb_array')
+
             self._ensure_path_exists(path)
             # generate random filename
             with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.mp4', delete=False) as f:
@@ -847,6 +884,9 @@ class Monitor(gym.Wrapper):
             with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.json', delete=False) as f:
                 meta_path  = f.name
         else:
+            # disable frame blending
+            if hasattr(self.env, 'set_render_buf_flag'):
+                self.env.set_render_buf_flag(False)
             video_path = None
             meta_path  = None
 
