@@ -225,7 +225,7 @@ class StatsRecorder(object):
         self.filename = self._make_path(directory, prefix, ext)
         self.header = json.dumps({"t_start": self.t_start, 'env_id': self.env_id})
         self._ensure_path_exists(self.filename)
-        LOG.info('Writing monitor to: ' + self.filename)
+        LOG.debug('Writing monitor to: ' + self.filename)
 
         # write header
         self.file_handler = open(self.filename, "wt")
@@ -473,7 +473,7 @@ class VideoRecorder(object):
         modes       = env.metadata.get('render.modes', [])
 
         if 'rgb_array' not in modes:
-            LOG.info('Disabling video recorder because {} not supports video mode "rgb_array"'.format(env))
+            LOG.warn('Disabling video recorder because {} not supports video mode "rgb_array"'.format(env))
             self.enabled = False
             return
         
@@ -515,7 +515,7 @@ class VideoRecorder(object):
             if self._async:
                 return
             else:
-                LOG.info('Env returned None on render(). Disabling further rendering for video recorder by marking as disabled: {}'.format(self.path))
+                LOG.error('Env returned None on render(). Disabling further rendering for video recorder by marking as disabled: {}'.format(self.path))
                 self.broken = True
         else:
             self._encode_image_frame(frame)
@@ -536,7 +536,7 @@ class VideoRecorder(object):
             self.metadata['empty'] = True
 
         if self.broken:
-            LOG.info('Cleaning up paths for broken video recorder: {}'.format(self.path))
+            LOG.warn('Cleaning up paths for broken video recorder: {}'.format(self.path))
 
             if os.path.isfile(self.path):
                 os.remove(self.path)
@@ -720,7 +720,7 @@ class Monitor(gym.Wrapper):
 
         self.enabled = False
 
-        LOG.info('Finished writing results')
+        LOG.debug('Finished writing results')
 
     def _before_step(self):
         if not self.enabled:
@@ -818,14 +818,14 @@ class Monitor(gym.Wrapper):
         # save metadata
         if os.path.isfile(self.video_recorder.meta_path):
             os.rename(self.video_recorder.meta_path, meta_path)
-            LOG.info('Saving metadata to: {}'.format(meta_path))
+            LOG.debug('Saving metadata to: {}'.format(meta_path))
         else:
             LOG.warn('Metadata not found: {}'.format(meta_path))
 
         # save video
         if os.path.isfile(self.video_recorder.path):
             os.rename(self.video_recorder.path, video_path)
-            LOG.info('Saving video to: {}'.format(video_path))
+            LOG.debug('Saving video to: {}'.format(video_path))
         else:
             if self.video_recorder.broken:
                 LOG.warn('Failed to save video, the VideoRecorder is broken, for more info: {}'.format(meta_path))
