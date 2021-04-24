@@ -18,7 +18,7 @@
 ### Atari-like environment (Image observation + discrete action)
 ```python
 python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id}/dqn/{rank}' \
-               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_path='model/weights' \
+               --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=312500 \
                --num_steps=4 --num_gradsteps=1 --batch_size=256 --target_update=625 \
                --explore_rate=1.0 --explore_final=0.05 --explore_progress=0.1 \
@@ -44,7 +44,7 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        1980 |          752 |      332.68 |           10M |         1~8 |            20 |         0 |
 | `BeamRiderNoFrameskip-v4` |       11500 |       7791.1 |     2570.17 |           10M |         1~8 |            20 |         0 |
 | `BreakoutNoFrameskip-v4`  |         424 |       393.05 |       25.72 |           10M |         1~8 |            20 |         0 |
 | `EnduroNoFrameskip-v4`    |        2229 |       1726.1 |      310.23 |           10M |         1~8 |            20 |         0 |

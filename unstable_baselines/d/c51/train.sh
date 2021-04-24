@@ -18,11 +18,11 @@ function train() {
     echo "Start training, rank=$1, seed=$2, env_id=$3"
     
     python -m $exe --rank $rank --seed $seed \
-                --logdir='./log/{env_id}/c51_2/{rank}' \
+                --logdir='./log/{env_id}/c51/{rank}' \
                 --logging='training.log' \
                 --monitor_dir='monitor' \
                 --tb_logdir='' \
-                --model_path='model/weights' \
+                --model_dir='model' \
                 --env_id="${env_id}" \
                 --log_interval=1000 \
                 --eval_interval=10000 \
