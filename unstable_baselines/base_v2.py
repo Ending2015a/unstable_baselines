@@ -489,7 +489,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
     @classmethod
     def _preload(cls,  file_or_dir: str,
                        weights_name: str=WEIGHTS_NAME,
-                       restore_best: bool=False):
+                       best: bool=False):
         '''This method returns the aboluste path of the best 
         matched checkpoint file.
 
@@ -547,14 +547,14 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             file_or_dir (str): A path to the checkpoint directory or
                 a full checkpoint path.
             weights_name (str, optional): Weights name. Defaults to WEIGHTS_NAME.
-            restore_best (bool, optional): Whether to restore the best
+            best (bool, optional): Whether to restore the best
                 checkpoint. Defaults to False.
 
         Raises:
             RuntimeError: Couldn't find a valid checkpoint path.
 
         Returns:
-            str: Checkpoint path.
+            str: Checkpoint path (absolute path).
         '''        
 
         checkpoint_path = None
@@ -566,7 +566,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             # if checkpoint state or best checkpoint state
             # files exist, get checkpoint path from files.
             # Eg. directory = model/
-            if restore_best:
+            if best:
                 checkpoint_path = _get_best_checkpoint(directory)
             else:
                 checkpoint_path = tf.train.latest_checkpoint(directory)
@@ -603,12 +603,12 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
     @classmethod
     def load(cls,  file_or_dir: str,
                    weights_name: str=WEIGHTS_NAME,
-                   restore_best: bool=False):
+                   best: bool=False):
         
         # find checkpoint path
         checkpoint_path = cls._preload(file_or_dir,
                                         weights_name,
-                                        restore_best)
+                                        best)
 
         LOG.debug('Restore weights from: {}'.format(checkpoint_path))
 
@@ -622,118 +622,6 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         status = tf.train.Checkpoint(model=self).restore(checkpoint_path)
 
         return self
-
-    # def save(self, filepath: str, 
-    #                 checkpoint_number: int=None):
-    #     '''Save model weights and config
-
-    #     The weights are saved to `{filepath}-{checkpoint_number}.xxxxxx`
-    #     and config saved to `{filepath}-{checkpoint_number}-config.xxxxxx`
-
-    #     Args:
-    #         filepath (str): path to save weights and config. If a directory
-    #             is given (path followed by a single '/'), the weights are 
-    #             saved to `{filepath}/weights.xxxxxx`.
-    #         checkpoint_number (int, optional): checkpoint number.
-    #             Defaults to None.
-    #     '''
-
-    #     # is a directory
-    #     if filepath.endswith('/'):
-    #         filepath = os.path.join(filepath, WEIGHTS_NAME)
-
-    #     # base path
-    #     filepath = os.path.abspath(filepath)
-    #     filedir  = os.path.dirname(filepath)
-    #     filename = os.path.basename(filepath)
-
-    #     # create checkpoint 
-    #     checkpoint = tf.train.Checkpoint(model=self)
-
-    #     # create checkpoint manager
-    #     manager = _get_checkpoint_manager(checkpoint, filedir, filename)
-
-    #     # get latest checkpoint number
-    #     latest_checkpoint = manager.latest_checkpoint
-    #     latest_checkpoint_number = _get_latest_checkpoint_number(latest_checkpoint)
-
-    #     if latest_checkpoint_number is None:
-    #         latest_checkpoint_number = 0
-
-    #     if checkpoint_number is None:
-    #         checkpoint_number = latest_checkpoint_number + 1
-
-    #     # save weights
-    #     manager.save(checkpoint_number=checkpoint_number)
-
-    #     # save config
-    #     config_path = manager.latest_checkpoint + CONFIG_SUFFIX
-    #     self.save_config(config_path)
-
-    #     return manager.latest_checkpoint
-
-    # @classmethod
-    # def load(cls, filepath: str):
-    #     '''Restore model
-
-    #     Restore model from the given `filepath`. `filepath` can 
-    #     be either the root directory or the full checkpoint name. 
-    #     For example, the checkpoint directory has the following
-    #     structure:
-
-    #     model/
-    #     ├── checkpoint  (*)
-    #     ├── weights-5.config.json
-    #     ├── weights-5.data-00000-of-00001
-    #     ├── weights-5.index
-    #     ├── weights-10.config.json
-    #     ├── weights-10.data-00000-of-00001
-    #     ├── weights-10.index
-    #     ├── weights-15.config.json
-    #     ├── weights-15.data-00000-of-00001
-    #     └── weights-15.index
-
-    #     If `model/` is given, the latest checkpoint is loaded
-    #     acccording to the `checkpoint` file (*), which, in this case,
-    #     is `weights-15`. If `model/weights-10` is given, then 
-    #     `model/weights-10` is loaded.
-
-    #     Args:
-    #         filepath (str): path to load weights and config. 
-
-    #     Raises:
-    #         RuntimeError: Config file not found
-
-    #     Returns:
-    #         DQN: restored model
-    #     '''
-
-    #     filepath = os.path.abspath(filepath)
-
-    #     if os.path.isdir(filepath):
-    #         # get latest checkpoint. (filepath is a dir)
-    #         latest_checkpoint = tf.train.latest_checkpoint(filepath)
-    #     else:
-    #         # get latest checkpoint (full checkpoint name)
-    #         latest_checkpoint = filepath
-
-    #     # determines whether the file exists
-    #     config_path = latest_checkpoint + CONFIG_SUFFIX
-
-    #     if not os.path.isfile(config_path):
-    #         raise RuntimeError('Failed to restore model, config file not '
-    #                 'found: {}'.format(config_path))
-        
-    #     LOG.debug('Restore weights from: {}'.format(latest_checkpoint))
-
-    #     # restore config & reconstruct model
-    #     self   = cls.load_config(config_path)
-
-    #     # restore weights
-    #     status = tf.train.Checkpoint(model=self).restore(latest_checkpoint)
-
-    #     return self
-
 
     def update(self, other_model, polyak=1.0, all_vars=False):
         '''
