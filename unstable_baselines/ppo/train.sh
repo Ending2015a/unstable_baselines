@@ -19,20 +19,21 @@ function train() {
     python -m $exe --rank $1 --seed $2 \
                    --logdir='./log/{env_id}/ppo/{rank}' \
                    --logging='training.log' \
+                   --log_level='DEBUG' \
                    --monitor_dir='monitor' \
                    --tb_logdir='' \
-                   --model_path='model/weights' \
+                   --model_dir='model' \
                    --env_id=$3 \
                    --num_envs=8 \
                    --num_epochs=10000 \
                    --num_steps=125 \
                    --num_subepochs=8 \
                    --batch_size=256 \
-                   --log_interval=1 \
-                   --eval_interval=1000 \
+                   --log_interval=100 \
+                   --eval_interval=500 \
                    --eval_episodes=5 \
                    --eval_max_steps=3000 \
-                   --save_interval=1000 \
+                   --save_interval=500 \
                    --verbose=2 \
                    --shared_net \
                    --record_video
