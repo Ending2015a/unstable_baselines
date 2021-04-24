@@ -270,9 +270,9 @@ if __name__ == '__main__':
         LOG.info('Saving model to: {}'.format(saved_path))
 
         # load the "latest" checkpoint
-        loaded_model = PPO.load(saved_path)
-        # or you can directly load from a.model_dir
-        # loaded_model = PPO.load(a.model_dir)
+        loaded_model = PPO.load(a.model_dir)
+        # or you can directly load from saved_path
+        # loaded_model = PPO.load(saved_path)
 
         # set env to continue training
         # loaded_model.set_env(env)
@@ -285,7 +285,7 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        # saved_path = model.agent.save(a.model_path)
+        # saved_path = model.agent.save(a.model_dir)
         # LOG.info('Saving model to: {}'.format(saved_path))
         # loaded_model = PPOAgent.load(saved_path)
 
@@ -315,7 +315,7 @@ if __name__ == '__main__':
 
 
         # load the "best" checkpoints
-        loaded_model = PPO.load(saved_path, best=True)
+        loaded_model = PPO.load(a.model_dir, best=True)
 
         LOG.info('Evaluating model (Best checkpoint)')
         eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=20)

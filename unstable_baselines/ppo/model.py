@@ -47,9 +47,7 @@ from unstable_baselines.bugs import ReLU
 from unstable_baselines.prob import (Categorical,
                                      MultiNormal)
 from unstable_baselines.utils_v2 import (set_global_seeds,
-                                         normalize,
-                                         to_json_serializable,
-                                         from_json_serializable)
+                                         normalize)
 
 
 
@@ -640,7 +638,7 @@ class Agent(SavableModel):
                   'shared_net':        self.shared_net,
                   'force_mlp':         self.force_mlp}
 
-        return to_json_serializable(config)
+        return config
 
 
 class PPO(TrainableModel):
