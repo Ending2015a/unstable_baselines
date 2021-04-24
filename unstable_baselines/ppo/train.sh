@@ -19,7 +19,7 @@ function train() {
     python -m $exe --rank $1 --seed $2 \
                    --logdir='./log/{env_id}/ppo/{rank}' \
                    --logging='training.log' \
-                   --log_level='DEBUG' \
+                   --log_level='INFO' \
                    --monitor_dir='monitor' \
                    --tb_logdir='' \
                    --model_dir='model' \
