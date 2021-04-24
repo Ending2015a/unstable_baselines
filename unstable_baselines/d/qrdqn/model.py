@@ -40,15 +40,12 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 
-from unstable_baselines.base import (SavableModel, 
-                                     TrainableModel)
+from unstable_baselines.base_v2 import (SavableModel, 
+                                        TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils import (normalize,
-                                      to_json_serializable,
-                                      from_json_serializable,
-                                      tf_soft_update_params,
-                                      StateObject)
+from unstable_baselines.utils_v2 import (normalize,
+                                        StateObject)
 
 
 
@@ -267,7 +264,7 @@ class QuantileQNet(tf.keras.Model):
 
 class Agent(SavableModel):
     def __init__(self, observation_space, action_space, n_quantiles=200, force_mlp=False, **kwargs):
-        '''C51 Agent
+        '''QRDQN Agent
 
         Args:
             observation_space (gym.Spaces): The observation space of the environment.
@@ -409,7 +406,7 @@ class Agent(SavableModel):
                   'n_quantiles':       self.n_quantiles,
                   'force_mlp':         self.force_mlp}
 
-        return to_json_serializable(config)
+        return config
 
 
 class QRDQN(TrainableModel):
@@ -771,7 +768,7 @@ class QRDQN(TrainableModel):
                     target_update:    int = 2500,
                     tb_logdir:        str = None,
                     reset_timesteps: bool = False):
-        '''Train C51
+        '''Train QRDQN
 
         Args:
             total_timesteps (int): Total timesteps to train agent.
@@ -794,7 +791,7 @@ class QRDQN(TrainableModel):
             reset_timesteps (bool, optional): reset timesteps. Defaults to False.
 
         Returns:
-            C51: self
+            QRDQN: self
         '''        
 
         assert self.env is not None, 'Env not set, call set_env() before training'
@@ -883,6 +880,7 @@ class QRDQN(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
+            eval_metrics = None
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
@@ -895,6 +893,9 @@ class QRDQN(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
+
+                # eval metrics to select the best model
+                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
@@ -930,10 +931,16 @@ class QRDQN(TrainableModel):
             if ((save_path is not None) and (save_interval is not None)
                     and (self.num_epochs % save_interval) == 0):
                 
-                saved_path = self.save(save_path, checkpoint_number=self.num_epochs)
+                saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
+                                    checkpoint_metrics=eval_metrics)
 
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))
+
+                    # find the best model path
+                    best_path = self._preload(save_path, best=True)
+                    if best_path == os.path.abspath(saved_path):
+                        LOG.debug(' (Current the best)')
 
         return self
 
@@ -957,9 +964,6 @@ class QRDQN(TrainableModel):
         setup_config = {'observation_space': self.observation_space,
                         'action_space':      self.action_space}
 
-        init_config  = to_json_serializable(init_config)
-        setup_config = to_json_serializable(setup_config)
-
         return {'init_config': init_config,
                 'setup_config': setup_config}
     
@@ -969,8 +973,8 @@ class QRDQN(TrainableModel):
         assert 'init_config' in config, 'Failed to load {} config, init_config not found'.format(cls.__name__)
         assert 'setup_config' in config, 'Failed to load {} config, setup_config not found'.format(cls.__name__)
 
-        init_config = from_json_serializable(config['init_config'])
-        setup_config = from_json_serializable(config['setup_config'])
+        init_config = config['init_config']
+        setup_config = config['setup_config']
 
         # construct model
         self = cls(env=None, **init_config)

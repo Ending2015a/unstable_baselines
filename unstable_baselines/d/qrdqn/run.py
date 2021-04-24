@@ -39,7 +39,7 @@ import numpy as np
 from unstable_baselines import logger
 
 from unstable_baselines.envs import *
-from unstable_baselines.utils import set_global_seeds
+from unstable_baselines.utils_v2 import set_global_seeds
 from unstable_baselines.sche import LinearScheduler
 
 from unstable_baselines.d.qrdqn.model import QRDQN
@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument('--log_level',        type=str, default='INFO',                     help='Log level')
     parser.add_argument('--monitor_dir',      type=str, default='monitor',                  help='Monitor dir          (args: {env_id}, {rank})')
     parser.add_argument('--tb_logdir',        type=str, default='',                         help='Tensorboard log name (args: {env_id}, {rank})')
-    parser.add_argument('--model_path',       type=str, default='model/weights',            help='Model save path      (args: {env_id}, {rank})')
+    parser.add_argument('--model_dir',        type=str, default='model',                    help='Model save path      (args: {env_id}, {rank})')
     parser.add_argument('--env_id',           type=str, default='BeamRiderNoFrameskip-v0',  help='Environment ID')
     parser.add_argument('--num_envs',         type=int, default=4,      help='Number of environments')
     parser.add_argument('--num_epochs',       type=int, default=625000, help='Number of training epochs')
@@ -90,7 +90,7 @@ def parse_args():
     a.logging     = os.path.join(a.logdir, a.logging).format(env_id=a.env_id,     rank=a.rank)
     a.monitor_dir = os.path.join(a.logdir, a.monitor_dir).format(env_id=a.env_id, rank=a.rank)
     a.tb_logdir   = os.path.join(a.logdir, a.tb_logdir).format(env_id=a.env_id,   rank=a.rank)
-    a.model_path  = os.path.join(a.logdir, a.model_path).format(env_id=a.env_id,  rank=a.rank)
+    a.model_dir  = os.path.join(a.logdir, a.model_dir).format(env_id=a.env_id,  rank=a.rank)
 
     return a
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     LOG.add_row('Logging path',          a.logging)
     LOG.add_row('Monitor path',          a.monitor_dir)
     LOG.add_row('Tensorboard path',      a.tb_logdir)
-    LOG.add_row('Model path',            a.model_path)
+    LOG.add_row('Model path',            a.model_dir)
     LOG.add_row('Env ID',                a.env_id)
     LOG.add_row('Seed',                  a.seed)
     LOG.add_row('Eval seed',             a.eval_seed)
@@ -207,20 +207,20 @@ if __name__ == '__main__':
 
     # === Create model ===
     try:
-        model = C51(env, learning_rate    = a.lr,
-                         buffer_size      = a.buffer_size,
-                         min_buffer       = a.min_buffer,
-                         n_quantiles      = a.num_quantiles,
-                         n_steps          = a.num_steps,
-                         n_gradsteps      = a.num_gradsteps,
-                         batch_size       = a.batch_size,
-                         gamma            = a.gamma,
-                         tau              = a.tau,
-                         kappa            = a.kappa,
-                         max_grad_norm    = a.max_grad_norm,
-                         force_mlp        = a.force_mlp,
-                         explore_schedule =   explore_schedule,
-                         verbose          = a.verbose)
+        model = QRDQN(env, learning_rate    = a.lr,
+                           buffer_size      = a.buffer_size,
+                           min_buffer       = a.min_buffer,
+                           n_quantiles      = a.num_quantiles,
+                           n_steps          = a.num_steps,
+                           n_gradsteps      = a.num_gradsteps,
+                           batch_size       = a.batch_size,
+                           gamma            = a.gamma,
+                           tau              = a.tau,
+                           kappa            = a.kappa,
+                           max_grad_norm    = a.max_grad_norm,
+                           force_mlp        = a.force_mlp,
+                           explore_schedule =   explore_schedule,
+                           verbose          = a.verbose)
         
         # Total timesteps = num_steps * num_envs * num_epochs (default ~ 10M)
         model.learn(a.num_steps *    a.num_envs * a.num_epochs, 
@@ -231,16 +231,19 @@ if __name__ == '__main__':
                     eval_episodes  = a.eval_episodes, 
                     eval_max_steps = a.eval_max_steps,
                     save_interval  = a.save_interval,
-                    save_path      = a.model_path,
+                    save_path      = a.model_dir,
                     target_update  = a.target_update)
         
         LOG.info('DONE')
 
         # Save complete model (continue training)
-        saved_path = model.save(a.model_path)
+        saved_path = model.save(a.model_dir)
         LOG.info('Saving model to: {}'.format(saved_path))
 
-        loaded_model = QRDQN.load(saved_path)
+        # load the "latest" checkpoint
+        loaded_model = QRDQN.load(a.model_dir)
+        # or you can load from saved_path
+        # loaded_model = QRDQN.load(saved_path)
 
         # set env to continue training
         # loaded_model.set_env(env)
@@ -253,13 +256,38 @@ if __name__ == '__main__':
         #                     eval_max_steps = a.eval_max_steps)
 
         # Save agent only
-        # saved_path = model.agent.save(a.model_path)
+        # saved_path = model.agent.save(a.model_dir)
         # LOG.info('Saving model to: {}'.format(saved_path))
         # loaded_model = QRDQNAgent.load(saved_path)
 
         # Evaluate model
-        LOG.info('Evaluating model')
+        LOG.info('Evaluating model (Latest checkpoint)')
         
+        eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=20)
+
+        max_idx    = np.argmax(eps_rews)
+        max_rews   = eps_rews[max_idx]
+        max_steps  = eps_steps[max_idx]
+        mean_rews  = np.mean(eps_rews)
+        std_rews   = np.std(eps_rews)
+        mean_steps = np.mean(eps_steps)
+
+        # === Print evaluation results ===
+        LOG.set_header('Final Evaluation Results')
+        LOG.add_line()
+        LOG.add_row('Max rewards',  max_rews)
+        LOG.add_row('  Length',     max_steps)
+        LOG.add_line()
+        LOG.add_row('Mean rewards', mean_rews)
+        LOG.add_row('Std rewards',  std_rews, fmt='{}: {:.6f}')
+        LOG.add_row('Mean length',  mean_steps)
+        LOG.add_line()
+        LOG.flush('INFO')
+
+        # load the "best" checkpoints
+        loaded_model = QRDQN.load(a.model_dir, best=True)
+
+        LOG.info('Evaluating model (Best checkpoint)')    
         eps_rews, eps_steps = loaded_model.eval(eval_env, n_episodes=20)
 
         max_idx    = np.argmax(eps_rews)
