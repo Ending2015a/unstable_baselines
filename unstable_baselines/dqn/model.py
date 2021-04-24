@@ -899,7 +899,8 @@ class DQN(TrainableModel):
             if ((save_path is not None) and (save_interval is not None)
                     and (self.num_epochs % save_interval) == 0):
                 
-                saved_path = self.save(save_path, checkpoint_number=self.num_epochs)
+                saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
+                                    checkpoint_metrics=eval_metrics)
 
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))

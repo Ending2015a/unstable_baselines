@@ -240,7 +240,7 @@ if __name__ == '__main__':
         # load the "latest" checkpoint
         loaded_model = DQN.load(a.model_dir)
         # or you can load from saved_path
-        # loaded_model = PPO.load(saved_path)
+        # loaded_model = DQN.load(saved_path)
 
         # set env to continue training
         # loaded_model.set_env(env)
