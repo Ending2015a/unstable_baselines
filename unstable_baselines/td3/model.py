@@ -534,7 +534,7 @@ class TD3(TrainableModel):
             env (gym.Env): Training environment.
         '''
 
-        if self.observation is not None:
+        if self.observation_space is not None:
             if env.observation_space != self.observation_space:
                 raise RuntimeError("Observation space does not match, "
                                 "expected {}, got {}".format(

@@ -44,8 +44,9 @@ from unstable_baselines.base_v2 import (SavableModel,
                                      TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils_v2 import (normalize,
-                                         StateObject)
+from unstable_baselines.utils_v2 import (is_image_observation,
+                                         preprocess_observation,
+                                         get_input_tensor_from_space)
 
 
 
@@ -289,12 +290,19 @@ class Agent(SavableModel):
                 environment.
             action_space (gym.Spaces): The action space of the environment.
         '''
+        if observation_space is None:
+            raise ValueError("Observation space not provided: "
+                            "{}".format(observation_space))
+        if action_space is None:
+            raise ValueError("Action space not provided: {}".format(
+                            action_space))
         
         self.observation_space = observation_space
         self.action_space      = action_space
 
         # --- setup model ---
-        if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
+        if (is_image_observation(observation_space)
+                and (not self.force_mlp)):
             self.net = NatureCnn()
         else:
             self.net = MlpNet()
@@ -302,7 +310,7 @@ class Agent(SavableModel):
         self.q_net = QNet(action_space)
 
         # construct networks
-        inputs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        inputs = get_input_tensor_from_space(observation_space)
 
         outputs = self.net(inputs)
         self.q_net(outputs)
@@ -322,16 +330,9 @@ class Agent(SavableModel):
             tf.Tensor: predicted state-action values in shape (batch, act_space.n),
                 tf.float32
         '''
-
-        # cast and normalize non-float32 inputs (e.g. image with uint8)
-        if tf.as_dtype(inputs.dtype) != tf.float32:
-            # cast observations to float32
-            inputs = tf.cast(inputs, dtype=tf.float32)
-            low    = tf.cast(self.observation_space.low, dtype=tf.float32)
-            high   = tf.cast(self.observation_space.high, dtype=tf.float32)
-            # normalize observations [0, 1]
-            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
-
+        # cast and normalize non-float32 inputs (e.g. image in uint8)
+        # NOTICE: image in float32 is considered as having been normalized
+        inputs = preprocess_observation(inputs, self.observation_space)
         # forward network
         latent = self.net(inputs, training=training)
         # forward policy net
@@ -381,7 +382,7 @@ class Agent(SavableModel):
 
         # predict
         outputs, *_ = self(inputs, training=False)
-        outputs     = outputs.numpy()
+        outputs     = np.asarray(outputs)
 
         if one_sample:
             outputs = np.squeeze(outputs, axis=0)
@@ -482,15 +483,19 @@ class DQN(TrainableModel):
         Args:
             env (gym.Env): Training environment.
         '''
-
         if self.observation_space is not None:
-            assert env.observation_space == self.observation_space, 'Observation space mismatch, expect {}, got {}'.format(
-                                                                        self.observation_space, env.observation_space)
+            if env.observation_space != self.observation_space:
+                raise RuntimeError("Observation space does not match, "
+                                "expected {}, got {}".format(
+                                    self.observation_space,
+                                    env.observation_space))
 
         if self.action_space is not None:
-            assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
-                                                                self.action_space, env.action_space)
-        
+            if env.action_space != self.action_space:
+                raise RuntimeError("Action space does not match, "
+                                "expected {}, got {}".format(
+                                    self.action_space,
+                                    env.action_space))
         self.env    = env
         self.n_envs = env.n_envs
 
@@ -502,14 +507,20 @@ class DQN(TrainableModel):
                 environment.
             action_space (gym.Spaces): The action space of the environment.
         '''
+        if observation_space is None:
+            raise ValueError("Observation space not provided: "
+                            "{}".format(observation_space))
+        if action_space is None:
+            raise ValueError("Action space not provided: {}".format(
+                            action_space))
         
         self.observation_space = observation_space
         self.action_space      = action_space
 
         # --- setup model ---
         self.buffer       = ReplayBuffer(buffer_size=self.buffer_size)
-        self.agent        = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
-        self.agent_target = Agent(self.observation_space, self.action_space, force_mlp=self.force_mlp)
+        self.agent        = Agent(observation_space, action_space, force_mlp=self.force_mlp)
+        self.agent_target = Agent(observation_space, action_space, force_mlp=self.force_mlp)
 
         self.optimizer    = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
                                                   clipnorm=self.max_grad_norm)

@@ -74,10 +74,10 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 ## Architecture
 
-|             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
-|:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
-| Action      | :x:                | :heavy_check_mark: | :x:             | :x:           |
+|             |        `Box`       |     `Discrete`     |   `MultiDiscrete`  |    `MultiBinary`   |
+|-------------|:------------------:|:------------------:|:------------------:|:------------------:|
+| Observation | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Action      |         :x:        | :heavy_check_mark: |         :x:        |         :x:        |
 
 <br/>
 <br/>

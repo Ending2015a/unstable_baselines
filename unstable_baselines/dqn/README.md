@@ -42,16 +42,16 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 > Learning curve
 
-| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
-|---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |        1530 |          667 |      265.68 |           10M |        1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |       10408 |       6806.6 |     1689.98 |           10M |        1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |         413 |        250.4 |       76.65 |           10M |        1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |        1354 |       838.95 |      276.42 |           10M |        1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |        2700 |       2109.5 |      295.82 |           10M |        1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |          21 |         20.9 |         0.3 |           10M |        1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |       11450 |         9575 |     1633.19 |           10M |        1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |       11660 |         9434 |     2410.74 |           10M |        1~8 |            20 |         0 |
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
+|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+| `AsteroidsNoFrameskip-v4` |        1530 |          667 |      265.68 |           10M |         1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |       10408 |       6806.6 |     1689.98 |           10M |         1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         413 |        250.4 |       76.65 |           10M |         1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |        1354 |       838.95 |      276.42 |           10M |         1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        2700 |       2109.5 |      295.82 |           10M |         1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |         20.9 |         0.3 |           10M |         1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |       11450 |         9575 |     1633.19 |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |       11660 |         9434 |     2410.74 |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 
@@ -71,10 +71,10 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 ## Architecture
 
-|             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
-|:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
-| Action      | :x:                | :heavy_check_mark: | :x:             | :x:           |
+|             |        `Box`       |     `Discrete`     |   `MultiDiscrete`  |    `MultiBinary`   |
+|-------------|:------------------:|:------------------:|:------------------:|:------------------:|
+| Observation | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Action      |         :x:        | :heavy_check_mark: |         :x:        |         :x:        |
 
 <br/>
 <br/>
