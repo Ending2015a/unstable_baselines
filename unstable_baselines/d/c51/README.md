@@ -44,14 +44,14 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |        1980 |          752 |      332.68 |           10M |         1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        1610 |        851.5 |       302.2 |           10M |         1~8 |            20 |         0 |
 | `BeamRiderNoFrameskip-v4` |       11500 |       7791.1 |     2570.17 |           10M |         1~8 |            20 |         0 |
 | `BreakoutNoFrameskip-v4`  |         424 |       393.05 |       25.72 |           10M |         1~8 |            20 |         0 |
 | `EnduroNoFrameskip-v4`    |        2229 |       1726.1 |      310.23 |           10M |         1~8 |            20 |         0 |
 | `MsPacmanNoFrameskip-v4`  |        3060 |       2796.5 |      316.31 |           10M |         1~8 |            20 |         0 |
 | `PongNoFrameskip-v4`      |          21 |         20.8 |         0.6 |           10M |         1~8 |            20 |         0 |
 | `QbertNoFrameskip-v4`     |       16550 |     15978.75 |      373.35 |           10M |         1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |        9660 |         8307 |      665.29 |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |       15970 |         8951 |      2381.3 |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 

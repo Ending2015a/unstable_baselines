@@ -149,6 +149,75 @@ def soft_update(target_vars, source_vars, polyak=0.005):
         tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
 
 
+def is_image_observation(obs_space):
+
+    return (isinstance(obs_space, gym.spaces.Box) and
+                len(obs_space.shape) == 3)
+
+# === TensorFlow utils ===
+
+def preprocess_observation(inputs, obs_space, dtype=tf.float32):
+    # we only normalize non-float32 inputs
+    # Eg. image observation (Box, uint8)
+    if tf.as_dtype(inputs.dtype) == tf.float32:
+        return inputs
+
+    if isinstance(obs_space, gym.spaces.Box):
+        inputs = tf.cast(inputs, dtype=tf.float32)
+        low    = tf.constant(obs_space.low, dtype=tf.float32)
+        high   = tf.constant(obs_space.high, dtype=tf.float32)
+        # normalize observations [0, 1]
+        inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
+    elif isinstance(obs_space, gym.spaces.Discrete):
+        depth  = tf.constant(obs_space.n, dtype=tf.int32)
+        inputs = tf.one_hot(inputs, depth=depth)
+    elif isinstance(obs_space, gym.spaces.MultiDiscrete):
+        # inputs = [3, 5] obs_space.nvec = [4, 7]
+        # [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]
+        nvec   = tf.constant(obs_space.nvec, dtype=tf.int32)
+        inputs = tf.concat([
+                tf.one_hot(inputs[:, idx], depth=nvec[idx])
+                for idx in range(inputs.shape[-1])
+            ], axis=-1)
+    elif isinstance(obs_space, gym.spaces.MultiBinary):
+        pass
+    else:
+        raise NotImplementedError("Preprocessing not implemented for "
+                                "{}".format(obs_space))
+
+    return tf.cast(inputs, dtype=dtype)
+
+def get_input_tensor_from_space(space: gym.Spaces):
+    '''Generates keras inputs from the given gym space
+
+    Args:
+        space (gym.Spaces): Space. Support (Box, Discrete, 
+            MultiDiscrete, MultiBinary)
+
+    Raises:
+        NotImplementedError: If `space` is not supported.
+
+    Returns:
+        tf.keras.Input: Keras input
+    '''    
+    sample = space.sample()
+    if isinstance(space, gym.spaces.Box):
+        inputs = tf.keras.Input(
+                   shape=space.shape, dtype=space.dtype)
+    elif isinstance(space, gym.spaces.Discrete):
+        inputs = tf.keras.Input(
+                   shape=sample.shape, dtype=sample.dtype)
+    elif isinstance(space, gym.spaces.MultiDiscrete):
+        inputs = tf.keras.Input(
+                   shape=sample.shape, dtype=sample.dtype)
+    elif isinstance(space, gym.spaces.MultiBinary):
+        inputs = tf.keras.Input(
+                   shape=sample.shape, dtype=sample.dtype)
+    else:
+        raise NotImplementedError("Input tensor not implemented "
+                "for {}".format(space))
+    return inputs
+
 # === JSON utils ===
 
 

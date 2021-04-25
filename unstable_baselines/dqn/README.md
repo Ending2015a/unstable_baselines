@@ -44,7 +44,7 @@ python -m unstable_baselines.dqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |         460 |          306 |       81.69 |           10M |        1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        1530 |          667 |      265.68 |           10M |        1~8 |            20 |         0 |
 | `BeamRiderNoFrameskip-v4` |       10408 |       6806.6 |     1689.98 |           10M |        1~8 |            20 |         0 |
 | `BreakoutNoFrameskip-v4`  |         413 |        250.4 |       76.65 |           10M |        1~8 |            20 |         0 |
 | `EnduroNoFrameskip-v4`    |        1354 |       838.95 |      276.42 |           10M |        1~8 |            20 |         0 |

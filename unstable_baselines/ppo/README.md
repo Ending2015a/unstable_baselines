@@ -56,14 +56,14 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |           20M |        1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |             |              |             |           20M |        1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |             |              |             |           20M |        1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |             |              |             |           20M |        1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |             |              |             |           20M |        1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |             |              |             |           20M |        1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        1570 |         1072 |      281.73 |           20M |        1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |        2832 |       1513.4 |      647.36 |           20M |        1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         368 |       131.85 |      118.28 |           20M |        1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |         302 |        189.2 |       29.79 |           20M |        1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        2650 |       2035.5 |       463.1 |           20M |        1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |           21 |           0 |           20M |        1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |       16925 |     16441.25 |      259.23 |           20M |        1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |        1760 |         1750 |       17.32 |           20M |        1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 

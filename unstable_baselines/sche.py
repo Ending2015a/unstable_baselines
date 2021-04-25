@@ -24,7 +24,7 @@ import cloudpickle
 import numpy as np
 
 # --- my module ---
-from unstable_baselines.utils import StateObject
+from unstable_baselines.utils_v2 import StateObject
 
 
 
