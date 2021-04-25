@@ -28,15 +28,15 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 <sup>Number of times each sample reused ≈ num_subepochs (~8 in this case)</sup><br>
 
 ### Continuous control environment
-<!-- ```python
+```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 \
-               --num_steps=1024 --num_subepochs=10 --batch_size=256 --verbose=2 \
+               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=10000 \
+               --num_steps=100 --num_subepochs=1 --batch_size=100 --verbose=2 \
                --ent_coef=0.0 --record_video
 ```
 <sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
-<sup>Number of times each sample reused = num_subepochs (~10 in this case)</sup><br> -->
+<sup>Number of times each sample reused = num_subepochs (~1 in this case)</sup><br> -->
 
 ## Atari 2600
 
@@ -54,16 +54,16 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 > Learning curve
 
-| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seed | Eval episodes | Eval seed |
-|---------------------------|------------:|-------------:|------------:|--------------:|-----------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |        1570 |         1072 |      281.73 |           20M |        1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |        2832 |       1513.4 |      647.36 |           20M |        1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |         368 |       131.85 |      118.28 |           20M |        1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |         302 |        189.2 |       29.79 |           20M |        1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |        2650 |       2035.5 |       463.1 |           20M |        1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |          21 |           21 |           0 |           20M |        1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |       16925 |     16441.25 |      259.23 |           20M |        1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |        1760 |         1750 |       17.32 |           20M |        1~8 |            20 |         0 |
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
+|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+| `AsteroidsNoFrameskip-v4` |        1570 |         1072 |      281.73 |           10M |         1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |        2832 |       1513.4 |      647.36 |           10M |         1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         368 |       131.85 |      118.28 |           10M |         1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |         302 |        189.2 |       29.79 |           10M |         1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        2650 |       2035.5 |       463.1 |           10M |         1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |           21 |           0 |           10M |         1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |       16925 |     16441.25 |      259.23 |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |        1760 |         1750 |       17.32 |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 
@@ -97,6 +97,14 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 > Learning curve
 
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
+|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+| `AntBulletEnv-v0`         |             |              |             |            1M |           1 |            20 |         0 |
+| `HalfCheetahBulletEnv-v0` |             |              |             |            1M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |             |              |             |            1M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
+
 
 ### Hyperparametrs
 
@@ -111,10 +119,10 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 ## Architecture
 
-|             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
-|:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
-| Action      | :heavy_check_mark: | :heavy_check_mark: | :x:             | :x:           |
+|             |        `Box`       |     `Discrete`     |   `MultiDiscrete`  |    `MultiBinary`   |
+|-------------|:------------------:|:------------------:|:------------------:|:------------------:|
+| Observation | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Action      | :heavy_check_mark: | :heavy_check_mark: |         :x:        |         :x:        |
 
 <br/>
 <br/>

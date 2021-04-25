@@ -50,8 +50,8 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines import logger
 
-from unstable_baselines.base import (SavableModel, 
-                                     TrainableModel)
+from unstable_baselines.base_v2 import (SavableModel, 
+                                        TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.utils_v2 import (normalize,
                                          denormalize,
@@ -999,6 +999,9 @@ class TD3(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
+
+                # eval metrics to select the best model
+                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
