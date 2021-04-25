@@ -32,8 +32,8 @@ python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 ### Video
 
-| `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `PongNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
-|---------------------------|--------------------------|----------------------|--------------------------|
+| `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `PongNoFrameskip-v4`  | `SeaquestNoFrameskip-v4` |
+|:-------------------------:|:------------------------:|:---------------------:|:------------------------:|
 |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.BeamRiderNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.BreakoutNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.PongNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.SeaquestNoFrameskip-v4.eval.gif" height=300px>|
 | `AsteroidsNoFrameskip-v4` | `EnduroNoFrameskip-v4`   | `QbertNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` |
 |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.AsteroidsNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.EnduroNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.QbertNoFrameskip-v4.eval.gif" height=300px>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/c51.MsPacmanNoFrameskip-v4.eval.gif" height=300px>|
