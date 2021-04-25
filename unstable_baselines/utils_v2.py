@@ -187,12 +187,14 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
 
     return tf.cast(inputs, dtype=dtype)
 
-def get_input_tensor_from_space(space: gym.Space):
+def get_input_tensor_from_space(space: gym.Space, dtype=tf.float32):
     '''Generates keras inputs from the given gym space
 
     Args:
         space (gym.Space): Space. Support (Box, Discrete, 
             MultiDiscrete, MultiBinary)
+        dtype (tf.dtypes.Dtype): Input tensor type.
+            If None, use space dtype
 
     Raises:
         NotImplementedError: If `space` is not supported.
@@ -201,18 +203,13 @@ def get_input_tensor_from_space(space: gym.Space):
         tf.keras.Input: Keras input
     '''    
     sample = space.sample()
-    if isinstance(space, gym.spaces.Box):
+    dtype = space.dtype if dtype is None else dtype
+    if isinstance(space, (gym.spaces.Box,
+                          gym.spaces.Discrete,
+                          gym.spaces.MultiDiscrete,
+                          gym.spaces.MultiBinary)):
         inputs = tf.keras.Input(
-                   shape=space.shape, dtype=space.dtype)
-    elif isinstance(space, gym.spaces.Discrete):
-        inputs = tf.keras.Input(
-                   shape=sample.shape, dtype=sample.dtype)
-    elif isinstance(space, gym.spaces.MultiDiscrete):
-        inputs = tf.keras.Input(
-                   shape=sample.shape, dtype=sample.dtype)
-    elif isinstance(space, gym.spaces.MultiBinary):
-        inputs = tf.keras.Input(
-                   shape=sample.shape, dtype=sample.dtype)
+                    shape=space.shape, dtype=dtype)
     else:
         raise NotImplementedError("Input tensor not implemented "
                 "for {}".format(space))
