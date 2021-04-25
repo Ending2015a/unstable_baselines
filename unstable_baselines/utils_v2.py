@@ -187,11 +187,11 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
 
     return tf.cast(inputs, dtype=dtype)
 
-def get_input_tensor_from_space(space: gym.Spaces):
+def get_input_tensor_from_space(space: gym.Space):
     '''Generates keras inputs from the given gym space
 
     Args:
-        space (gym.Spaces): Space. Support (Box, Discrete, 
+        space (gym.Space): Space. Support (Box, Discrete, 
             MultiDiscrete, MultiBinary)
 
     Raises:
