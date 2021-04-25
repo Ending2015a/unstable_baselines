@@ -47,7 +47,10 @@ from unstable_baselines.bugs import ReLU
 from unstable_baselines.prob import (Categorical,
                                      MultiNormal)
 from unstable_baselines.utils_v2 import (set_global_seeds,
-                                         normalize)
+                                         normalize,
+                                         is_image_observation,
+                                         preprocess_observation,
+                                         get_input_tensor_from_space)
 
 
 
@@ -496,18 +499,28 @@ class Agent(SavableModel):
             observation_space (gym.Spaces): The observation space of the
                 environment.
             action_space (gym.Spaces): The action space of the environment.
-        '''        
+
+        Raises:
+            ValueError: If `observation_space` or `action_space` is None
+        '''
+        if observation_space is None:
+            raise ValueError("Observation space not provided: "
+                            "{}".format(observation_space))
+        if action_space is None:
+            raise ValueError("Action space not provided: {}".format(
+                            action_space))
 
         self.observation_space = observation_space
         self.action_space      = action_space
 
         # --- setup model ---
-        if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
+        if (is_image_observation(observation_space)
+                and (not self.force_mlp)):
             self.net = NatureCnn()
         else:
             self.net = MlpNet()
         
-        self.policy_net = PolicyNet(self.action_space)
+        self.policy_net = PolicyNet(action_space)
         
         # not sharing the backbone network
         if not self.shared_net:
@@ -516,7 +529,7 @@ class Agent(SavableModel):
         self.value_net  = ValueNet()
 
         # construct networks
-        inputs  = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        inputs  = get_input_tensor_from_space(observation_space)
         
         outputs = self.net(inputs)
         self.policy_net(outputs)
@@ -544,14 +557,9 @@ class Agent(SavableModel):
             tf.Tensor: Predicted state values, shape (batch,)
         '''
         
-        # cast and normalize non-float32 inputs (e.g. image with uint8)
-        if tf.as_dtype(inputs.dtype) != tf.float32:
-            # cast observations to float32
-            inputs = tf.cast(inputs, dtype=tf.float32)
-            low    = tf.cast(self.observation_space.low, dtype=tf.float32)
-            high   = tf.cast(self.observation_space.high, dtype=tf.float32)
-            # normalize observations [0, 1]
-            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
+        # cast and normalize non-float32 inputs (e.g. image in uint8)
+        # NOTICE: image in float32 is considered as having been normalized
+        inputs = preprocess_observation(inputs, self.observation_space)
 
         # forward network
         latent = self.net(inputs, training=training)
@@ -619,7 +627,7 @@ class Agent(SavableModel):
 
         # predict
         outputs, *_ = self(inputs, deterministic=deterministic, training=False)
-        outputs     = outputs.numpy()
+        outputs     = np.asarray(outputs)
 
         # clip action to a valid range (Continuous action)
         if clip_action and isinstance(self.action_space, gym.spaces.Box):
@@ -731,13 +739,20 @@ class PPO(TrainableModel):
             env (gym.Env): Training environment.
         '''
 
-        if self.observation_space is not None:
-            assert env.observation_space == self.observation_space, 'Observation space mismatch, expect {}, got {}'.format(
-                                                                        self.observation_space, env.observation_space)
+        if self.observation is not None:
+            if env.observation_space != self.observation_space:
+                raise RuntimeError("Observation space does not match, "
+                                "expected {}, got {}".format(
+                                    self.observation_space,
+                                    env.observation_space))
 
         if self.action_space is not None:
-            assert env.action_space == self.action_space, 'Action space mismatch, expect {}, got {}'.format(
-                                                                self.action_space, env.action_space)
+            if env.action_space != self.action_space:
+                raise RuntimeError("Action space does not match, "
+                                "expected {}, got {}".format(
+                                    self.action_space,
+                                    env.action_space))
+
         self.env    = env
         self.n_envs = env.n_envs
     
@@ -750,12 +765,19 @@ class PPO(TrainableModel):
             action_space (gym.Spaces): The action space of the environment.
         '''
 
+        if observation_space is None:
+            raise ValueError("Observation space not provided: "
+                            "{}".format(observation_space))
+        if action_space is None:
+            raise ValueError("Action space not provided: {}".format(
+                            action_space))
+
         self.observation_space = observation_space
         self.action_space      = action_space
 
         # --- setup model ---
         self.buffer     = GaeBuffer(gae_lambda=self.gae_lambda, gamma=self.gamma)
-        self.agent      = Agent(self.observation_space, self.action_space, shared_net=self.shared_net, force_mlp=self.force_mlp)
+        self.agent      = Agent(observation_space, action_space, shared_net=self.shared_net, force_mlp=self.force_mlp)
         
         self.optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
                                                    epsilon=1e-5,
@@ -1193,7 +1215,7 @@ class PPO(TrainableModel):
                 LOG.add_row('Max rewards',  max_rews)
                 LOG.add_row('  Length',     max_steps)
                 LOG.add_line()
-                LOG.add_row('Mean rewards', mean_rews)
+                LOG.add_row('Mean rewards', mean_rews.round(3))
                 LOG.add_row('Std rewards',  std_rews, fmt='{}: {:.6f}')
                 LOG.add_row('Mean length',  mean_steps)
                 LOG.add_line()
