@@ -1174,7 +1174,7 @@ class PPO(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
-            eval_metrics = None
+            eps_rews, eps_steps = [], []
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
@@ -1187,9 +1187,6 @@ class PPO(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
-
-                # eval metrics to select the best model
-                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
@@ -1226,7 +1223,8 @@ class PPO(TrainableModel):
                     and (self.num_epochs % save_interval) == 0):
                 
                 saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
-                                    checkpoint_metrics=eval_metrics)
+                                    checkpoint_metrics=self.get_eval_metrics(eps_rews, eps_steps))
+
 
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))
