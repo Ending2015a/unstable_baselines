@@ -122,7 +122,8 @@ def make_atari(a, eval=False):
         env = gym.make(a.env_id)
         env = SeedEnv(env, seed=a.eval_seed)
         env = NoopResetEnv(env, noop_max=30)
-        env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'), fps=60,
+        if a.record_video:
+            env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'), fps=60,
                                  prefix='eval', callback=True, force=True)
         env = MaxAndSkipEnv(env, skip=4)
         env = Monitor(env, directory=a.monitor_dir, prefix='eval', force=True)
