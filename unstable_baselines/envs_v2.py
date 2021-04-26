@@ -30,15 +30,18 @@ import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import logger
-from unstable_baselines.utils_v2 import flatten_obs
+from unstable_baselines.utils_v2 import (flatten_obs,
+                                        StateObject)
 
 
 __all__ = [
+    'SeedEnv',
     'NoopResetEnv',
     'MaxAndSkipEnv',
     'EpisodicLifeEnv',
     'ClipRewardEnv',
     'WarpFrame',
+    'VideoRecorder',
     'Monitor',
     'FrameStack',
     'SubprocVecEnv',
@@ -49,6 +52,14 @@ LOG = logger.getLogger()
 
 
 # === Env wrappers ---
+class SeedEnv(gym.Wrapper):
+    def __init__(self, env, seed):
+        super().__init__(env)
+
+        env.seed(seed)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+
 # Stable baselines - wrapper
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env, noop_max=30):
@@ -93,27 +104,6 @@ class MaxAndSkipEnv(gym.Wrapper):
         self._obs_buffer = np.zeros((blend,) + env.observation_space.shape, dtype=env.observation_space.dtype)
         self._skip = skip
         self._blend = blend
-        self._render_buf = None
-        self._render_buf_flag = False
-        self._render_buf_mode = 'rgb_array'
-
-    def set_render_buf_flag(self, flag):
-        self._render_buf_flag = True if flag else False
-
-        if self._render_buf_flag is False:
-            self.render_buf = None
-
-    def set_render_buf_mode(self, type):
-        self._render_buf_mode = str(type)
-
-    def render(self, mode='human'):
-        if (self._render_buf_flag 
-                and (self._render_buf is not None) 
-                and (mode == self._render_buf_mode)):
-            img = self._render_buf.max(axis=0)
-            return img
-        else:
-            return self.env.render(mode=mode)
 
     def step(self, action):
         """
@@ -129,14 +119,6 @@ class MaxAndSkipEnv(gym.Wrapper):
 
             # store observations to buffer
             self._obs_buffer[i % self._blend] = obs
-            # store rendered image to buffer
-            if self._render_buf_flag:
-                img = self.env.render(self._render_buf_mode)
-
-                if self._render_buf is None:
-                    self._render_buf = np.zeros((self._blend,) + img.shape, dtype=img.dtype)
-
-                self._render_buf[i % self._blend] = img
 
             total_reward += reward
             if done:
@@ -230,114 +212,163 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 # Rewrite gym.wrappers.monitoring.StatsRecorder
-#   will output Stable baselines style csv records
-class StatsRecorder(object):
-    #TODO: fix ext
-    def __init__(self, directory=None, prefix=None, ext='monitor.csv', env_id=None):
-        '''
-        Filename
-            {directory}/{prefix}.{ext}
-        directory: directory
-        prefix: filename prefix
-            e.g. directory='/foo/bar', prefix=1   => /foo/bar/1.monitor.csv
+#   output Stable-baselines style csv records
+class _StatsRecorder(object):
+    def __init__(self, directory: str = None, 
+                       prefix:    str = None, 
+                       ext:       str = 'monitor.csv', 
+                       env_id:    str = None):
+        '''StatsRecorder records environment stats: episodic rewards,
+        total timesteps, time spent. And write them to a monitor file
+        `{directory}/{prefix}.{ext}` in CSV format.
 
-        CSV format
-            # {t_start: timestamp, env_id: env id}
+        CSV contents:
+        The first line is a JSON comment indicating the timestamp 
+        the environment started, and the name of the environment.
+        The next line is the header line, indicating the column
+        names [r, l, t] for each columns, where 'r' denotes
+        rewards, 'l' episode length, 't' episode running time.
+        The following lines are data for each episode.
+
+        Example:
+            # {t_start: timestamp, env_id: env_id}
             r, l, t
+            320, 1000, 5.199693
+            ...
+
         r: total episodic rewards
         l: episode length
         t: running time (time - t_start)
+
+        Args:
+            directory (str, optional): [description]. Defaults to None.
+            prefix (str, optional): [description]. Defaults to None.
+            ext (str, optional): [description]. Defaults to 'monitor.csv'.
+            env_id (str, optional): [description]. Defaults to None.
         '''
         self.t_start = time.time()
-        self.env_id = env_id
 
+        self.directory = directory or './'
+        self.prefix    = prefix
+        self.ext       = ext or 'monitor.csv'
+        self.env_id    = env_id
+
+        # initialize
+        self._closed      = False
+        self._need_reset  = True
+        self.filepath     = None
+        self.header       = None
+        self.file_handler = None
+        self.writer       = None
+
+        self._stats = StateObject()
+        self._stats.episodes = 0    # Current episode number
+        self._stats.steps = 0       # Current timestep
+        self._stats.start_steps = 0 # Timestep when this episode begins
+        self._stats.rewards = []    # Cumulative rewards in one episode
+        self._stats.ep_rewards = [] # Episode rewards
+        self._stats.ep_lengths = [] # Episode lengths
+        self._stats.ep_times   = [] # Episode time spent
+
+        self._setup_writer()
+
+    def _setup_writer(self):
         # setup csv file
-        self.filename = self._make_path(directory, prefix, ext)
-        self.header = json.dumps({"t_start": self.t_start, 'env_id': self.env_id})
-        self._ensure_path_exists(self.filename)
-        LOG.debug('Writing monitor to: ' + self.filename)
+        self.filepath = self._make_save_path(self.directory, self.prefix, self.ext)
+        self.header = json.dumps({'t_start': self.t_start, 'env_id': self.env_id})
+
+        filedir = os.path.dirname(self.filepath)
+        relpath = os.path.relpath(self.filepath)
+
+        self._ensure_dir_exists(filedir)
+        LOG.debug('Writing monitor to: ' + relpath)
 
         # write header
-        self.file_handler = open(self.filename, "wt")
+        self.file_handler = open(self.filepath, 'wt')
         self.file_handler.write('#{}\n'.format(self.header))
-        
+
         # create csv writer
-        self.writer = csv.DictWriter(self.file_handler, fieldnames=('r', 'l', 't')) # rewards/length/time
+        #   r: rewards
+        #   l: length
+        #   t: timestamp
+        self.writer = csv.DictWriter(self.file_handler, fieldnames=('r', 'l', 't'))
         self.writer.writeheader()
         self.file_handler.flush()
 
-        # initialize
-        self._closed = False
-        self.rewards = None
-        self.need_reset = None
-        self.episode_rewards = []
-        self.episode_lengths = []
-        self.episode_times = []
-        self.total_steps = 0
-        
-
     @property
-    def closed(self):
-        return self._closed
+    def stats(self):
+        return self._stats
 
-    def _make_path(self, base_path, prefix, ext):
-        # path = {base_path}/{prefix}.{ext}
-        path = ext
+    def _make_save_path(self, base_path, prefix, ext):
+        '''Make save path {base_path}/{prefix}.{ext}
+        or {base_path}/{ext} if {preffix} is None
+        '''
+        paths = []
         if prefix:
-            if not isinstance(prefix, str):
-                prefix = str(prefix)
-            
-            if os.path.basename(prefix):
-                path = prefix + '.' + ext
+            paths.append(str(prefix))
+        paths.append(str(ext))
 
-        path = os.path.join(base_path, path)
+        filename = '.'.join(paths)
+        path = os.path.join(base_path, filename)
 
-        return path
+        return os.path.abspath(path)
 
-    def _ensure_path_exists(self, path):
-        
-        base_path = os.path.dirname(path)
-        if base_path:
-            os.makedirs(base_path, exist_ok=True)
+    def _ensure_dir_exists(self, path):
+        '''Ensure nested directories exist
+        if not, create them
+        '''
+        if not path:
+            raise RuntimeError('Receive empty path: {}'.format(path))
+        try:
+            os.makedirs(path, exist_ok=True)
+        except:
+            pass
 
-
-    def before_step(self):
-
-        if self.need_reset:
+    def before_step(self, action):
+        if self._need_reset:
             raise RuntimeError('Tried to step environment that needs reset')
 
-    def after_step(self, observation, reward, done, info):
+        return action
 
-        # append reward
-        self.rewards.append(reward)
+    def after_step(self, obs, rew, done, info):
+        # append rewards
+        self.stats.rewards.append(rew)
 
         # episode ended
         if done:
-            self.need_reset = True
-            ep_rew = sum(self.rewards)
-            ep_len = len(self.rewards)
-            ep_info = {'r': round(ep_rew, 6), 'l':ep_len, 't': round(time.time() - self.t_start, 6)}
+            self._need_reset = True
+            ep_rew = sum(self.stats.rewards)
+            ep_len = len(self.stats.rewards)
+            ep_time = time.time()-self.t_start
+            ep_info = {'r': round(ep_rew, 6), 
+                       'l': ep_len,
+                       't': round(ep_time, 6)}
 
-            self.episode_rewards.append(ep_rew)
-            self.episode_lengths.append(ep_len)
-            self.episode_times.append(time.time() - self.t_start)
-            
+            self.stats.ep_rewards.append(ep_rew)
+            self.stats.ep_lengths.append(ep_len)
+            self.stats.ep_times.append(ep_time)
+
             # write episode info to csv
             if self.writer:
                 self.writer.writerow(ep_info)
                 self.file_handler.flush()
-
+            
             info['episode'] = ep_info
         
-        self.total_steps += 1
-        return observation, reward, done, info
+        self.stats.steps += 1
+        return obs, rew, done, info
 
-    def before_reset(self):
-        pass
+    def before_reset(self, kwargs):
+        '''Do nothing'''
+        return kwargs
 
-    def after_reset(self):
-        self.rewards = []
-        self.need_reset = False
+    def after_reset(self, obs):
+        '''Reset episodic info'''
+        self.stats.rewards = []
+        self.stats.start_steps = self.stats.steps
+        self.stats.episodes += 1
+        self._need_reset = False
+        return obs
 
     def close(self):
         if self.file_handler is not None:
@@ -346,39 +377,31 @@ class StatsRecorder(object):
         self._closed = True
 
     def __del__(self):
-        if not self.closed:
+        if not self._closed:
             self.close()
 
     def flush(self):
         pass
 
-    def get_total_steps(self):
-        return self.total_steps
 
-    def get_episode_rewards(self):
-        return self.episode_rewards
-
-    def get_episode_lengths(self):
-        return self.episode_lengths
-
-    def get_episode_times(self):
-        return self.episode_times
-
-
-class VideoEncoder(object):
-    def __init__(self, path, frame_shape, video_shape, fps, output_fps):
+class _VideoEncoder(object):
+    def __init__(self, path, 
+                       frame_shape, 
+                       video_shape, 
+                       in_fps, 
+                       out_fps):
         '''
         path: output path
         frame_shape: input frame shape (h,w,c)
         video_shape: output video shape (h,w,c)
-        fps: input framerate
-        output_fps: output video framerate
+        in_fps: input framerate
+        out_fps: output video framerate
         '''
         self.path = path
         self.frame_shape = frame_shape
         self.video_shape = video_shape
-        self.fps = fps
-        self.output_fps = output_fps
+        self.in_fps = in_fps
+        self.out_fps = out_fps
 
         self.proc = None
         h,w,c = self.frame_shape
@@ -409,14 +432,14 @@ class VideoEncoder(object):
             '-f', 'rawvideo', # input format
             '-s:v', "{:d}x{:d}".format(*self.wh), # input shape (w,h)
             '-pix_fmt', ('rgb32' if self.includes_alpha else 'rgb24'),
-            '-framerate', '{:d}'.format(self.fps), # input framerate,
+            '-framerate', '{:d}'.format(self.in_fps), # input framerate,
             '-i', '-', # input from stdin
 
             # output
             '-vf', 'scale={:d}:{:d}'.format(*self.output_wh),
             '-c:v', 'libx264', # video codec
             '-pix_fmt', 'yuv420p',
-            '-r', '{:d}'.format(self.output_fps),
+            '-r', '{:d}'.format(self.out_fps),
             self.path)
         
 
@@ -437,8 +460,8 @@ class VideoEncoder(object):
         return {
             'width': self.wh[0],
             'height': self.wh[1],
-            'input_fps': self.fps,
-            'output_fps': self.output_fps
+            'input_fps': self.in_fps,
+            'output_fps': self.out_fps
         }
 
     def capture_frame(self, frame):
@@ -466,67 +489,81 @@ class VideoEncoder(object):
         self.proc = None
 
 
-# Rewrite gym.wrappers.monitoring.video_recorder.VideoRecorder
-class VideoRecorder(object):
-    def __init__(self, env, path, meta_path, metadata=None, width=None, height=None, fps=None, enabled=True):
-        '''
-        env: environment
-        path: video path
-        meta_path: metadata path
-        metadata: additional metadata
-            content_type, empty, broken, encoder_version, video_info, exc
-        width: video width (None=default)
-        height: video height (None=default)
-        fps: video framerate (None=default)
-        enabled:
+class _VideoRecorder(object):
+    def __init__(self, env:   gym.Env, 
+                       path:      str, 
+                       meta_path: str, 
+                       metadata: dict = None, 
+                       width:     int = None, 
+                       height:    int = None,
+                       in_fps:    int = None,
+                       out_fps:   int = None,
+                       enabled:  bool = True):
+        '''VideoRecorder captures video frames
+        from `env` and saves to `path`.
+
+        Args:
+            env (gym.Emv): Environment.
+            path (str): Video save path.
+            meta_path (str): Metadata save path.
+            metadata (dict, optional): Additional metadata. Defaults to None.
+            width (int, optional): Video width. Defaults to None.
+            height (int, optional): Video height. Defaults to None.
+            in_fps (int, optional): Environment fps. Defaults to None.
+            out_fps (int, optional): Output video fps. Defaults to None.
+            enabled (bool, optional): Enable this recorder. Defaults to True.
         '''
         self.env       = env
         self.path      = path
         self.meta_path = meta_path
         self.width     = width
         self.height    = height
-        self.fps       = fps
+        self.in_fps    = in_fps
+        self.out_fps   = out_fps
         self.enabled   = enabled
         self.metadata  = metadata or {}
-        self._closed = False
-
+        self._closed   = False
         if not self.enabled:
             return
 
-        fps        = env.metadata.get('video.frames_per_second', 30)
-        output_fps = env.metadata.get('video.output_frames_per_second', fps)
+        if not path:
+            raise ValueError("'path' not specified: {}".format(path))
+        if not meta_path:
+            raise ValueError("'meta_path' not specified: {}".format(meta_path))
 
-        self.fps        = self.fps if self.fps else fps
-        self.output_fps = self.fps if self.fps else output_fps
+        in_fps  = env.metadata.get('video.frames_per_second', 30)
+        out_fps = env.metadata.get('video.output_frames_per_second', in_fps)
+
+        self.in_fps  = self.in_fps or self.out_fps or in_fps
+        self.out_fps = self.out_fps or self.in_fps or out_fps
 
         self._async = env.metadata.get('semantics.async')
         modes       = env.metadata.get('render.modes', [])
 
         if 'rgb_array' not in modes:
-            LOG.warn('Disabling video recorder because {} not supports video mode "rgb_array"'.format(env))
+            LOG.warn('Disabling video recorder because {} not '
+                    'supports video mode "rgb_array"'.format(env))
             self.enabled = False
             return
         
-        self.encoder = None
-        self.broken  = False
-
-        # pybullet_envs
-        if width is not None and hasattr(env.unwrapped, '_render_width'):
+        # pybullet_envs: set render width, height to the environment
+        if (width is not None) and hasattr(env.unwrapped, '_render_width'):
             env.unwrapped._render_width = width
-        if height is not None and hasattr(env.unwrapped, '_render_height'):
+        if (height is not None) and hasattr(env.unwrapped, '_render_height'):
             env.unwrapped._render_height = height
 
         # Create directory
-        self._ensure_path_exists(self.path)
-        self._ensure_path_exists(self.meta_path)
+        self._ensure_dir_exists(os.path.abspath(self.path))
+        self._ensure_dir_exists(os.path.abspath(self.meta_path))
         
         # Write metadata
         self.metadata['content_type'] = 'video/mp4'
         self.write_metadata()
 
+        self.encoder = None
+        self.broken  = False
         self.empty   = True
         
-
     @property
     def closed(self):
         return self._closed
@@ -545,11 +582,12 @@ class VideoRecorder(object):
             if self._async:
                 return
             else:
-                LOG.error('Env returned None on render(). Disabling further rendering for video recorder by marking as disabled: {}'.format(self.path))
+                LOG.error('Env returned None on render(). Disabling further '
+                        'rendering for video recorder by marking as disabled: '
+                        '{}'.format(self.path))
                 self.broken = True
         else:
             self._encode_image_frame(frame)
-
 
     def close(self):
         if not self.functional:
@@ -566,7 +604,8 @@ class VideoRecorder(object):
             self.metadata['empty'] = True
 
         if self.broken:
-            LOG.warn('Cleaning up paths for broken video recorder: {}'.format(self.path))
+            LOG.warn('Cleaning up paths for broken video recorder: '
+                        '{}'.format(self.path))
 
             if os.path.isfile(self.path):
                 os.remove(self.path)
@@ -585,24 +624,29 @@ class VideoRecorder(object):
         with open(self.meta_path, 'wt') as f:
             json.dump(self.metadata, f, indent=4)
 
-    def _ensure_path_exists(self, path):
+    def _ensure_dir_exists(self, path):
+        '''Ensure nested directories exist
+        if not, create them
+        '''
         if not path:
             raise RuntimeError('Receive empty path: {}'.format(path))
-            
-        path = os.path.dirname(path)
-        if path:
+        try:
             os.makedirs(path, exist_ok=True)
+        except:
+            pass
         
 
     def _get_frame_shape(self, frame):
         if len(frame.shape) != 3:
-            raise RuntimeError('Receive unknown frame shape: {}'.format(frame.shape))
+            raise RuntimeError('Receive unknown frame shape: '
+                                '{}'.format(frame.shape))
 
         return frame.shape # h,w,c
 
     def _get_video_shape(self, frame):
         if len(frame.shape) != 3:
-            raise RuntimeError('Receive unknown frame shape: {}'.format(frame.shape))
+            raise RuntimeError('Receive unknown frame shape: '
+                                '{}'.format(frame.shape))
 
         h,w,c = frame.shape
 
@@ -615,7 +659,11 @@ class VideoRecorder(object):
         if not self.encoder:
             frame_shape = self._get_frame_shape(frame)
             video_shape = self._get_video_shape(frame)
-            self.encoder = VideoEncoder(self.path, frame_shape, video_shape, self.fps, self.output_fps)
+            self.encoder = _VideoEncoder(self.path, 
+                                         frame_shape, 
+                                         video_shape, 
+                                         self.in_fps, 
+                                         self.out_fps)
 
             self.metadata['encoder_version'] = self.encoder.version_info
             self.metadata['video_info'] = self.encoder.video_info
@@ -624,7 +672,8 @@ class VideoRecorder(object):
             self.encoder.capture_frame(frame)
 
         except RuntimeError as e:
-            LOG.exception('Tried to pass invalid video frame, marking as broken: {}'.format(self.path))
+            LOG.exception('Tried to pass invalid video frame, '
+                        'marking as broken: {}'.format(self.path))
             self.metadata['exc'] = str(e)
             self.broken = True
         else:
@@ -633,407 +682,452 @@ class VideoRecorder(object):
     def __del__(self):
         self.close()
 
+# ===
 
-def capped_cubic_video_schedule(episode):
-    if episode < 1000:
-        return int(round(episode ** (1. / 3))) ** 3 == episode
-    else:
-        return episode % 1000 == 0
+class MonitorGroupWrapper(gym.Wrapper):
+    '''MonitoGroupWrapper provides an interface
+    for those inherited subclasses (wrappers) 
+    to find each other by simply calling
+    get_component(other subclasses)
+    '''
+    def __init__(self, env, depth: int=None):
+        super().__init__(env)
 
-def disable_videos(episode):
-    return False
+        self.set_component(self, depth=depth)
 
-
-# Rewrite gym.wrappers.monitors.Monitor
-class Monitor(gym.Wrapper):
-    def __init__(self, env, directory='monitor', prefix=None, ext='monitor.csv', force=False,
-                    enable_video_recording=False, video_kwargs={}):
+    def get_component(self, component_type, depth: int=None):
+        '''Get the `depth`-th wrapper whose type is 
+        `component_type`. If `depth` is None, act
+        as same as `depth`=1.
         '''
-        directory: base directory
-        prefix: monitor file prefix
-        ext: monitor file extention
-        force: if False, raise Exception if the monitor file exists
-        enable_video_recording: whether record video
+        if (depth is not None) and (depth <= 0):
+            return
+        if (component_type is type(self)):
+            if depth is None or depth == 1:
+                return self
+            else:
+                depth -= 1
+        if hasattr(self.env, 'set_component'):
+            return self.env.get_component(component_type, depth=depth)
+        return None
 
-        video_kwargs:
-            prefix: video filename prefix (default: 'video/')
-            ext: video filename ext (default: 'ep{episode}.{start_steps}-{total_steps}.video.mp4')
-            meta_ext: metadata filename ext (default: 'ep{episode}.{start_steps}-{total_steps}.metadata.json')
-            width: video width 
-            height: video height
-            fps: video framerate
-            callback: video callback
-            metadata: metadata (default: None)
+    def set_component(self, component, depth: int=None):
+        '''Set top `depth` wrappers with `component`. If 
+        `depth` is None, set all of the wrappers.
         '''
+        if (depth is not None) and (depth <= 0):
+            return
+        if ((component is not self)
+                and isinstance(component, MonitorGroupWrapper)):
+            self._set_component(component)
+            if depth is not None:
+                depth -= 1
+        if hasattr(self.env, 'set_component'):
+            self.env.set_component(component, depth=depth)
+
+    @abc.abstractmethod
+    def _set_component(self, component):
+        '''Override this method to receive 
+        set_component() signals from other 
+        subclasses.
+        '''
+        
+        raise NotImplementedError('Method not implemented')
+
+
+class VideoRecorder(MonitorGroupWrapper):
+    def __init__(self, env:  gym.Env, 
+                      directory: str = None, 
+                      prefix:    str = None,
+                      suffix:    str = None,
+                      ext:       str = None,
+                      meta_ext:  str = None,
+                      width:     int = None,
+                      height:    int = None,
+                      fps:       int = None,
+                      in_fps:    int = None,
+                      callback       = None,
+                      metadata: dict = None,
+                      force:    bool = False):
         super().__init__(env=env)
 
-        self.directory      = directory
-        self.monitor_prefix = prefix
-        self.monitor_ext    = ext
-        
-        self.stats_recorder = None
-        self.video_recorder = None
+        default_suffix = 'ep{episode:06d}.{start_steps}-{end_steps}'
+        get = lambda v, de: de if v is None else v
 
-        self.episode     = 0
-        self.start_steps = 0
-        self.total_steps = 0
-        self.env_id      = env.unwrapped.spec.id
-        self.enabled     = True
+        # Default callback
+        if callback is None:
+            callback = VideoRecorder.capped_cubic_video_schedule
+        elif callback is True:
+            callback = lambda ep: True
+        elif callback is False:
+            callback = lambda ep: False
+        elif not callable(callback):
+            raise RuntimeError('You must provide a function, None, or False for'
+                            'callback not {}: {}'.format(type(callback), callback))
 
-    
-        base_ext = 'ep{episode:06d}.{start_steps}-{total_steps}'
-
-        video_prefix   = video_kwargs.get('prefix', 'video/')
-        video_ext      = video_kwargs.get('ext', base_ext + '.video.mp4')
-        width          = video_kwargs.get('width', None)
-        height         = video_kwargs.get('height', None)
-        fps            = video_kwargs.get('fps', None)
-        meta_ext       = video_kwargs.get('meta_ext', base_ext + '.metadata.json')
-        metadata       = video_kwargs.get('metadata', None)
-        video_callback = video_kwargs.get('callback', None)
-        
-        if enable_video_recording == False:
-            video_callback = disable_videos 
-        elif video_callback is None:
-            video_callback = capped_cubic_video_schedule
-        elif not callable(video_callback):
-            raise RuntimeError('You must provide a function, None, or False for video_callable, not {}: {}'.format(
-                                type(video_callback), video_callback))
-
-        self.video_prefix   = video_prefix
-        self.video_ext      = video_ext
-        self.width          = width
-        self.height         = height
-        self.fps            = fps
-        self.meta_ext       = meta_ext
-        self.metadata       = metadata
-        self.video_callback = video_callback
-
-        if self.video_prefix:
-            self.video_prefix = str(self.video_prefix)
-
-        # create directory
+        directory = directory or './'
         if force:
-            self._clear_monitor(directory)
-        else:
-            if self._detect_monitor(directory):
-                raise RuntimeError('Trying to write to non-empty monitor directory {}'.format(directory))
-
-        if directory:
-            os.makedirs(directory, exist_ok=True)
+            self._clear_dir(directory)
+        elif not self._dir_is_empty(directory):
+            raise RuntimeError('Trying to write to non-empty video '
+                                'directory {}'.format(directory))
         
-        # Create stats recorder
-        self.stats_recorder = StatsRecorder(directory=self.directory, 
-                                            prefix=self.monitor_prefix, 
-                                            ext=self.monitor_ext, 
-                                            env_id=self.env_id)
+        self._ensure_dir_exists(directory)
+
+        self._directory = directory
+        self._prefix    = prefix
+        self._suffix    = suffix or default_suffix
+        self._ext       = ext or 'video.mp4'
+        self._width     = width
+        self._height    = height
+        self._fps       = fps
+        self._in_fps    = in_fps
+        self._meta_ext  = meta_ext or 'metadata.json'
+        self._metadata  = metadata
+        self._callback  = callback
+
+        # disabled if something error happend
+        self._enabled        = True
+        self._video_recorder = None
+        self._start_steps    = 0
+        self._num_steps      = 0
+        self._num_episodes   = 0
+        self._episode_rewards = 0
+        self._is_reset       = True
+        self._monitor        = super().get_component(Monitor)
+        self._monitor_stats  = None
+
+        self._stats = StateObject()
+        self._stats.episodes    = 0   # Current episode number
+        self._stats.steps       = 0   # Current timestep
+        self._stats.start_steps = 0   # Timestep when this episode begins
+        self._stats.rewards     = []  # Cumulative rewards in one episode
+
+    def _set_component(self, component):
+        '''Override MonitorGroupWrapper._set_component'''
+        if type(component) is Monitor:
+            self._monitor = component
+        else:
+            LOG.debug('Receive unknown component: '
+                        '{}'.format(component))
+
+    @staticmethod
+    def capped_cubic_video_schedule(episode):
+        if episode < 1000:
+            return int(round(episode ** (1./3))) ** 3 == episode
+        else:
+            return episode % 1000 == 0
+
+    @property
+    def need_record(self):
+        '''Whether we should record this episode'''
+        return self._callback(self.stats.episodes)
+
+    def _get_monitor_stats(self):
+        if self._monitor_stats is not None:
+            return self._monitor_stats
+
+        stats = None
+        if self._monitor is not None:
+            if hasattr(self._monitor, 'stats'):
+                stats = self._monitor.stats
+        return stats
+
+    @property
+    def stats(self):
+        '''Get stats from Monitor or self (read-only)'''
+        monitor_stats = self._get_monitor_stats()
+        stats = monitor_stats or self._stats
+        return stats
 
     def step(self, action):
-        self._before_step()
-        observation, reward, done, info = self.env.step(action)
-        return self._after_step(observation, reward, done, info)
+        '''Step env'''
+        action = self._before_step(action)
+        obs, rew, done, info = self.env.step(action)
+        return self._after_step(obs, rew, done, info)
 
     def reset(self, **kwargs):
-        self._before_reset()
-        observation = self.env.reset(**kwargs)
-        self._after_reset()
-        return observation
+        '''Reset env'''
+        kwargs = self._before_reset(kwargs)
+        obs = self.env.reset(**kwargs)
+        return self._after_reset(obs)
 
     def close(self):
+        '''Close VideoRecorder'''
         super().close()
 
-        if not self.enabled:
+        if not self._enabled:
             return
-        
-        self.stats_recorder.close()
-        if self.video_recorder:
-            self._close_and_save_video_recorder()
-
-        self.enabled = False
-
-        LOG.debug('Finished writing results')
-
-    def _before_step(self):
-        if not self.enabled:
-            return
-
-        self.stats_recorder.before_step()
-
-
-    def _after_step(self, observation, reward, done, info):
-        if not self.enabled:
-            return observation, reward, done, info
-        
-        self.video_recorder.capture_frame()
-
-        self.total_steps += 1
-
-        return self.stats_recorder.after_step(observation, reward, done, info)
-
-    def _before_reset(self):
-        if not self.enabled:
-            return
-
-        self.stats_recorder.before_reset()
-
-    def _after_reset(self):
-        if not self.enabled:
-            return
-
-        
-        # close video recorder and copy tempfile to `filename`
         self._close_and_save_video_recorder()
-        
+        # disable VideoRecorder (self)
+        self._enabled = False
+    
+    def _before_step(self, action):
+        '''Create a new recorder if the video recorder is reset'''
+        if not self._enabled:
+            return action
 
-        self.stats_recorder.after_reset()
-        # increase episode number
-        self.start_steps = self.total_steps
-        self.episode += 1 
+        # Create a new recorder
+        if self._is_reset:
+            # {base_path}/{prefix}.{ext}.[tempfile].mp4
+            temppath = self._make_save_path(base_path=self._directory,
+                                            prefix=self._prefix, 
+                                            suffix=None,
+                                            ext='ep{episode}.')
+            self._new_video_recorder(temppath)
+            self._is_reset = False
 
-        # create new video recorder for new episode
-        temp_path = self._make_path(self.directory, self.video_prefix, 'ep{episode}.')
-        self._new_video_recorder(temp_path)
+        return action
 
-    def _make_ext(self, ext):
-        return ext.format(episode=self.episode,
-                         start_steps=self.start_steps,
-                         total_steps=self.total_steps)
+    def _after_step(self, obs, rew, done, info):
+        '''Capture frames, increase step counter'''
+        if not self._enabled:
+            return obs, rew, done, info
 
-    def _ensure_path_exists(self, path):
+        self._video_recorder.capture_frame()
+        self._stats.steps += 1
+        self._stats.rewards.append(rew)
+
+        return obs, rew, done, info
+
+    def _before_reset(self, kwargs):
+        '''Do nothing'''
+        if not self._enabled:
+            return kwargs
+
+        # close video recorder and copy tempfile to `filename`
+        # stats recorder is reset at after reset
+        self._close_and_save_video_recorder()
+
+        return kwargs
+
+    def _after_reset(self, obs):
+        '''Save video and increase episode counter'''
+        if not self._enabled:
+            return obs
+
+        # increate counter
+        self._stats.start_steps = self._stats.steps
+        self._stats.episodes += 1
+        self._stats.rewards = []
+        # mark as reset
+        # need to create a new video recorder for the 
+        # new episode
+        self._is_reset = True
+
+        return obs
+
+    def _ensure_dir_exists(self, path):
+        '''Ensure nested directories exist
+        if not, create them
+        '''
         if not path:
             raise RuntimeError('Receive empty path: {}'.format(path))
-            
-        path = os.path.dirname(path)
-        if path:
+        try:
             os.makedirs(path, exist_ok=True)
+        except:
+            pass
 
-    def _make_path(self, base_path, prefix, ext):
-        ext = self._make_ext(ext)
-        path = ext
+    def _format_path(self, path):
+        '''Format path
+        Format params:
+            episode: Episode number
+            start_steps: Number of timesteps the episode started
+            end_steps: Number of timesteps the epsiode ended
+        '''
+        return path.format(episode=self.stats.episodes,
+                           start_steps=self.stats.start_steps,
+                           end_steps=self.stats.steps)
 
+    def _make_save_path(self, base_path, prefix, suffix, ext):
+        '''Make save path {base_path}/{prefix}.{suffix}.{ext}
+        or {base_path}/{suffix}.{ext} if {preffix} is None
+        or {base_path}/{prefix}.{ext} if {suffix} is None
+        or {base_path}/{ext} if both {preffix} and {suffix} are None
+        '''
+        paths = []
         if prefix:
-            if os.path.basename(prefix):
-                # {prefix}.{ext}
-                path = prefix + '.' + ext
+            paths.append(str(prefix))
+        if suffix:
+            paths.append(str(suffix))
+        paths.append(str(ext))
 
-        path = os.path.join(base_path, path)
-        return path
+        filename = '.'.join(paths)
+        path = os.path.join(base_path, filename)
+
+        abspath = os.path.abspath(path)
+        return self._format_path(abspath)
 
     def _close_and_save_video_recorder(self):
-        if not self.video_recorder or not self.video_recorder.enabled:
-            return
         
-        self.video_recorder.close()
+        if (not self._video_recorder) or (not self._video_recorder.enabled):
+            return
 
-
+        self._video_recorder.close()
+        
         # make video/metadata path
-        video_path = self._make_path(self.directory, self.video_prefix, self.video_ext)
-        meta_path = self._make_path(self.directory, self.video_prefix, self.meta_ext)
+        video_abspath = self._make_save_path(self._directory, self._prefix,
+                                        self._suffix, self._ext)
+        meta_abspath  = self._make_save_path(self._directory, self._prefix,
+                                        self._suffix, self._meta_ext)
+        
+        video_path = os.path.relpath(video_abspath)
+        meta_path  = os.path.relpath(meta_abspath)
 
         # update metadata
-        monitor_metadata = {
-            'episode': self.episode,
-            'start_steps': self.start_steps,
-            'total_steps': self.total_steps,
-            'episode_length': self.total_steps - self.start_steps,
-            'episode_rewards': sum(self.stats_recorder.rewards),
+        episode_metadata = {
+            'episode': self.stats.episodes,
+            'start_steps': self.stats.start_steps,
+            'end_steps': self.stats.steps,
+            'episode_length': self.stats.steps - self.stats.start_steps,
+            'episode_rewards': sum(self.stats.rewards),
         }
 
-        self.video_recorder.metadata['monitor'] = monitor_metadata
-        self.video_recorder.write_metadata()
-        
-        self._ensure_path_exists(meta_path)
-        self._ensure_path_exists(video_path)
+        self._video_recorder.metadata['episode_info'] = episode_metadata
+        self._video_recorder.write_metadata()
 
-        # copy tempfile to specified location
+        # ensure the save paths exist
+        self._ensure_dir_exists(os.path.dirname(video_abspath))
+        self._ensure_dir_exists(os.path.dirname(meta_abspath))
+
+        # copy tempfiles to the specified locations
         # save metadata
-        if os.path.isfile(self.video_recorder.meta_path):
-            os.rename(self.video_recorder.meta_path, meta_path)
+        if os.path.isfile(self._video_recorder.meta_path):
+            os.rename(self._video_recorder.meta_path, meta_path)
             LOG.debug('Saving metadata to: {}'.format(meta_path))
         else:
             LOG.warn('Metadata not found: {}'.format(meta_path))
-
+        
         # save video
-        if os.path.isfile(self.video_recorder.path):
-            os.rename(self.video_recorder.path, video_path)
+        if os.path.isfile(self._video_recorder.path):
+            os.rename(self._video_recorder.path, video_path)
             LOG.debug('Saving video to: {}'.format(video_path))
         else:
-            if self.video_recorder.broken:
-                LOG.warn('Failed to save video, the VideoRecorder is broken, for more info: {}'.format(meta_path))
+            if self._video_recorder.broken:
+                LOG.warn('Failed to save video, the VideoRecorder is broken,'
+                        'for more info: {}'.format(meta_path))
             else:
-                LOG.error('Failed to save video, missing tempfile, for more info: {}'.format(meta_path))
+                LOG.error('Failed to save video, missing tempfile, '
+                        'for more info: {}'.format(meta_path))
 
-    def _new_video_recorder(self, path):
+    def _new_video_recorder(self, temppath):
+        '''Create a new video recorder
 
-        enabled = self._video_enabled()
+        Args:
+            temppath (str): Temporary path to save video and metadata (will
+                be renamed in self._close_and_save_video_recorder())
+        '''
 
-        directory = os.path.dirname(path)
-        prefix = os.path.basename(path)
+        base_path = os.path.dirname(temppath)
+        prefix = os.path.basename(temppath)
+        video_path = None
+        meta_path = None
 
-        if enabled:
-            # enable frame blending
-            if hasattr(self.env, 'set_render_buf_flag'):
-                self.env.set_render_buf_flag(True)
-            
-            if hasattr(self.env, 'set_render_buf_type'):
-                self.env.set_render_buf_mode('rgb_array')
-
-            self._ensure_path_exists(path)
+        if self._enabled:
+            self._ensure_dir_exists(base_path)
             # generate random filename
-            with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.mp4', delete=False) as f:
+            with tempfile.NamedTemporaryFile(dir=base_path, prefix=prefix,\
+                    suffix='.mp4', delete=False) as f:
                 video_path = f.name
-            with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix='.json', delete=False) as f:
-                meta_path  = f.name
-        else:
-            # disable frame blending
-            if hasattr(self.env, 'set_render_buf_flag'):
-                self.env.set_render_buf_flag(False)
-            video_path = None
-            meta_path  = None
+            with tempfile.NamedTemporaryFile(dir=base_path, prefix=prefix,\
+                    suffix='.json', delete=False) as f:
+                meta_path = f.name
 
-        self.video_recorder = VideoRecorder(env=self.env, 
-                                            path=video_path,
-                                            meta_path=meta_path,
-                                            metadata=self.metadata,
-                                            width=self.width, 
-                                            height=self.height, 
-                                            fps=self.fps,
-                                            enabled=enabled)
+        self._video_recorder = _VideoRecorder(env=self.env,
+                                              path=video_path,
+                                              meta_path=meta_path,
+                                              metadata=self._metadata,
+                                              width=self._width,
+                                              height=self._height,
+                                              in_fps=self._in_fps,
+                                              out_fps=self._fps,
+                                              enabled=self.need_record)
+        # capture the first frame
+        self._video_recorder.capture_frame()
 
-        self.video_recorder.capture_frame()
-    
-    def _video_enabled(self):
-        return self.video_callback(self.episode)
-
-    def _detect_monitor(self, directory):
+    def _dir_is_empty(self, directory):
+        '''Returns a bool, determine whether the directory is empty.'''
         if not directory:
             return True
         
-        return (os.path.isdir(directory) and len(os.listdir(directory)) > 0)
+        # if directory does not exist, or is empty => True
+        return ((not os.path.isdir(directory))
+                    or (len(os.listdir(directory)) == 0))
 
-    def _clear_monitor(self, directory):
+
+    def _clear_dir(self, directory):
+        '''Do nothing'''
         if not directory:
-            return 
-
-        #TODO: clear monitor
+            return True
+        
+        #TODO: clear folder !!danger!!
         pass
 
+class Monitor(MonitorGroupWrapper):
+    def __init__(self, env:   gym.Env, 
+                       directory: str = 'monitor', 
+                       prefix:    str = None, 
+                       ext:       str = 'monitor.csv', 
+                       force:    bool = False):
+        '''Monitor records timesteps and rewards to 
+        {directory}/{prefix}.{ext}
 
-# class Monitor(gym.Wrapper):
-#     EXT = "monitor.csv"
+        Args:
+            env (gym.Env): Enviornment to monitor.
+            directory (str, optional): Base directory. Defaults to 'monitor'.
+            prefix (str, optional): Filename prefix. Defaults to None.
+            ext (str, optional): File extention. Defaults to 'monitor.csv'.
+            force (bool, optional): Force to save files. Defaults to False.
+        '''
+        super().__init__(env)
 
-#     def __init__(self, env, path=None, prefix=None):
-#         '''
-#         Filename
-#             {path}/{prefix}.{EXT}
-#         path: directory
-#         prefix: filename prefix
-#             e.g. path='/foo/bar', prefix=1   => /foo/bar/1.monitor.csv
+        self._directory = directory or './'
+        self._prefix    = prefix
+        self._ext       = ext or 'monitor.csv'
 
-#         CSV format
-#             # {t_start: timestamp, env_id: env id}
-#             r, l, t
-#         r: total episodic rewards
-#         l: episode length
-#         t: running time (time - t_start)
-#         '''
-#         super(Monitor, self).__init__(env=env)
-#         self.t_start = time.time()
+        self.env_id = env.unwrapped.spec.id
 
-#         # setup csv file
-#         self.filename = self.make_filename(path, prefix)
-#         self.header = json.dumps({"t_start": self.t_start, 'env_id': env.spec and env.spec.id})
+        self._stats_recorder = _StatsRecorder(directory=self._directory,
+                                              prefix=self._prefix,
+                                              ext=self._ext,
+                                              env_id=self.env_id)
 
-#         # write header
-#         self.file_handler = open(self.filename, "wt")
-#         self.file_handler.write('#{}\n'.format(self.header))
-        
-#         # create csv writer
-#         self.writer = csv.DictWriter(self.file_handler, fieldnames=('r', 'l', 't')) # rewards/length/time
-#         self.writer.writeheader()
-#         self.file_handler.flush()
+    def _set_component(self, component):
+        '''Override MonitorGroupWrapper._set_component'''
+        pass
 
-#         # initialize
-#         self.rewards = None
-#         self.need_reset = None
-#         self.episode_rewards = []
-#         self.episode_lengths = []
-#         self.episode_times = []
-#         self.total_steps = 0
-    
-#     @classmethod
-#     def make_filename(cls, path, prefix):
-#         # filename = [path]/[prefix].[EXT]
-#         if prefix is None:
-#             filename = cls.EXT
-#         else:
-#             # convert prefix to str
-#             if not isinstance(prefix, str):
-#                 prefix = str(prefix)
-            
-#             filename = prefix + '.' + cls.EXT
+    @property
+    def stats(self):
+        return self._stats_recorder._stats
 
-#         # create directories
-#         if path is not None:
-#             os.makedirs(path, exist_ok=True)
-#             filename = os.path.join(path, filename)
-        
-#         LOG.info('Save monitor file: ' + filename)
-#         return filename
+    def step(self, action):
+        action = self._before_step(action)
+        obs, rew, done, info = self.env.step(action)
+        return self._after_step(obs, rew, done, info)
 
-#     def reset(self, **kwargs):
-#         self.rewards = []
-#         self.need_reset = False
+    def reset(self, **kwargs):
+        kwargs = self._before_reset(kwargs)
+        obs = self.env.reset(**kwargs)
+        return self._after_reset(obs)
 
-#         return self.env.reset(**kwargs)
+    def close(self):
+        super().close()
+        self._stats_recorder.close()
 
+    def _before_step(self, action):
+        return self._stats_recorder.before_step(action)
 
-#     def step(self, action):
-        
-#         if self.need_reset:
-#             raise RuntimeError('Tried to step environment that needs reset')
+    def _after_step(self, obs, rew, done, info):
+        return self._stats_recorder.after_step(obs, rew, done, info)
 
-#         # step env
-#         observation, reward, done, info = self.env.step(action)
-#         self.rewards.append(reward)
+    def _before_reset(self, kwargs):
+        return self._stats_recorder.before_reset(kwargs)
 
-#         # episode ended
-#         if done:
-#             self.need_reset = True
-#             ep_rew = sum(self.rewards)
-#             ep_len = len(self.rewards)
-#             ep_info = {'r': round(ep_rew, 6), 'l':ep_len, 't': round(time.time() - self.t_start, 6)}
+    def _after_reset(self, obs):
+        return self._stats_recorder.after_reset(obs)
 
-#             self.episode_rewards.append(ep_rew)
-#             self.episode_lengths.append(ep_len)
-#             self.episode_times.append(time.time() - self.t_start)
-            
-#             # write episode info to csv
-#             if self.writer:
-#                 self.writer.writerow(ep_info)
-#                 self.file_handler.flush()
+# ===
 
-#             info['episode'] = ep_info
-        
-#         self.total_steps += 1
-#         return observation, reward, done, info
-
-#     def close(self):
-#         super().close()
-#         if self.file_handler is not None:
-#             self.file_handler.close()
-
-#     def get_total_steps(self):
-#         return self.total_steps
-
-#     def get_episode_rewards(self):
-#         return self.episode_rewards
-
-#     def get_episode_lengths(self):
-#         return self.episode_lengths
-
-#     def get_episode_times(self):
-#         return self.episode_times
 
 class FrameStack(gym.Wrapper):
     def __init__(self, env, n_frames):
