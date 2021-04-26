@@ -33,11 +33,11 @@ function train() {
                     --policy_update=2 \
                     --target_update=2 \
                     --lr=1e-3 \
-                    --log_interval=1 \
-                    --eval_interval=1000 \
+                    --log_interval=100 \
+                    --eval_interval=500 \
                     --eval_episodes=5 \
                     --eval_max_steps=1000 \
-                    --save_interval=1000 \
+                    --save_interval=500 \
                     --verbose=1 \
                     --action_samples=50 \
                     --action_noise=0.2 \

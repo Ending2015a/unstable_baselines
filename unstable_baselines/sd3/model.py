@@ -57,7 +57,7 @@ from unstable_baselines.prob import MultiNormal
 from unstable_baselines.utils_v2 import (normalize,
                                         denormalize,
                                         is_image_observation,
-                                        preproess_observation,
+                                        preprocess_observation,
                                         get_input_tensor_from_space)
 
 
@@ -355,7 +355,7 @@ class Agent(SavableModel):
         obs_inputs = get_input_tensor_from_space(observation_space)
         act_inputs = get_input_tensor_from_space(action_space)
         fea_inputs = self.net(obs_inputs)
-        self.actor(features)
+        self.actor(fea_inputs)
         self.critic_1([fea_inputs, act_inputs])
         self.critic_2([fea_inputs, act_inputs])
 
@@ -395,15 +395,16 @@ class Agent(SavableModel):
         Returns:
             tf.Tensor: predicted actions in shape (batch, act_space.shape), 
                 tf.float32
+            tf.Tensor: Extracted input features (batch, latent), tf.float32
         '''
 
         action, features = self._forward(inputs, training=training)
 
         # denormalize action
         if not normalized_act:
-            low    = tf.cast(self.action_space.low, tf.float32)
-            high   = tf.cast(self.action_space.high, tf.float32)
-            action = denormalize(action, high=high, low=low, nlow=-1., nhigh=1.)
+            low    = tf.cast(self.action_space.low,  dtype=tf.float32)
+            high   = tf.cast(self.action_space.high, dtype=tf.float32)
+            action = denormalize(action, low=low, high=high, nlow=-1., nhigh=1.)
         
         return action, features
 
@@ -427,12 +428,11 @@ class Agent(SavableModel):
 
         # predict
         outputs, *_ = self(inputs, normalized_act=normalized_act, training=False)
-        outputs     np.asarray(outputs)
+        outputs     = np.asarray(outputs)
 
         if one_sample:
             outputs = np.squeeze(outputs, axis=0)
 
-        # predict
         return outputs
 
     def get_config(self):
@@ -580,14 +580,11 @@ class SD3(TrainableModel):
         self.agent_target = Agent(observation_space, action_space, force_mlp=self.force_mlp)
 
         self.actor_optimizer  = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
-                                                         clipnorm=self.max_grad_norm)
+                                                        clipnorm=self.max_grad_norm)
         self.critic_optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate,
-                                                         clipnorm=self.max_grad_norm)
-
+                                                        clipnorm=self.max_grad_norm)
         # initialize target
         self.agent_target.update(self.agent)
-
-    
 
     @tf.function
     def _forward(self, inputs, training=True):
@@ -636,7 +633,6 @@ class SD3(TrainableModel):
         '''
         return self.agent.predict(inputs, normalized_act=normalized_act)
 
-
     @tf.function
     def actor_loss(self, obs):
         '''Compute actor loss
@@ -678,7 +674,6 @@ class SD3(TrainableModel):
         Returns:
             tf.Tensor: Critic loss, tf.float32
         '''
-
         reward = tf.cast(reward, dtype=tf.float32)
         done   = tf.cast(done,   dtype=tf.float32)
 
@@ -695,7 +690,7 @@ class SD3(TrainableModel):
         # sample noise
         noise_mean   = tf.constant(0., dtype=tf.float32)
         noise_scale  = tf.constant(self.action_noise, dtype=tf.float32)
-        noise        = tf.random.normal(shape=dup_act_shape) * noise_scale
+        noise        = tf.random.normal(shape=dup_next_act.shape) * noise_scale
         noise_prob   = MultiNormal(noise_mean, noise_scale).prob(noise)       # (batch, action_samples)
         noise        = tf.clip_by_value(noise, -self.action_noise_clip, self.action_noise_clip)
         dup_next_act = tf.clip_by_value(dup_next_act + noise, -1., 1.)
@@ -808,15 +803,16 @@ class SD3(TrainableModel):
 
             if len(self.buffer) < self.min_buffer:
                 # random sample (collecting rollouts)
-                action = np.array([self.action_space.sample() for n in range(self.n_envs)])
+                action = np.asarray([self.action_space.sample() for n in range(self.n_envs)])
                 action = normalize(action, high=self.action_space.high, low=self.action_space.low, nlow=-1., nhigh=1.)
             else:
                 # sample from policy (normalized)
-                action = self(obs, normalized_act=True)
+                action, _ = self(obs, normalized_act=True)
             
             # add action noise
             if self.explore_noise is not None:
-                action = np.clip(action + self.explore_noise(shape=action.shape), -1, 1)
+                noise  = self.explore_noise(shape=action.shape).astype(np.float32)
+                action = np.clip(action + noise, -1., 1.)
 
             # step environment
             raw_action = denormalize(action, high=self.action_space.high, low=self.action_space.low, nlow=-1., nhigh=1.)
@@ -870,12 +866,10 @@ class SD3(TrainableModel):
                 actor_loss = self._train_actor(obs)
                 all_actor_loss.append(actor_loss)
 
-
             # update target agent
             if self.num_gradsteps % target_update == 0:
                 self.agent_target.update(self.agent)
 
-                
             all_critic_loss.append(critic_loss)
 
         if len(all_actor_loss) > 0:
@@ -960,7 +954,7 @@ class SD3(TrainableModel):
         time_start = time.time()
         time_spent = 0
         timesteps_per_epoch = self.n_steps * self.n_envs
-        total_epoch = int(float(total_timesteps-self.num_timesteps) / 
+        total_epochs = int(float(total_timesteps-self.num_timesteps) / 
                                         float(timesteps_per_epoch) + 0.5)
 
 
@@ -1028,7 +1022,7 @@ class SD3(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
-            eval_metrics = None
+            eps_rews, eps_steps = [], []
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
                 eps_rews, eps_steps = self.eval(env=eval_env, 
                                                 n_episodes=eval_episodes, 
@@ -1040,9 +1034,6 @@ class SD3(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
-
-                # eval metrics to select the best model
-                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
@@ -1068,7 +1059,7 @@ class SD3(TrainableModel):
                 LOG.add_row('Max rewards',  max_rews)
                 LOG.add_row('     Length',  max_steps)
                 LOG.add_line()
-                LOG.add_row('Mean rewards', mean_rews)
+                LOG.add_row('Mean rewards', mean_rews.round(3))
                 LOG.add_row(' Std rewards', std_rews, fmt='{}: {:.3f}')
                 LOG.add_row(' Mean length', mean_steps)
                 LOG.add_line()
@@ -1079,7 +1070,7 @@ class SD3(TrainableModel):
                     and (self.num_epochs % save_interval) == 0):
                 
                 saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
-                                    checkpoint_metrics=eval_metrics)
+                                    checkpoint_metrics=self.get_eval_metrics(eps_rews, eps_steps))
 
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))
