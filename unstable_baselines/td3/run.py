@@ -41,7 +41,7 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines import logger
 
-from unstable_baselines.envs import *
+from unstable_baselines.envs_v2 import *
 from unstable_baselines.utils_v2 import (NormalActionNoise,
                                          set_global_seeds)
 
@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument('--lr',                  type=float, default=1e-3,    help='Learning rate')
     parser.add_argument('--gamma',               type=float, default=0.99,    help='Discount factor')
     parser.add_argument('--tau',                 type=float, default=0.005,   help='Polyak update coefficient (tau in original paper)')
-    parser.add_argument('--max_grad_norm',       type=float, default=0.5,     help='Gradient norm clip range')
+    parser.add_argument('--max_grad_norm',       type=float, default=None,    help='Gradient norm clip range')
     parser.add_argument('--action_noise',        type=float, default=0.2,     help='Noise scale added to target actions')
     parser.add_argument('--action_noise_clip',   type=float, default=0.5,     help='Noise range added to target actions')
     parser.add_argument('--explore_noise_mean',  type=float, default=0,       help='Mean of normal action noise')
@@ -110,23 +110,24 @@ def make_env(a, eval=False):
             def _init():
                 logger.Config.use(filename=a.logging, level=a.log_level, 
                                   colored=True, reset=True)
+                set_global_seeds(a.seed)
                 import pybullet_envs
                 env = gym.make(a.env_id)
-                env.seed(a.seed + rank)
-                env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
-                            enable_video_recording=a.record_video, force=True,
-                            video_kwargs={'prefix':'video/train.{}'.format(rank)})
+                env = SeedEnv(env, seed=a.seed+rank)
+                if a.record_video:
+                    env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
+                                      prefix='train.{}'.format(rank), force=True)
+                env = Monitor(env, a.monitor_dir, prefix=str(rank), force=True)
                 return env
-            set_global_seeds(a.seed)
             return _init
         env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
     else:
         env = gym.make(a.env_id)
-        env.seed(a.eval_seed)
-        env = Monitor(env, directory=a.monitor_dir, prefix='eval',
-                        enable_video_recording=a.record_video, force=True,
-                        video_kwargs={'prefix':'video/eval',
-                                        'callback': lambda x: True})
+        env = SeedEnv(env, seed=a.eval_seed)
+        if a.record_video:
+            env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
+                            prefix='eval', callback=True, force=True)
+        env = Monitor(env, a.monitor_dir, prefix='eval',force=True)
     return env
 
 
@@ -186,8 +187,9 @@ if __name__ == '__main__':
     LOG.add_row('Explore noise',         a.explore_noise)
     LOG.add_row('Explore noise mean',    a.explore_noise_mean)
     LOG.add_row('Explore noise scale',   a.explore_noise_scale)
-    
     LOG.flush('WARNING')
+
+    set_global_seeds(a.seed)
 
     # === Make envs ===
     
@@ -210,7 +212,7 @@ if __name__ == '__main__':
                          buffer_size       = a.buffer_size,
                          min_buffer        = a.min_buffer,
                          n_steps           = a.num_steps,
-                         n_gradsteps       = a.n_gradsteps,
+                         n_gradsteps       = a.num_gradsteps,
                          batch_size        = a.batch_size,
                          policy_update     = a.policy_update,
                          gamma             = a.gamma,
@@ -223,7 +225,7 @@ if __name__ == '__main__':
                          verbose           = a.verbose)
         
         # Total timesteps = num_steps * num_envs * num_episodes (default ~ 1M)
-        model.learn(a.num_steps *    a.num_envs * a.num_episodes,
+        model.learn(a.num_steps *    a.num_envs * a.num_epochs,
                     tb_logdir      = a.tb_logdir,
                     log_interval   = a.log_interval,
                     eval_env       =   eval_env, 
