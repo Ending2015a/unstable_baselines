@@ -728,6 +728,42 @@ class TrainableModel(SavableModel):
         
         raise NotImplementedError('Method not implemented')
 
+    def get_eval_metrics(self, eps_rews, eps_steps):
+        '''Compute evaluation metrics (default: mean)
+        override this method to customize your evaluation metrics.
+        '''
+        if len(eps_rews) == 0:
+            return None
+        else:
+            return np.mean(eps_rews)
+
+    def metrics_compare_fn(self, last_metrics, new_metrics):
+        '''Compare two metrics
+        override this method to customize your metrics comparison
+        method.
+        '''
+        return _default_metric_compare_fn(last_metrics, new_metrics)
+
+    def save(self, directory: str,
+                   weights_name: str=WEIGHTS_NAME,
+                   checkpoint_number: int=None,
+                   checkpoint_metrics=None,
+                   metrics_compare_fn=None,
+                   max_to_keep=None,
+                   **kwargs):
+        '''Save model checkpoint, 
+        See `SavableModel.save()` for more info
+        '''
+        if metrics_compare_fn is None:
+            metrics_compare_fn = self.metrics_compare_fn
+        return super().save(directory=directory,
+                            weights_name=weights_name,
+                            checkpoint_number=checkpoint_number,
+                            checkpoint_metrics=checkpoint_metrics,
+                            metrics_compare_fn=metrics_compare_fn,
+                            max_to_keep=max_to_keep,
+                            **kwargs)
+
     def save_config(self, filepath):
         '''Save model config to `filepath`
 
