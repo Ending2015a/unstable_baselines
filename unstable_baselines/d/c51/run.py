@@ -38,7 +38,7 @@ import numpy as np
 # --- my module ---
 from unstable_baselines import logger
 
-from unstable_baselines.envs import *
+from unstable_baselines.envs_v2 import *
 from unstable_baselines.utils_v2 import set_global_seeds
 from unstable_baselines.sche import LinearScheduler
 
@@ -104,30 +104,31 @@ def make_atari(a, eval=False):
             def _init():
                 logger.Config.use(filename=a.logging, level=a.log_level, 
                                   colored=True, reset=True)
+                set_global_seeds(a.seed)
                 env = gym.make(a.env_id)
-                env.seed(a.seed + rank)
+                env = SeedEnv(env, seed=a.seed+rank)
                 env = NoopResetEnv(env, noop_max=30)
+                if a.record_video:
+                    env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
+                                    prefix='train.{}'.format(rank), fps=60, force=True)
                 env = MaxAndSkipEnv(env, skip=4)
-                env = Monitor(env, directory=a.monitor_dir, prefix=str(rank),
-                            enable_video_recording=a.record_video, force=True,
-                            video_kwargs={'prefix':'video/train.{}'.format(rank)})
+                env = Monitor(env, a.monitor_dir, prefix=str(rank), force=True)
                 env = EpisodicLifeEnv(env)
                 env = WarpFrame(env)
                 env = ClipRewardEnv(env)
                 return env
-            set_global_seeds(a.seed)
             return _init
         env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
         env = VecFrameStack(env, 4)
     else:
         env = gym.make(a.env_id)
-        env.seed(a.eval_seed)
+        env = SeedEnv(env, seed=a.eval_seed)
         env = NoopResetEnv(env, noop_max=30)
+        if a.record_video:
+            env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'), fps=60,
+                                 prefix='eval', callback=True, force=True)
         env = MaxAndSkipEnv(env, skip=4)
-        env = Monitor(env, directory=a.monitor_dir, prefix='eval',
-                        enable_video_recording=a.record_video, force=True,
-                        video_kwargs={'prefix':'video/eval',
-                                        'callback': lambda x: True})
+        env = Monitor(env, directory=a.monitor_dir, prefix='eval', force=True)
         env = WarpFrame(env)
         env = FrameStack(env, 4)
     
@@ -190,6 +191,8 @@ if __name__ == '__main__':
     LOG.add_row('Final explore rate',    a.explore_final)
     LOG.add_row('Explore progress',      a.explore_progress)
     LOG.flush('WARNING')
+
+    set_global_seeds(a.seed)
 
     # === Make envs ===
 
