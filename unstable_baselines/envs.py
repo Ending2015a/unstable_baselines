@@ -30,7 +30,7 @@ import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import logger
-from unstable_baselines.utils_v2 import (flatten_obs,
+from unstable_baselines.utils import (flatten_obs,
                                         StateObject)
 
 

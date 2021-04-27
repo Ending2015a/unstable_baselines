@@ -16,7 +16,7 @@ from tensorflow.python.framework import errors
 
 # --- my module ---
 from unstable_baselines import logger
-from unstable_baselines import utils_v2 as utils
+from unstable_baselines import utils as utils
 
 __all__ = ['SavableModel',
            'TrainableModel']
