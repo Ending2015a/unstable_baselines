@@ -26,6 +26,7 @@ function train() {
                    --env_id="$3" \
                    --log_interval=1000 \
                    --eval_interval=10000 \
+                   --eval_episodes=5 \
                    --save_interval=10000 \
                    --num_envs=8 \
                    --num_epochs=312500 \
