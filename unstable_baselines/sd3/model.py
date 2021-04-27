@@ -868,7 +868,7 @@ class SD3(TrainableModel):
 
             # update target agent
             if self.num_gradsteps % target_update == 0:
-                self.agent_target.update(self.agent)
+                self.agent_target.update(self.agent, polyak=self.tau)
 
             all_critic_loss.append(critic_loss)
 

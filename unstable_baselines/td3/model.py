@@ -671,7 +671,7 @@ class TD3(TrainableModel):
 
         noise    = tf.random.normal(shape=action.shape) * self.action_noise
         noise    = tf.clip_by_value(noise, -self.action_noise_clip, self.action_noise_clip)
-        
+
         next_act, next_fea = self.agent_target._forward(next_obs)
         next_act           = tf.clip_by_value(next_act + noise, -1., 1.)
 
@@ -832,7 +832,7 @@ class TD3(TrainableModel):
             
             # update target agent
             if self.num_gradsteps % target_update == 0:
-                self.agent_target.update(self.agent)
+                self.agent_target.update(self.agent, polyak=self.tau)
             
             all_critic_loss.append(critic_loss)
 
