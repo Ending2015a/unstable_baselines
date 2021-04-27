@@ -14,7 +14,6 @@ import random
 import inspect
 import datetime
 import tempfile
-import multiprocessing
 
 # --- 3rd party ---
 import gym 
@@ -23,25 +22,40 @@ import cloudpickle
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.python.lib.io import file_io
+
 # --- my module ---
+from unstable_baselines import logger
+
+LOG = logger.getLogger()
 
 
 __all__ = [
     'NormalActionNoise',
+    'StateObject',
     'set_global_seeds',
     'normalize',
     'denormalize',
+    'flatten_obs',
+    'soft_update',
+    'is_json_serializable',
     'to_json_serializable',
     'from_json_serializable',
-    'tf_soft_update_params',
-    'soft_update'
+    'safe_json_dumps',
+    'safe_json_loads',
+    'safe_json_dump',
+    'safe_json_load'
 ]
 
 
-SERIALIZATION_KEY='#serialized'
+
+# === Const params ===
+
+SERIALIZATION_KEY='#SERIALIZED'
 
 
 # === Action noises ===
+#TODO: Serializable Action noise 
 class NormalActionNoise():
     def __init__(self, mean, scale):
         self.mean = mean
@@ -56,18 +70,34 @@ class NormalActionNoise():
     def reset(self):
         pass
 
-# === State object ===
+
+# === StateObject ===
 class StateObject(dict):
+    '''StateObject can store model states, and it can
+    be serialized by JSON.
+    '''
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
         self.__dict__ = self
         return self
+    
+    def tostring(self):
+        return safe_json_dumps(self, indent=None)
 
-# === utils ===
+    @classmethod
+    def fromstring(cls, string):
+        self = StateObject()
+        self.update(safe_json_loads(string))
+        return self
+
+
+# === Utils ===
+
 def set_global_seeds(seed):
     tf.random.set_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
 
 def normalize(x, low, high, nlow=0.0, nhigh=1.0):
     '''
@@ -80,6 +110,7 @@ def denormalize(x, low, high, nlow=0.0, nhigh=1.0):
     Denormalize x from [nlow, nhigh] to [low, high]
     '''
     return ((high-low)/(nhigh-nlow)) * (x-nlow) + low
+
 
 def flatten_obs(obs, space):
     assert isinstance(obs, (list, tuple)), "expected list or tuple of observations per environment"
@@ -96,6 +127,97 @@ def flatten_obs(obs, space):
     else:
         return np.stack(obs)
 
+
+def soft_update(target_vars, source_vars, polyak=0.005):
+    '''Perform soft updates
+
+    target_var = (1-polyak) * target_var + polyak * source_var
+
+    Args:
+        target_vars (list): A list of tf.Variable update to.
+        source_vars (list): A list of tf.Variable update from. 
+            The length must be equal to target_vars.
+        polyak (float, optional): Smooth rate. Defaults to 0.005.
+    '''
+
+
+    if len(target_vars) != len(source_vars):
+        raise ValueError('Length does not match, got {} and {}'.format(
+                        len(target_vars), len(source_vars)))
+
+    for (tar_var, src_var) in zip(target_vars, source_vars):
+        tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
+
+
+def is_image_observation(obs_space):
+
+    return (isinstance(obs_space, gym.spaces.Box) and
+                len(obs_space.shape) == 3)
+
+# === TensorFlow utils ===
+
+def preprocess_observation(inputs, obs_space, dtype=tf.float32):
+    # we only normalize non-float32 inputs
+    # Eg. image observation (Box, uint8)
+    if tf.as_dtype(inputs.dtype) == tf.float32:
+        return inputs
+
+    if isinstance(obs_space, gym.spaces.Box):
+        inputs = tf.cast(inputs, dtype=tf.float32)
+        low    = tf.constant(obs_space.low, dtype=tf.float32)
+        high   = tf.constant(obs_space.high, dtype=tf.float32)
+        # normalize observations [0, 1]
+        inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
+    elif isinstance(obs_space, gym.spaces.Discrete):
+        depth  = tf.constant(obs_space.n, dtype=tf.int32)
+        inputs = tf.one_hot(inputs, depth=depth)
+    elif isinstance(obs_space, gym.spaces.MultiDiscrete):
+        # inputs = [3, 5] obs_space.nvec = [4, 7]
+        # [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]
+        nvec   = tf.constant(obs_space.nvec, dtype=tf.int32)
+        inputs = tf.concat([
+                tf.one_hot(inputs[:, idx], depth=nvec[idx])
+                for idx in range(inputs.shape[-1])
+            ], axis=-1)
+    elif isinstance(obs_space, gym.spaces.MultiBinary):
+        pass
+    else:
+        raise NotImplementedError("Preprocessing not implemented for "
+                                "{}".format(obs_space))
+
+    return tf.cast(inputs, dtype=dtype)
+
+def get_input_tensor_from_space(space: gym.Space, dtype=tf.float32):
+    '''Generates keras inputs from the given gym space
+
+    Args:
+        space (gym.Space): Space. Support (Box, Discrete, 
+            MultiDiscrete, MultiBinary)
+        dtype (tf.dtypes.Dtype): Input tensor type.
+            If None, use space dtype
+
+    Raises:
+        NotImplementedError: If `space` is not supported.
+
+    Returns:
+        tf.keras.Input: Keras input
+    '''    
+    sample = space.sample()
+    dtype = space.dtype if dtype is None else dtype
+    if isinstance(space, (gym.spaces.Box,
+                          gym.spaces.Discrete,
+                          gym.spaces.MultiDiscrete,
+                          gym.spaces.MultiBinary)):
+        inputs = tf.keras.Input(
+                    shape=space.shape, dtype=dtype)
+    else:
+        raise NotImplementedError("Input tensor not implemented "
+                "for {}".format(space))
+    return inputs
+
+# === JSON utils ===
+
+
 def is_json_serializable(obj):
     '''
     Check if the object is json serializable
@@ -106,55 +228,71 @@ def is_json_serializable(obj):
     except:
         return False
 
-SERIALIZED_KEY='#serialized'
+def to_json_serializable(obj):
+    '''Convert any object into json serializable object
 
-
-def to_json_serializable(d: dict):
+    Args:
+        obj (Any): Any object.
     '''
-    Serialize dict object to json string
+    if not is_json_serializable(obj):
+        encoded_obj = base64.b64encode(
+            cloudpickle.dumps(obj)).decode()
+        encoded_obj = {SERIALIZATION_KEY: encoded_obj}
+    else:
+        encoded_obj = obj
+
+    return encoded_obj
+
+def from_json_serializable(encoded_obj):
+    '''Convert any serializable object into original object
+
+    Args:
+        encoded_obj (Any): Serializable object
     '''
-    serializable_data = {}
-    for k, v in d.items():
-        if is_json_serializable(v):
-            serializable_data[k] = v
-        else:
-            base64_encoded = base64.b64encode(
-                cloudpickle.dumps(v)
-            ).decode()
-
-            serializable_data[k] = {SERIALIZED_KEY:base64_encoded}
-
-    return serializable_data
-
-def from_json_serializable(json_dict):
-    '''
-    Deserialize from json string
-    '''
-
-    deserialized_data = {}
-    for k, v in json_dict.items():
-        if isinstance(v, dict) and SERIALIZED_KEY in v.keys():
-            serialized_obj = v[SERIALIZED_KEY]
-
-            try:
-                deserialized_obj = cloudpickle.loads(
-                    base64.b64decode(serialized_obj.encode())
-                )
-            except pickle.UnpicklingError:
-                raise RuntimeError("Failed to deserialize object {}".format(k))
-
-            deserialized_data[k] = deserialized_obj
-        else:
-            deserialized_data[k] = v
-
-    return deserialized_data
+    if (isinstance(encoded_obj, dict) 
+            and SERIALIZATION_KEY in encoded_obj.keys()):
+        obj = encoded_obj[SERIALIZATION_KEY]
+        obj = cloudpickle.loads(
+            base64.b64decode(obj.encode()))
+    else:
+        obj = encoded_obj
+    return obj
 
 
-@tf.function
-def tf_soft_update_params(target_vars, current_vars, polyak=0.005):
-    '''
-    Soft update (polyak update)
-    '''
 
-    for (tar_var, cur_var) in zip(target_vars, current_vars):
-        tar_var.assign((1.-polyak) * tar_var + polyak * cur_var)
+def safe_json_dumps(obj, 
+                    indent=4, 
+                    ensure_ascii=False, 
+                    default=to_json_serializable, 
+                    **kwargs):
+    string = json.dumps(obj, indent=indent, 
+                        ensure_ascii=ensure_ascii, 
+                        default=default,
+                        **kwargs)
+    return string
+
+def safe_json_loads(string, 
+                    object_hook=from_json_serializable, 
+                    **kwargs):
+
+    obj = json.loads(string, 
+                    object_hook=object_hook, 
+                    **kwargs)
+    return obj
+
+
+def safe_json_dump(filepath,
+                    obj,
+                    **kwargs):
+    string = safe_json_dumps(obj, **kwargs)
+    file_io.atomic_write_string_to_file(filepath, string)
+
+
+def safe_json_load(filepath,
+                    **kwargs):    
+    obj = None
+    if file_io.file_exists(filepath):
+        string = file_io.read_file_to_string(filepath)
+        obj = safe_json_loads(string, **kwargs)
+
+    return obj
