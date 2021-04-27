@@ -98,6 +98,8 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 > some video
 
+> colab examples
+
 ## Benchmarks
 
 > learning curves
