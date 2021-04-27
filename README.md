@@ -1,6 +1,6 @@
 > Some cool video
 
-# Unstable Baselines
+# Unstable Baselines (Early Access)
 
 A Deep Reinforcement Learning codebase in TensorFlow 2.0 with an unified, flexible and highly customizable structure for fast prototyping.
 
@@ -16,7 +16,7 @@ A Deep Reinforcement Learning codebase in TensorFlow 2.0 with an unified, flexib
 | **Easy to trace, customize**   | :heavy_check_mark:                | :x: <sup>(3)</sup>  | :x: <sup>(3)</sup> |
 | **Standalone implementations for each algo** | :heavy_check_mark:  | :heavy_minus_sign:  | :x: <sup>(4)</sup> |
 
-<sup>(1) Currently only support DQN, PPO, TD3, SD3. We are still working on other algorithms.</sup><br>
+<sup>(1) Currently only support DQN, C51, PPO, TD3, ...etc. We are still working on other algorithms.</sup><br>
 <sup>(2) Do we really need this? </sup><br>
 <sup>(3) If you have traced Stable-baselines or OpenAI/baselines once, you'll never do that again.</sup><br>
 <sup>(4) Many cross-dependencies across all algos make the code very hard to trace, for example [baselines/common/policies.py](https://github.com/openai/baselines/blob/master/baselines/common/policies.py#L3), [baselines/a2c/a2c.py](https://github.com/openai/baselines/blob/master/baselines/a2c/a2c.py#L14).... Great job! OpenAI!:cat:</sup><br>
