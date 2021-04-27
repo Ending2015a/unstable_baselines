@@ -1023,7 +1023,7 @@ class VideoRecorder(MonitorGroupWrapper):
         video_path = None
         meta_path = None
 
-        if self._enabled:
+        if self.need_record:
             self._ensure_dir_exists(base_path)
             # generate random filename
             with tempfile.NamedTemporaryFile(dir=base_path, prefix=prefix,\
