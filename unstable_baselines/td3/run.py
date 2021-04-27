@@ -41,8 +41,8 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines import logger
 
-from unstable_baselines.envs_v2 import *
-from unstable_baselines.utils_v2 import (NormalActionNoise,
+from unstable_baselines.envs import *
+from unstable_baselines.utils import (NormalActionNoise,
                                          set_global_seeds)
 
 from unstable_baselines.td3.model import TD3

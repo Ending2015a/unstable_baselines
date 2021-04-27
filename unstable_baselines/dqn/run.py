@@ -38,8 +38,8 @@ import numpy as np
 # --- my module ---
 from unstable_baselines import logger
 
-from unstable_baselines.envs_v2 import *
-from unstable_baselines.utils_v2 import set_global_seeds
+from unstable_baselines.envs import *
+from unstable_baselines.utils import set_global_seeds
 from unstable_baselines.sche import LinearScheduler
 
 from unstable_baselines.dqn.model import DQN

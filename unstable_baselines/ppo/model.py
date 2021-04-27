@@ -41,12 +41,12 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 
-from unstable_baselines.base_v2 import (SavableModel, 
+from unstable_baselines.base import (SavableModel, 
                                         TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.prob import (Categorical,
                                      MultiNormal)
-from unstable_baselines.utils_v2 import (set_global_seeds,
+from unstable_baselines.utils import (set_global_seeds,
                                          normalize,
                                          is_image_observation,
                                          preprocess_observation,
