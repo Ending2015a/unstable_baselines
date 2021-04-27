@@ -31,12 +31,12 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 ```python
 python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/ppo/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=10000 \
-               --num_steps=100 --num_subepochs=1 --batch_size=100 --verbose=2 \
+               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 \
+               --num_steps=1000 --num_subepochs=10 --batch_size=100 --verbose=2 \
                --ent_coef=0.0 --record_video
 ```
 <sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
-<sup>Number of times each sample reused = num_subepochs (~1 in this case)</sup><br> -->
+<sup>Number of times each sample reused = num_subepochs (~10 in this case)</sup><br> -->
 
 ## Atari 2600
 
@@ -85,12 +85,10 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 ### Video
 
-| Environment | Video |
-|-|-|
-|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>|
-| `AntBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.AntBulletEnv-v0.eval.gif" width=300px/>|
-|`HopperBulletEnv-v0`  |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HopperBulletEnv-v0.eval.gif" width=300px/>|
-|`Walker2DBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.Walker2DBulletEnv-v0.eval.gif" width=300px/>|
+| Environment | Video | Environment | Video |
+|:-:|:-:|:-:|:-:|
+|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>| `AntBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.AntBulletEnv-v0.eval.gif" width=300px/>|
+|`HopperBulletEnv-v0`  |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HopperBulletEnv-v0.eval.gif" width=300px/>|`Walker2DBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.Walker2DBulletEnv-v0.eval.gif" width=300px/>|
 |`HumanoidBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/ppo.HumanoidBulletEnv-v0.eval.gif" width=300px/>|
 
 ### Learning Curve
@@ -99,23 +97,26 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AntBulletEnv-v0`         |             |              |             |            1M |           1 |            20 |         0 |
-| `HalfCheetahBulletEnv-v0` |             |              |             |            1M |           1 |            20 |         0 |
-| `HopperBulletEnv-v0`      |             |              |             |            1M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
-| `Walker2DBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
+| `AntBulletEnv-v0`         |             |              |             |            2M |           1 |            20 |         0 |
+| `HalfCheetahBulletEnv-v0` |             |              |             |            2M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |             |              |             |            2M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
 
 
 ### Hyperparametrs
 
-
-<!-- | `env_id`                | `num_envs` | `num_episodes` | `num_steps` | `num_epochs` | `batch_size` | `ent_coef` | `vf_coef` | `shared_net`  |
-| ----------------------- |:----------:|:--------------:|:-----------:|:------------:|:------------:|:----------:|:---------:|:-------------:|
-|`HalfCheetahBulletEnv-v0`| 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
-|`AntBulletEnv-v0`        | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
-|`HopperBulletEnv-v0`     | 1          | 1000           | 2000        | 10           | 200          | 0.0        | 0.5       | :x:           |
-|`Walker2DBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           |
-|`HumanoidBulletEnv-v0`   | 32         | 1000           | 512         | 15           | 4096         | 0.0        | 0.5       | :x:           | -->
+| `env_id`        | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |
+|-----------------|:-----------------:|:-------------------------:|:--------------------:|:----------------------:|:----------------------:|
+| `num_envs`      |         1         |             1             |           1          |            4           |            1           |
+| `num_epochs`    |        2000       |            2000           |         2000         |          2000          |          2000          |
+| `num_steps`     |        1000       |            1000           |         1000         |          1000          |          1000          |
+| `num_subepochs` |         10        |             10            |          10          |           10           |           10           |
+| `batch_size`    |        100        |            100            |          100         |           100          |           100          |
+| `lr`            |        3e-4       |            3e-4           |         3e-4         |          3e-4          |          3e-4          |
+| `ent_coef`      |        0.0        |            0.0            |          0.0         |           0.0          |           0.0          |
+| `vf_coef`       |        0.5        |            0.5            |          0.5         |           0.5          |           0.5          |
+| `shared_net`    |        :x:        |            :x:            |          :x:         |           :x:          |           :x:          |
 
 ## Architecture
 
