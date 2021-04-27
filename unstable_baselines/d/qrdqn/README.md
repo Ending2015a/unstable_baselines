@@ -42,16 +42,16 @@ python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_
 
 > Learning curve
 
-| `env_id`                  | Max rewards | Mean rewards | Std rewards | Total frames | Eval episodes |
-|---------------------------|------------:|-------------:|------------:|-------------:|--------------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |          10M |            20 |
-| `BeamRiderNoFrameskip-v4` |       11500 |       7791.1 |     2570.17 |          10M |            20 |
-| `BreakoutNoFrameskip-v4`  |         424 |       393.05 |          25 |          10M |            20 |
-| `EnduroNoFrameskip-v4`    |        2229 |       1726.1 |      310.23 |          10M |            20 |
-| `MsPacmanNoFrameskip-v4`  |             |              |             |          10M |            20 |
-| `PongNoFrameskip-v4`      |          21 |         20.8 |         0.6 |          10M |            20 |
-| `QbertNoFrameskip-v4`     |             |              |             |          10M |            20 |
-| `SeaquestNoFrameskip-v4`  |        9660 |         8307 |      665.29 |          10M |            20 |
+| `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
+|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+| `AsteroidsNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |             |              |             |           10M |         1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |             |              |             |           10M |         1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |             |              |             |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 

@@ -40,11 +40,11 @@ import tensorflow as tf
 from unstable_baselines import logger
 
 
-from unstable_baselines.base_v2 import (SavableModel, 
+from unstable_baselines.base import (SavableModel, 
                                         TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils_v2 import (normalize,
+from unstable_baselines.utils import (normalize,
                                         StateObject)
 
 
@@ -620,6 +620,7 @@ class QRDQN(TrainableModel):
         target_q = tf.gather(next_qs, indices=next_act, batch_dims=1) # (batch, n_quantiles)
 
         y     = reward + (1.-done) * self.gamma * target_q # (batch, n_quantiles)
+        y     = tf.stop_gradient(y)
 
         # compute current quantile q values
         qs    = self.agent._forward(obs) # (batch, act_space.n, n_quantiles)
@@ -880,7 +881,7 @@ class QRDQN(TrainableModel):
                 LOG.flush('INFO')
 
             # evaluate model
-            eval_metrics = None
+            eps_rews, eps_steps = [], []
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
 
                 eps_rews, eps_steps = self.eval(env=eval_env, 
@@ -893,9 +894,6 @@ class QRDQN(TrainableModel):
                 mean_rews  = np.mean(eps_rews)
                 std_rews   = np.std(eps_rews)
                 mean_steps = np.mean(eps_steps)
-
-                # eval metrics to select the best model
-                eval_metrics = mean_rews
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
@@ -932,7 +930,7 @@ class QRDQN(TrainableModel):
                     and (self.num_epochs % save_interval) == 0):
                 
                 saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
-                                    checkpoint_metrics=eval_metrics)
+                                    checkpoint_metrics=self.get_eval_metrics(eps_rews, eps_steps))
 
                 if self.verbose > 0:
                     LOG.info('Checkpoint saved to: {}'.format(saved_path))
