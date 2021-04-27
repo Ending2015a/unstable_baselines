@@ -33,11 +33,12 @@ python -m unstable_baselines.sd3.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 ### Video
 
-| Environment | Video | Environment | Video |
-|:-:|:-:|:-:|:-:|
-|`HalfCheetahBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HalfCheetahBulletEnv-v0.eval.gif" width=300px/>|`AntBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.AntBulletEnv-v0.eval.gif" width=300px/>|
-|`HopperBulletEnv-v0`  |<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HopperBulletEnv-v0.eval.gif" width=300px/>|`Walker2DBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.Walker2DBulletEnv-v0.eval.gif" width=300px/>|
-|`HumanoidBulletEnv-v0`|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HumanoidBulletEnv-v0.eval.gif" width=300px/>|||
+
+|`HalfCheetahBulletEnv-v0`|`AntBulletEnv-v0`|`HopperBulletEnv-v0`
+|:-:|:-:|:-:|
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HalfCheetahBulletEnv-v0.eval.gif" />|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.AntBulletEnv-v0.eval.gif" />|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HopperBulletEnv-v0.eval.gif" />|
+|`Walker2DBulletEnv-v0`|`HumanoidBulletEnv-v0`||
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.Walker2DBulletEnv-v0.eval.gif" />|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/sd3.HumanoidBulletEnv-v0.eval.gif" />||
 
 ### Results
 
