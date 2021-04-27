@@ -33,9 +33,9 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 
 |`HalfCheetahBulletEnv-v0`|`AntBulletEnv-v0`|`HopperBulletEnv-v0`
 |:-:|:-:|:-:|
-|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HalfCheetahBulletEnv-v0.eval.gif" max-height="180px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.AntBulletEnv-v0.eval.gif" max-height="180px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HopperBulletEnv-v0.eval.gif" max-height="180px"/>|
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HalfCheetahBulletEnv-v0.eval.gif" max-width="200px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.AntBulletEnv-v0.eval.gif" max-width="200px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HopperBulletEnv-v0.eval.gif" max-width="200px"/>|
 |`Walker2DBulletEnv-v0`|`HumanoidBulletEnv-v0`||
-|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.Walker2DBulletEnv-v0.eval.gif" max-height="180px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HumanoidBulletEnv-v0.eval.gif" max-height="180px"/>||
+|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.Walker2DBulletEnv-v0.eval.gif" max-width="200px"/>|<img src="https://github.com/Ending2015a/unstable_baselines_assets/blob/master/images/td3.HumanoidBulletEnv-v0.eval.gif" max-width="200px"/>||
 
 ### Results
 
