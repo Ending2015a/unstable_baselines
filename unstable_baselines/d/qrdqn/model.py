@@ -41,11 +41,11 @@ from unstable_baselines import logger
 
 
 from unstable_baselines.base import (SavableModel, 
-                                        TrainableModel)
+                                     TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
 from unstable_baselines.utils import (normalize,
-                                        StateObject)
+                                      StateObject)
 
 
 
@@ -307,7 +307,7 @@ class Agent(SavableModel):
         else:
             self.net = MlpNet()
 
-        self.q_net = CategoricalQNet(action_space, n_quantiles=self.n_quantiles)
+        self.q_net = QuantileQNet(action_space, n_quantiles=self.n_quantiles)
 
         # construct networks
         inputs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
