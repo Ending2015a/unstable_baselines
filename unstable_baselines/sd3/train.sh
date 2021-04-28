@@ -24,11 +24,11 @@ function train() {
                     --model_dir='model' \
                     --env_id=$3 \
                     --num_envs=1 \
-                    --num_epochs=2000 \
+                    --num_epochs=1000 \
                     --num_steps=1000 \
-                    --num_gradsteps=100 \
+                    --num_gradsteps=1000 \
                     --batch_size=100 \
-                    --buffer_size=1000000 \
+                    --buffer_size=200000 \
                     --min_buffer=10000 \
                     --policy_update=2 \
                     --target_update=2 \
