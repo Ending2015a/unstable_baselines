@@ -36,7 +36,7 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
                --ent_coef=0.0 --record_video
 ```
 <sup>Total timesteps (Samples) = num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
-<sup>Number of times each sample reused = num_subepochs (~10 in this case)</sup><br> -->
+<sup>Number of times each sample reused = num_subepochs (~10 in this case)</sup><br>
 
 ## Atari 2600
 
