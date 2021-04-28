@@ -166,8 +166,11 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
         inputs = tf.cast(inputs, dtype=tf.float32)
         low    = tf.constant(obs_space.low, dtype=tf.float32)
         high   = tf.constant(obs_space.high, dtype=tf.float32)
+        if ((not tf.math.reduce_any(tf.math.is_inf(low)))
+                and (not tf.math.reduce_any(tf.math.is_inf(high)))
+                and tf.math.reduce_any(high-low != 0)):
         # normalize observations [0, 1]
-        inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
+            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
     elif isinstance(obs_space, gym.spaces.Discrete):
         depth  = tf.constant(obs_space.n, dtype=tf.int32)
         inputs = tf.one_hot(inputs, depth=depth)
