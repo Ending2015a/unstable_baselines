@@ -17,7 +17,7 @@
 
 ### Atari-like environment (Image observation + discrete action)
 ```python
-python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id}/dqn/{rank}' \
+python -m unstable_baselines.d.c51.run --rank 0 --seed 1 --logdir='./log/{env_id}/c51/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=312500 \
                --num_steps=4 --num_gradsteps=1 --batch_size=256 --target_update=625 \

@@ -41,12 +41,12 @@ from unstable_baselines import logger
 
 
 from unstable_baselines.base import (SavableModel, 
-                                        TrainableModel)
+                                     TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
 from unstable_baselines.utils import (is_image_observation,
-                                        preprocess_observation,
-                                        get_input_tensor_from_space)
+                                      preprocess_observation,
+                                      get_input_tensor_from_space)
 
 
 
