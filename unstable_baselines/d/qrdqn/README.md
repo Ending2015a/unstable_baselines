@@ -17,7 +17,7 @@
 
 ### Atari-like environment (Image observation + discrete action)
 ```python
-python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/dqn/{rank}' \
+python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_id}/qrdqn/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
                --env_id="BreakoutNoFrameskip-v4" --num_envs=8 --num_epochs=312500 \
                --num_steps=4 --num_gradsteps=1 --batch_size=256 --target_update=625 \
@@ -58,7 +58,7 @@ python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_
 ### Hyperparameters
 
 
-| `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
+<!-- | `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
 |--------------------|:-------------------------:|:-------------------------:|:------------------------:|:----------------------:|:------------------------:|:--------------------:|:---------------------:|:------------------------:|
 | `num_envs`         |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
 | `num_epochs`       |           312500          |           312500          |          312500          |         312500         |          312500          |        312500        |         312500        |          312500          |
@@ -68,14 +68,14 @@ python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_
 | `target_update`    |            625            |            625            |            625           |           625          |            625           |          625         |          625          |            625           |
 | `exploration`      |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)    |    Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |   Linear(1.0, 0.01)  |   Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |
 | `explore_progress` |            0.1            |            0.1            |            0.1           |           0.1          |            0.1           |          0.1         |          0.1          |            0.1           |
-| `num_quantiles`    |            200            |            200            |            200           |           200          |            200           |          200         |          200          |            200           |
+| `num_quantiles`    |            200            |            200            |            200           |           200          |            200           |          200         |          200          |            200           | -->
 
 ## Architecture
 
-|             | `Box`              | `Discrete`         | `MultiDiscrete` | `MultiBinary` |
-|:-----------:|:------------------:|:------------------:|:---------------:|:-------------:|
-| Observation | :heavy_check_mark: | :x:                | :x:             | :x:           |
-| Action      | :x:                | :heavy_check_mark: | :x:             | :x:           |
+|             |        `Box`       |     `Discrete`     |   `MultiDiscrete`  |    `MultiBinary`   |
+|-------------|:------------------:|:------------------:|:------------------:|:------------------:|
+| Observation | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Action      |         :x:        | :heavy_check_mark: |         :x:        |         :x:        |
 
 <br/>
 <br/>
