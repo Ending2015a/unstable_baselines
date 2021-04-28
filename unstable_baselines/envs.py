@@ -27,6 +27,7 @@ import cloudpickle
 import numpy as np
 import tensorflow as tf
 
+from gym.wrappers import TimeLimit
 
 # --- my module ---
 from unstable_baselines import logger
@@ -41,6 +42,7 @@ __all__ = [
     'EpisodicLifeEnv',
     'ClipRewardEnv',
     'WarpFrame',
+    'TimeFeatureWrapper',
     'VideoRecorder',
     'Monitor',
     'FrameStack',
@@ -60,7 +62,7 @@ class SeedEnv(gym.Wrapper):
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
 
-# Stable baselines - wrapper
+# from Stable baselines
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env, noop_max=30):
         """
@@ -92,6 +94,7 @@ class NoopResetEnv(gym.Wrapper):
     def step(self, action):
         return self.env.step(action)
 
+# from Stable baselines
 class MaxAndSkipEnv(gym.Wrapper):
     def __init__(self, env, skip=4, blend=4):
         """
@@ -132,6 +135,7 @@ class MaxAndSkipEnv(gym.Wrapper):
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
 
+# from Stable baselines
 class EpisodicLifeEnv(gym.Wrapper):
     def __init__(self, env):
         """
@@ -173,6 +177,7 @@ class EpisodicLifeEnv(gym.Wrapper):
         self.lives = self.env.unwrapped.ale.lives()
         return obs
 
+# from Stable baselines
 class ClipRewardEnv(gym.RewardWrapper):
     def __init__(self, env):
         """
@@ -188,6 +193,7 @@ class ClipRewardEnv(gym.RewardWrapper):
         """
         return np.sign(reward)
 
+# from Stable baselines
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env):
         """
@@ -210,6 +216,57 @@ class WarpFrame(gym.ObservationWrapper):
         frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
 
+# from Stable baselines
+class TimeFeatureWrapper(gym.Wrapper):
+    """
+    Add remaining time to observation space for fixed length episodes.
+    See https://arxiv.org/abs/1712.00378 and https://github.com/aravindr93/mjrl/issues/13.
+    :param env: (gym.Env)
+    :param max_steps: (int) Max number of steps of an episode
+        if it is not wrapped in a TimeLimit object.
+    :param test_mode: (bool) In test mode, the time feature is constant,
+        equal to zero. This allow to check that the agent did not overfit this feature,
+        learning a deterministic pre-defined sequence of actions.
+    """
+    def __init__(self, env, max_steps=1000, test_mode=True):
+        super().__init__(env)
+        assert isinstance(env.observation_space, gym.spaces.Box)
+
+        low, high = env.observation_space.low, env.observation_space.high
+        low, high = np.concatenate((low, [0.])), np.concatenate((high, [1.]))
+        
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+
+        if (isinstance(env, TimeLimit)):
+            self._max_steps = env._max_episode_steps
+        else:
+            self._max_steps = max_steps
+        
+        self._current_step = 0
+        self._test_mode = test_mode
+
+    def reset(self, **kwargs):
+        self._current_step = 0
+        obs = self.env.reset(**kwargs)
+        return self._get_obs(obs)
+
+    def step(self, action):
+        self._current_step += 1
+        obs, reward, done, info = self.env.step(action)
+        return self._get_obs(obs), reward, done, info
+
+    def _get_obs(self, obs):
+        """
+        Concatenate the time feature to the current observation.
+        :param obs: (np.ndarray)
+        :return: (np.ndarray)
+        """
+        # Remaining time is more general
+        time_feature = 1 - (self._current_step / self._max_steps)
+        if self._test_mode:
+            time_feature = 1.0
+        # Optionnaly: concatenate [time_feature, time_feature ** 2]
+        return np.concatenate((obs, [time_feature])).astype(obs.dtype)
 
 # Rewrite gym.wrappers.monitoring.StatsRecorder
 #   output Stable-baselines style csv records
@@ -824,14 +881,14 @@ class VideoRecorder(MonitorGroupWrapper):
         return self._callback(self.stats.episodes)
 
     def _get_monitor_stats(self):
+        '''Try to get stats object from Monitor'''
         if self._monitor_stats is not None:
             return self._monitor_stats
 
-        stats = None
         if self._monitor is not None:
             if hasattr(self._monitor, 'stats'):
-                stats = self._monitor.stats
-        return stats
+                self._monitor_stats = self._monitor.stats
+        return self._monitor_stats
 
     @property
     def stats(self):
@@ -939,6 +996,7 @@ class VideoRecorder(MonitorGroupWrapper):
                            start_steps=self.stats.start_steps,
                            end_steps=self.stats.steps)
 
+
     def _make_save_path(self, base_path, prefix, suffix, ext):
         '''Make save path {base_path}/{prefix}.{suffix}.{ext}
         or {base_path}/{suffix}.{ext} if {preffix} is None
@@ -960,7 +1018,8 @@ class VideoRecorder(MonitorGroupWrapper):
 
     def _close_and_save_video_recorder(self):
         
-        if (not self._video_recorder) or (not self._video_recorder.enabled):
+        if ((not self._video_recorder)
+                or (not self._video_recorder.functional)):
             return
 
         self._video_recorder.close()
@@ -1063,6 +1122,8 @@ class VideoRecorder(MonitorGroupWrapper):
         #TODO: clear folder !!danger!!
         pass
 
+# Rewrite gym.wrappers.Monitor
+# Use to control StatsRecorder
 class Monitor(MonitorGroupWrapper):
     def __init__(self, env:   gym.Env, 
                        directory: str = 'monitor', 
@@ -1160,7 +1221,7 @@ class FrameStack(gym.Wrapper):
 
 # === Vec Env ===
 
-# Stable baselines - VecEnv
+# from Stable baselines - VecEnv
 def _worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
     env = env_fn_wrapper.env_fn()
@@ -1203,6 +1264,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
         except EOFError:
             break
 
+# from Stable baselines
 class CloudpickleWrapper(object):
     def __init__(self, env_fn):
         self.env_fn = env_fn
@@ -1213,6 +1275,7 @@ class CloudpickleWrapper(object):
     def __setstate__(self, env_fn):
         self.env_fn = cloudpickle.loads(env_fn)
 
+# from Stable baselines
 class SubprocVecEnv():
     def __init__(self, env_fns, start_method=None):
         
@@ -1359,7 +1422,7 @@ class SubprocVecEnv():
     def unwrapped(self):
         raise NotImplementedError('Method not implemented')
 
-
+# from Stable baselines
 class VecFrameStack():
     """
     Frame stacking wrapper for vectorized environment

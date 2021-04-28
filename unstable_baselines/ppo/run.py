@@ -150,6 +150,7 @@ def make_env(a, eval=False):
                 set_global_seeds(a.seed)
                 import pybullet_envs
                 env = gym.make(a.env_id)
+                env = TimeFeatureWrapper(env)
                 env = SeedEnv(env, seed=a.seed+rank)
                 if a.record_video:
                     env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
@@ -160,6 +161,7 @@ def make_env(a, eval=False):
         env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
     else:
         env = gym.make(a.env_id)
+        env = TimeFeatureWrapper(env, test_mode=True)
         env = SeedEnv(env, seed=a.eval_seed)
         if a.record_video:
             env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),

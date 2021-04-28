@@ -37,6 +37,7 @@ import gym
 
 import numpy as np
 import tensorflow as tf
+from gym.wrappers import TimeLimit
 
 # --- my module ---
 from unstable_baselines import logger
@@ -95,7 +96,7 @@ def parse_args():
     a.logging     = os.path.join(a.logdir, a.logging).format(env_id=a.env_id, rank=a.rank)
     a.monitor_dir = os.path.join(a.logdir, a.monitor_dir).format(env_id=a.env_id, rank=a.rank)
     a.tb_logdir   = os.path.join(a.logdir, a.tb_logdir).format(env_id=a.env_id, rank=a.rank)
-    a.model_dir  = os.path.join(a.logdir, a.model_dir).format(env_id=a.env_id,  rank=a.rank)
+    a.model_dir   = os.path.join(a.logdir, a.model_dir).format(env_id=a.env_id,  rank=a.rank)
 
     return a
 
@@ -113,6 +114,7 @@ def make_env(a, eval=False):
                 set_global_seeds(a.seed)
                 import pybullet_envs
                 env = gym.make(a.env_id)
+                env = TimeFeatureWrapper(env)
                 env = SeedEnv(env, seed=a.seed+rank)
                 if a.record_video:
                     env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
@@ -123,13 +125,13 @@ def make_env(a, eval=False):
         env = SubprocVecEnv([_make_env(i, a) for i in range(a.num_envs)])
     else:
         env = gym.make(a.env_id)
+        env = TimeFeatureWrapper(env, test_mode=True)
         env = SeedEnv(env, seed=a.eval_seed)
         if a.record_video:
             env = VideoRecorder(env, os.path.join(a.monitor_dir, 'video/'),
                             prefix='eval', callback=True, force=True)
         env = Monitor(env, a.monitor_dir, prefix='eval',force=True)
     return env
-
 
 
 if __name__ == '__main__':
@@ -285,7 +287,6 @@ if __name__ == '__main__':
         LOG.add_row('Mean length',  mean_steps)
         LOG.add_line()
         LOG.flush('INFO')
-
 
         # load the "best" checkpoints
         loaded_model = TD3.load(a.model_dir, best=True)
