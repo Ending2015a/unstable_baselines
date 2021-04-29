@@ -58,9 +58,18 @@ class SeedEnv(gym.Wrapper):
     def __init__(self, env, seed):
         super().__init__(env)
 
-        env.seed(seed)
-        env.action_space.seed(seed)
-        env.observation_space.seed(seed)
+        if not isinstance(seed, int):
+            raise ValueError('`seed` must be of type int, '
+                            'got: {}'.format(seed))
+        self._seed = seed
+        self.seed()
+
+    def seed(self, seed=None):
+        if seed is None:
+            seed = self._seed
+        self.env.seed(seed)
+        self.env.action_space.seed(seed)
+        self.env.observation_space.seed(seed)
 
 # from Stable baselines
 class NoopResetEnv(gym.Wrapper):
@@ -1421,6 +1430,7 @@ class SubprocVecEnv():
     @property
     def unwrapped(self):
         raise NotImplementedError('Method not implemented')
+
 
 # from Stable baselines
 class VecFrameStack():
