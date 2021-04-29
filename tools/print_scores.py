@@ -1,15 +1,19 @@
 import os
 import json
 import argparse
-
 from pathlib import Path
 
-import shutil
+'''
+This tool helps you list out all of the episode rewards
+recorded by Monitor.
 
+Example:
+  python tools/print_scores --path="log/BeamRiderNoFrameskip-v4/ppo/0/"
+'''
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Print Score')
-  parser.add_argument('--path', type=str, default='log/', help='Root dir')
+  parser.add_argument('--path', type=str, default='log/', help='Root dir to monitor json files')
   parser.add_argument('--file', type=str, default='*.json', help='filename')
   parser.add_argument('--reverse', action='store_true', help='Reverse sorting')
 
