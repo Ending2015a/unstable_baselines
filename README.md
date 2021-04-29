@@ -44,7 +44,8 @@ pip install -r requirements.txt
 
 ### Done
 
-Modify the code to fit your needs, or you can run demo code. (Please see README in each algo folder)
+* Modify the code to fit your needs
+* or you can run the demo codes. (Please see README in each algo folder)
 
 ## Algorithms
 
@@ -101,8 +102,13 @@ Modify the code to fit your needs, or you can run demo code. (Please see README 
 
 > some video
 
-> colab examples
+
+## Tutorials
+> colab tutorials
 
 ## Benchmarks
 
 > learning curves
+
+## Update Logs
+* 2021.04.27: Update to framework v2: supports saving/loading the best performed checkpoints.

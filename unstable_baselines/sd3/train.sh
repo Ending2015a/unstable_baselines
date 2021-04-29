@@ -1,10 +1,10 @@
 #!/bin/bash
 # usage:
-#   ./train.sh --rank 0 --seed 1 "BeamRiderNoFrameskip-v4"
+#   ./train.sh --rank 0 --seed 1 "HalfCheetahBulletEnv-v0"
 # batch training on multiple environments:
-#   ./train.sh --rank 0 --seed 1 "SeaquestNoFrameskip-v4" \
-#                                "BeamRiderNoFrameskip-v4" \
-#                                "PongNoFrameskip-v4"
+#   ./train.sh --rank 0 --seed 1 "AntBulletEnv-v0" \
+#                                "HalfCheetahBulletEnv-v0" \
+#                                "HopperBulletEnv-v0"
 
 rank=0
 seed=1
@@ -33,6 +33,7 @@ function train() {
                     --policy_update=2 \
                     --target_update=2 \
                     --lr=1e-3 \
+                    --gamma=0.98 \
                     --log_interval=10 \
                     --eval_interval=50 \
                     --eval_episodes=5 \

@@ -19,12 +19,13 @@
 ```python
 python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}/td3/{rank}' \
                --logging='training.log' --monitor_dir='monitor' --tb_logdir='' --model_dir='model' \
-               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 --min_buffer=10000 \
-               --num_steps=1000 --num_gradsteps=100 --batch_size=100 --verbose=2
+               --env_id="HalfCheetahBulletEnv-v0" --num_envs=1 --num_epochs=1000 --num_steps=1000 \
+            --gradient_steps=1000 --batch_size=100 --min_buffer=10000 --buffer_size=200000 \
+            --verbose=2 --explore_noise
 ```
 
 <sup>Total timesteps (Samples) ≈ num_envs * num_steps * num_epochs (~1M in this case)</sup><br>
-<sup>Number of times each sample reused ≈ batch_size/num_steps * num_gradsteps/num_envs (~10 in this case)</sup><br>
+<sup>Number of times each sample reused ≈ batch_size/num_steps * num_gradsteps/num_envs (~100 in this case)</sup><br>
 
 
 ## PyBullet
@@ -42,22 +43,23 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 > Learning curve
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
-|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AntBulletEnv-v0`         |             |              |             |            2M |           1 |            20 |         0 |
-| `HalfCheetahBulletEnv-v0` |             |              |             |            2M |           1 |            20 |         0 |
-| `HopperBulletEnv-v0`      |             |              |             |            2M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
-| `Walker2DBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
+|---------------------------|-------------|--------------|-------------|---------------|-------------|---------------|-----------|
+| `AntBulletEnv-v0`         |             |              |             | 2M            | 1           | 20            | 0         |
+| `HalfCheetahBulletEnv-v0` | 2756.60     | 2654.996     | 72.471      | 2M            | 1           | 20            | 0         |
+| `HopperBulletEnv-v0`      |             |              |             | 2M            | 1           | 20            | 0         |
+| `HumanoidBulletEnv-v0`    |             |              |             | 2M            | 1           | 20            | 0         |
+| `Walker2DBulletEnv-v0`    |             |              |             | 2M            | 1           | 20            | 0         |
 
 ### Hyperparameters
 
 | `env_id`        | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |
 |-----------------|:-----------------:|:-------------------------:|:--------------------:|:----------------------:|:----------------------:|
-| `num_envs`      |         1         |             1             |           1          |            4           |            1           |
-| `num_epochs`    |        2000       |            2000           |         2000         |          2000          |          2000          |
+| `num_envs`      |         1         |             1             |           1          |            1           |            1           |
+| `num_epochs`    |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `num_steps`     |        1000       |            1000           |         1000         |          1000          |          1000          |
-| `num_gradsteps` |        100        |            100            |          100         |           100          |           100          |
+| `num_gradsteps` |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `batch_size`    |        100        |            100            |          100         |           100          |           100          |
+| `buffer_size`   |       200000      |           200000          |        200000        |         200000         |         200000         |
 | `policy_update` |         2         |             2             |           2          |            2           |            2           |
 | `target_update` |         2         |             2             |           2          |            2           |            2           |
 | `lr`            |        1e-3       |            1e-3           |         1e-3         |          1e-3          |          1e-3          |
