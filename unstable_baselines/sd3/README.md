@@ -46,11 +46,11 @@ python -m unstable_baselines.sd3.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AntBulletEnv-v0`         |             |              |             |            2M |           1 |            20 |         0 |
-| `HalfCheetahBulletEnv-v0` |             |              |             |            2M |           1 |            20 |         0 |
-| `HopperBulletEnv-v0`      |             |              |             |            2M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
-| `Walker2DBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
+| `AntBulletEnv-v0`         |    2542.294 |     2257.922 |     607.286 |            1M |           1 |            20 |         0 |
+| `HalfCheetahBulletEnv-v0` |    2692.213 |     2591.908 |      52.607 |            1M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |    2677.314 |     2662.124 |       9.286 |            1M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |     218.096 |      165.934 |      49.114 |            1M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
 
 
 ### Hyperparameters

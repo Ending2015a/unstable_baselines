@@ -43,12 +43,12 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 > Learning curve
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
-|---------------------------|-------------|--------------|-------------|---------------|-------------|---------------|-----------|
-| `AntBulletEnv-v0`         |             |              |             | 2M            | 1           | 20            | 0         |
-| `HalfCheetahBulletEnv-v0` | 2756.60     | 2654.996     | 72.471      | 2M            | 1           | 20            | 0         |
-| `HopperBulletEnv-v0`      |             |              |             | 2M            | 1           | 20            | 0         |
-| `HumanoidBulletEnv-v0`    |             |              |             | 2M            | 1           | 20            | 0         |
-| `Walker2DBulletEnv-v0`    |             |              |             | 2M            | 1           | 20            | 0         |
+|---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+| `AntBulletEnv-v0`         |    2910.995 |     2707.637 |     504.815 |            1M |           1 |            20 |         0 |
+| `HalfCheetahBulletEnv-v0` |    2756.600 |     2654.996 |      72.471 |            1M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |    2719.811 |     2689.082 |      18.047 |            1M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |    1005.420 |      384.532 |     275.775 |            1M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |    2117.742 |     2104.583 |       9.381 |            1M |           1 |            20 |         0 |
 
 ### Hyperparameters
 
