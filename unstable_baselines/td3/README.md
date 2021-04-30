@@ -50,6 +50,8 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 | `HumanoidBulletEnv-v0`    |    1005.420 |      384.532 |     275.775 |            1M |           1 |            20 |         0 |
 | `Walker2DBulletEnv-v0`    |    2117.742 |     2104.583 |       9.381 |            1M |           1 |            20 |         0 |
 
+<sup>Bug: the algo is not deterministic. The results may change when we solve this bug.</sup><br>
+
 ### Hyperparameters
 
 | `env_id`        | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |

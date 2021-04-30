@@ -52,6 +52,7 @@ python -m unstable_baselines.sd3.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 | `HumanoidBulletEnv-v0`    |     218.096 |      165.934 |      49.114 |            1M |           1 |            20 |         0 |
 | `Walker2DBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
 
+<sup>Bug: the algo is not deterministic. The results may change when we solve this bug.</sup><br>
 
 ### Hyperparameters
 
