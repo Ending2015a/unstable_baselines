@@ -46,11 +46,11 @@ python -m unstable_baselines.sd3.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AntBulletEnv-v0`         |    2542.294 |     2257.922 |     607.286 |            1M |           1 |            20 |         0 |
+| `AntBulletEnv-v0`         |    2659.900 |     2341.345 |     308.402 |            1M |           1 |            20 |         0 |
 | `HalfCheetahBulletEnv-v0` |    2692.213 |     2591.908 |      52.607 |            1M |           1 |            20 |         0 |
-| `HopperBulletEnv-v0`      |    2677.314 |     2662.124 |       9.286 |            1M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |     218.096 |      165.934 |      49.114 |            1M |           1 |            20 |         0 |
-| `Walker2DBulletEnv-v0`    |             |              |             |            1M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |    2793.888 |     2775.304 |      11.150 |            1M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |    2661.585 |     2596.141 |      41.613 |            2M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |    2166.296 |     2016.048 |     457.554 |            1M |           1 |            20 |         0 |
 
 <sup>Bug: the algo is not deterministic. The results may change when we solve this bug.</sup><br>
 
@@ -58,8 +58,8 @@ python -m unstable_baselines.sd3.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`            | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |
 |---------------------|:-----------------:|:-------------------------:|:--------------------:|:----------------------:|:----------------------:|
-| `num_envs`          |         1         |             1             |           1          |            4           |            1           |
-| `num_epochs`        |        1000       |            1000           |         1000         |          1000          |          1000          |
+| `num_envs`          |         1         |             1             |           1          |            1           |            1           |
+| `num_epochs`        |        1000       |            1000           |         1000         |          2000          |          1000          |
 | `num_steps`         |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `num_gradsteps`     |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `batch_size`        |        100        |            100            |          100         |           100          |           100          |

@@ -47,7 +47,7 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 | `AntBulletEnv-v0`         |    2910.995 |     2707.637 |     504.815 |            1M |           1 |            20 |         0 |
 | `HalfCheetahBulletEnv-v0` |    2756.600 |     2654.996 |      72.471 |            1M |           1 |            20 |         0 |
 | `HopperBulletEnv-v0`      |    2719.811 |     2689.082 |      18.047 |            1M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |    1005.420 |      384.532 |     275.775 |            1M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |    2643.223 |     2360.450 |     766.838 |            2M |           1 |            20 |         0 |
 | `Walker2DBulletEnv-v0`    |    2117.742 |     2104.583 |       9.381 |            1M |           1 |            20 |         0 |
 
 <sup>Bug: the algo is not deterministic. The results may change when we solve this bug.</sup><br>
@@ -57,7 +57,7 @@ python -m unstable_baselines.td3.run  --rank 0 --seed 1 --logdir='./log/{env_id}
 | `env_id`        | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |
 |-----------------|:-----------------:|:-------------------------:|:--------------------:|:----------------------:|:----------------------:|
 | `num_envs`      |         1         |             1             |           1          |            1           |            1           |
-| `num_epochs`    |        1000       |            1000           |         1000         |          1000          |          1000          |
+| `num_epochs`    |        1000       |            1000           |         1000         |          2000          |          1000          |
 | `num_steps`     |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `num_gradsteps` |        1000       |            1000           |         1000         |          1000          |          1000          |
 | `batch_size`    |        100        |            100            |          100         |           100          |           100          |
