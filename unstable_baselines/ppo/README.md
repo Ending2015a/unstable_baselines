@@ -97,26 +97,27 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AntBulletEnv-v0`         |             |              |             |            2M |           1 |            20 |         0 |
-| `HalfCheetahBulletEnv-v0` |             |              |             |            2M |           1 |            20 |         0 |
-| `HopperBulletEnv-v0`      |             |              |             |            2M |           1 |            20 |         0 |
-| `HumanoidBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
-| `Walker2DBulletEnv-v0`    |             |              |             |            2M |           1 |            20 |         0 |
+| `AntBulletEnv-v0`         |    2247.002 |     2157.180 |     107.803 |            2M |           1 |            20 |         0 |
+| `HalfCheetahBulletEnv-v0` |    2696.556 |     2477.882 |     759.322 |            2M |           1 |            20 |         0 |
+| `HopperBulletEnv-v0`      |    2689.504 |     2542.172 |     373.381 |            2M |           1 |            20 |         0 |
+| `HumanoidBulletEnv-v0`    |    2447.299 |     1883.564 |     923.937 |            8M |           1 |            20 |         0 |
+| `Walker2DBulletEnv-v0`    |    2108.727 |     2005.461 |     286.699 |            4M |           1 |            20 |         0 |
 
 
 ### Hyperparametrs
 
 | `env_id`        | `AntBulletEnv-v0` | `HalfCheetahBulletEnv-v0` | `HopperBulletEnv-v0` | `HumanoidBulletEnv-v0` | `Walker2DBulletEnv-v0` |
 |-----------------|:-----------------:|:-------------------------:|:--------------------:|:----------------------:|:----------------------:|
-| `num_envs`      |         1         |             1             |           1          |            4           |            1           |
-| `num_epochs`    |        2000       |            2000           |         2000         |          2000          |          2000          |
-| `num_steps`     |        1000       |            1000           |         1000         |          1000          |          1000          |
-| `num_subepochs` |         10        |             10            |          10          |           10           |           10           |
-| `batch_size`    |        100        |            100            |          100         |           100          |           100          |
+| `num_envs`      |         1         |             1             |           1          |           16           |            4           |
+| `num_epochs`    |        2000       |            2000           |         2000         |          1000          |          2000          |
+| `num_steps`     |        1000       |            1000           |         1000         |           500          |           500          |
+| `num_subepochs` |         10        |             10            |          10          |           20           |           20           |
+| `batch_size`    |        100        |            100            |          100         |          1000          |          1000          |
 | `lr`            |        3e-4       |            3e-4           |         3e-4         |          3e-4          |          3e-4          |
 | `ent_coef`      |        0.0        |            0.0            |          0.0         |           0.0          |           0.0          |
 | `vf_coef`       |        0.5        |            0.5            |          0.5         |           0.5          |           0.5          |
 | `shared_net`    |        :x:        |            :x:            |          :x:         |           :x:          |           :x:          |
+| `MlpNet`        |     [256, 256]    |         [256, 256]        |      [256, 256]      |       [256, 256]       |       [256, 256]       |
 
 ## Architecture
 
