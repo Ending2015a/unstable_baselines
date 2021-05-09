@@ -655,6 +655,7 @@ class C51(TrainableModel):
 
         reward  = tf.expand_dims(reward, axis=-1) # (batch, 1)
         done    = tf.expand_dims(done, axis=-1)   # (batch, 1)
+        batch   = tf.shape(done)[0]
 
         # compute bins and delta_z
         bins, delta_z = calc_bins(self.v_min, self.v_max, self.n_atoms)
@@ -662,15 +663,18 @@ class C51(TrainableModel):
         delta_z = tf.constant(delta_z, dtype=tf.float32)  # ()
 
         # compute TZ
-        zi      = tf.repeat(tf.expand_dims(bins, axis=0), tf.shape(done)[0], axis=0) # (batch, n_atoms)
-        Tzi     = reward + (1.-done) * self.gamma * zi                               # (batch, n_atoms)
-        Tzi     = tf.clip_by_value(Tzi, self.v_min, self.v_max)                      # (batch, n_atoms)
+        zi      = tf.repeat(tf.expand_dims(bins, axis=0), batch, axis=0) # (batch, n_atoms)
+        Tzi     = reward + (1.-done) * self.gamma * zi                   # (batch, n_atoms)
+        Tzi     = tf.clip_by_value(Tzi, self.v_min, self.v_max)          # (batch, n_atoms)
 
-        mat_zi  = tf.repeat(tf.expand_dims(zi,  axis=-1), self.n_atoms, axis=-1) # (batch, n_atoms, n_atoms)
-        mat_Tzi = tf.repeat(tf.expand_dims(Tzi, axis=-1), self.n_atoms, axis=-1) # (batch, n_atoms, n_atoms)
-        mat_Tzj = tf.transpose(mat_Tzi, (0, 2, 1))
+        zi      = tf.expand_dims(zi,  axis=-1) # (batch, n_atoms, 1)
+        Tzj     = tf.expand_dims(Tzi, axis=-2) # (batch, 1, n_atoms)
+        mat_TZ  = tf.clip_by_value(1. - tf.math.abs(Tzj - zi)/delta_z, 0., 1.) # (batch, n_atoms, n_atoms)
+        #mat_zi  = tf.repeat(tf.expand_dims(zi,  axis=-1), self.n_atoms, axis=-1) # (batch, n_atoms, n_atoms)
+        #mat_Tzi = tf.repeat(tf.expand_dims(Tzi, axis=-1), self.n_atoms, axis=-1) # (batch, n_atoms, n_atoms)
+        #mat_Tzj = tf.transpose(mat_Tzi, (0, 2, 1))
 
-        mat_TZ  = tf.clip_by_value(1. - tf.math.abs(mat_Tzj - mat_zi)/delta_z, 0., 1.)
+        #mat_TZ  = tf.clip_by_value(1. - tf.math.abs(mat_Tzj - mat_zi)/delta_z, 0., 1.)
 
         # compute pj(x', a')
         next_act, _, next_ps = self.agent_target(next_obs) 
@@ -686,18 +690,6 @@ class C51(TrainableModel):
         it      = tf.gather(its, indices=action, batch_dims=1) # (batch, n_atoms)
         loss    = tf.nn.softmax_cross_entropy_with_logits(labels=PhiTZ, logits=it)
         loss    = tf.math.reduce_mean(loss)
-
-        # # compute logp(x, a)
-        # it      = self.agent._forward(obs)                       # (batch, act_space.n, n_atoms)
-        # x       = it - tf.math.reduce_max(it, axis=-1, keepdims=True)
-        # e       = tf.math.exp(x)
-        # z       = tf.math.reduce_sum(e, axis=-1, keepdims=True)
-        # logps   = x - tf.math.log(z)                             # (batch, act_space.n, n_atoms)
-        # logp    = tf.gather(logps, indices=action, batch_dims=1) # (batch, n_atoms)
-
-        # # compute cross entropy loss
-        # ce      = -tf.stop_gradient(PhiTZ) * logp          # (batch, n_atoms)
-        # loss    = tf.math.reduce_mean(tf.math.reduce_sum(ce, axis=-1))
 
         return loss
 
