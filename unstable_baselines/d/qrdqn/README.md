@@ -1,4 +1,4 @@
-# Quantile Regression Deep Q-learning (QRDQN) (Early Access)
+# Quantile Regression Deep Q-learning (QRDQN)
 
 > [Dabney, W., Rowland, M., Bellemare, M., & Munos, R. (2018). Distributional Reinforcement Learning With Quantile Regression. *In AAAI Conference on Artificial Intelligence.*](https://arxiv.org/abs/1710.10044)
 
@@ -44,21 +44,21 @@ python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |             |              |             |           10M |         1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |             |              |             |           10M |         1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |             |              |             |           10M |         1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        2030 |          985 |      363.23 |           10M |         1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |       13578 |         7731 |     2588.28 |           10M |         1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         778 |          321 |      301.88 |           10M |         1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |        1092 |        944.5 |      137.87 |           10M |         1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        4990 |         3960 |     1033.51 |           10M |         1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |           21 |           0 |           10M |         1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |        7825 |      5246.25 |     1567.27 |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |        8520 |         7764 |      638.80 |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 
 ### Hyperparameters
 
 
-<!-- | `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
+| `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
 |--------------------|:-------------------------:|:-------------------------:|:------------------------:|:----------------------:|:------------------------:|:--------------------:|:---------------------:|:------------------------:|
 | `num_envs`         |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
 | `num_epochs`       |           312500          |           312500          |          312500          |         312500         |          312500          |        312500        |         312500        |          312500          |
@@ -66,9 +66,9 @@ python -m unstable_baselines.d.qrdqn.run --rank 0 --seed 1 --logdir='./log/{env_
 | `num_gradsteps`    |             1             |             1             |             1            |            1           |             1            |           1          |           1           |             1            |
 | `batch_size`       |            256            |            256            |            256           |           256          |            256           |          256         |          256          |            256           |
 | `target_update`    |            625            |            625            |            625           |           625          |            625           |          625         |          625          |            625           |
-| `exploration`      |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)    |    Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |   Linear(1.0, 0.01)  |   Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |
+| `exploration`      |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)    |   Linear(1.0, 0.025)   |     Linear(1.0, 0.05)    |   Linear(1.0, 0.05)  |   Linear(1.0, 0.05)   |     Linear(1.0, 0.05)    |
 | `explore_progress` |            0.1            |            0.1            |            0.1           |           0.1          |            0.1           |          0.1         |          0.1          |            0.1           |
-| `num_quantiles`    |            200            |            200            |            200           |           200          |            200           |          200         |          200          |            200           | -->
+| `num_quantiles`    |            200            |            200            |            200           |           200          |            200           |          200         |          200          |            200           |
 
 ## Architecture
 

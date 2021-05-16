@@ -44,8 +44,9 @@ from unstable_baselines.base import (SavableModel,
                                      TrainableModel)
 from unstable_baselines.bugs import ReLU
 from unstable_baselines.sche import Scheduler
-from unstable_baselines.utils import (normalize,
-                                      StateObject)
+from unstable_baselines.utils import (is_image_observation,
+                                      preprocess_observation,
+                                      get_input_tensor_from_space)
 
 
 
@@ -302,7 +303,8 @@ class Agent(SavableModel):
         self.action_space      = action_space
 
         # --- setup model ---
-        if (len(self.observation_space.shape) == 3) and (not self.force_mlp):
+        if (is_image_observation(observation_space)
+                and (not self.force_mlp)):
             self.net = NatureCnn()
         else:
             self.net = MlpNet()
@@ -310,7 +312,7 @@ class Agent(SavableModel):
         self.q_net = QuantileQNet(action_space, n_quantiles=self.n_quantiles)
 
         # construct networks
-        inputs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        inputs = get_input_tensor_from_space(observation_space)
 
         outputs = self.net(inputs)
         self.q_net(outputs)
@@ -332,14 +334,8 @@ class Agent(SavableModel):
         '''
 
         # cast and normalize non-float32 inputs (e.g. image with uint8)
-        if tf.as_dtype(inputs.dtype) != tf.float32:
-            # cast observations to float32
-            inputs = tf.cast(inputs, dtype=tf.float32)
-            low    = tf.cast(self.observation_space.low, dtype=tf.float32)
-            high   = tf.cast(self.observation_space.high, dtype=tf.float32)
-            # normalize observations [0, 1]
-            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
-
+        # NOTICE: image in float32 is considered as already normalized
+        inputs = preprocess_observation(inputs, self.observation_space)
         # forward network
         latent = self.net(inputs, training=training)
         # forward value net
@@ -611,7 +607,7 @@ class QRDQN(TrainableModel):
         done   = tf.expand_dims(done, axis=-1)   # (batch, 1)
 
         # generate quantiles
-        tau_i  = (tf.range(self.n_quantiles, dtype=tf.float32) + 0.5) / self.n_quantiles
+        tau_i  = (np.arange(self.n_quantiles, dtype=np.float32) + 0.5) / self.n_quantiles
         tau_i  = tf.constant(tau_i) # (n_quantiles,)
         tau_i  = tf.reshape(tau_i, (1, -1, 1)) # (1, n_quantiles, 1)
 
