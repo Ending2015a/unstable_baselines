@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument('--num_taus',         type=int, default=64,     help='Number of quantile samples')
     parser.add_argument('--num_target_taus',  type=int, default=64,     help='Number of target quantile samples')
     parser.add_argument('--num_ks',           type=int, default=32,     help='Number of quantile samples for behavior policy')
+    parser.add_argument('--embed_size',       type=int, default=64,     help='Embedding size of Phi net')
     parser.add_argument('--target_update',    type=int, default=2500,   help='Target network update frequency (gradsteps)')
     parser.add_argument('--batch_size',       type=int, default=64,     help='Training batch size')
     parser.add_argument('--buffer_size',      type=int, default=1000000,help='Replay buffer capacity')
@@ -183,7 +184,8 @@ if __name__ == '__main__':
     LOG.add_row('Force MLP',             a.force_mlp)
     LOG.add_row('Num of taus',           a.num_taus)
     LOG.add_row('Num of target taus',    a.num_target_taus)
-    LOG.add_row('Num of taus (policy)'   a.num_ks)
+    LOG.add_row('Num of taus (policy)',  a.num_ks)
+    LOG.add_row('Embedding size',        a.embed_size)
     LOG.add_row('Learning rate',         a.lr)
     LOG.add_row('Gamma',                 a.gamma)
     LOG.add_row('Tau (Polyak)',          a.tau)
@@ -223,6 +225,7 @@ if __name__ == '__main__':
                          n_steps          = a.num_steps,
                          n_gradsteps      = a.num_gradsteps,
                          batch_size       = a.batch_size,
+                         embed_size       = a.embed_size,
                          gamma            = a.gamma,
                          tau              = a.tau,
                          kappa            = a.kappa,

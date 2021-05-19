@@ -187,8 +187,7 @@ class PhiNet(tf.keras.Model):
                 shape (batch, n_taus, latent_size), dtype tf.float32.
         '''
         tau     = tf.expand_dims(inputs, axis=-1)     # (batch, n_taus, 1)
-        i_pi    = tf.constant(np.pi * tf.range(self.embed_size, dtype=inputs.dtype), 
-                                dtype=inputs.dtype)   # (embed_size,)
+        i_pi    = np.pi * tf.range(self.embed_size, dtype=inputs.dtype)
         cos_tau = tf.math.cos(i_pi * tau)    # (batch, n_taus, embed_size)
         # forward mlp
         x = cos_tau
@@ -218,7 +217,6 @@ class IqnNatureCnn(tf.keras.Model):
             ReLU(name='relu4')
         ]
 
-    @tf.function
     def call(self, inputs, training=False, _get_middle=False):
         '''Forward network
 
@@ -251,7 +249,7 @@ class IqnNatureCnn(tf.keras.Model):
         if _get_middle:
             x = inputs
         else:
-            if not isinstance(inputs, tuple):
+            if not isinstance(inputs, (tuple, list)):
                 raise RuntimeError('`inputs` must be of type tuple, got '
                                 '{}'.format(type(inputs)))
             x = inputs[0]
@@ -288,7 +286,6 @@ class IqnMlpNet(tf.keras.Model):
             ReLU(name='relu2')
         ]
     
-    @tf.function
     def call(self, inputs, training=False, _get_middle=False):
         '''Forward network
 
@@ -447,13 +444,13 @@ class Agent(SavableModel):
             tf.Tensor: predicted quentile Q values in shape (batch, act_space.n, n_taus),
                 tf.float32
         '''
-        (inputs, taus) = inputs
+        inputs, taus = inputs
 
         # cast and normalize non-float32 inputs (e.g. image with uint8)
         inputs = preprocess_observation(inputs, self.observation_space)
         # forward network
         phi_t  = self.phi_net(taus, training=training)
-        latent = self.net([inouts, phi_t], training=training)
+        latent = self.net([inputs, phi_t], training=training)
         # forward value net
         values = self.q_net(latent, training=training) # (batch, n_taus, act_space.n)
         values = tf.transpose(values, (0, 2, 1))       # (batch, act_space.n, n_taus)
@@ -763,7 +760,7 @@ class IQN(TrainableModel):
         abs_u = tf.math.abs(u)
         huber = tf.where(abs_u > self.kappa, self.kappa * (abs_u - 0.5*self.kappa), 
                                              0.5 * tf.math.square(u))      # (batch, n_taus, n_target_taus)
-
+        tau_i = tf.expand_dims(taus, axis=-1) # (batch, n_taus, 1)
         loss  = tf.abs(tau_i - tf.cast(u < 0.0, dtype=tf.float32)) * huber # (batch, n_taus, n_target_taus)
         loss  = tf.math.reduce_mean(tf.math.reduce_sum(loss, axis=-2))
 
@@ -825,7 +822,7 @@ class IQN(TrainableModel):
 
             else:
                 # predict action
-                action, *_ = self(obs)
+                action = self.predict(obs)
 
             # step environment
             new_obs, reward, done, infos = self.env.step(action)

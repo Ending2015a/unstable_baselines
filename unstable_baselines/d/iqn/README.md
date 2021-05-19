@@ -1,4 +1,4 @@
-# Implicit Quantile Networks (IQN) (Early Access)
+# Implicit Quantile Networks (IQN)
 
 > [Dabney, W., Ostrovski, G., Silver, D., & Munos, R. (2018). Implicit Quantile Networks for Distributional Reinforcement Learning. In *Proceedings of the 35th International Conference on Machine Learning*](https://arxiv.org/abs/1806.06923)
 
