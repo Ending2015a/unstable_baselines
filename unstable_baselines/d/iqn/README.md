@@ -44,21 +44,21 @@ python -m unstable_baselines.d.iqn.run --rank 0 --seed 1 --logdir='./log/{env_id
 
 | `env_id`                  | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
 |---------------------------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
-| `AsteroidsNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
-| `BeamRiderNoFrameskip-v4` |             |              |             |           10M |         1~8 |            20 |         0 |
-| `BreakoutNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
-| `EnduroNoFrameskip-v4`    |             |              |             |           10M |         1~8 |            20 |         0 |
-| `MsPacmanNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
-| `PongNoFrameskip-v4`      |             |              |             |           10M |         1~8 |            20 |         0 |
-| `QbertNoFrameskip-v4`     |             |              |             |           10M |         1~8 |            20 |         0 |
-| `SeaquestNoFrameskip-v4`  |             |              |             |           10M |         1~8 |            20 |         0 |
+| `AsteroidsNoFrameskip-v4` |        1830 |        928.5 |      458.79 |           10M |         1~8 |            20 |         0 |
+| `BeamRiderNoFrameskip-v4` |       12862 |       7434.1 |     2064.42 |           10M |         1~8 |            20 |         0 |
+| `BreakoutNoFrameskip-v4`  |         826 |       372.55 |      116.21 |           10M |         1~8 |            20 |         0 |
+| `EnduroNoFrameskip-v4`    |        1656 |      1206.85 |      247.98 |           10M |         1~8 |            20 |         0 |
+| `MsPacmanNoFrameskip-v4`  |        2690 |       2347.5 |      230.84 |           10M |         1~8 |            20 |         0 |
+| `PongNoFrameskip-v4`      |          21 |           21 |           0 |           10M |         1~8 |            20 |         0 |
+| `QbertNoFrameskip-v4`     |       15925 |        14860 |     1073.99 |           10M |         1~8 |            20 |         0 |
+| `SeaquestNoFrameskip-v4`  |       19780 |      12193.5 |     4172.15 |           10M |         1~8 |            20 |         0 |
 
 <sup>M = million (1e6)</sup><br>
 
 ### Hyperparameters
 
 
-<!-- | `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
+| `env_id`           | `AsteroidsNoFrameskip-v4` | `BeamRiderNoFrameskip-v4` | `BreakoutNoFrameskip-v4` | `EnduroNoFrameskip-v4` | `MsPacmanNoFrameskip-v4` | `PongNoFrameskip-v4` | `QbertNoFrameskip-v4` | `SeaquestNoFrameskip-v4` |
 |--------------------|:-------------------------:|:-------------------------:|:------------------------:|:----------------------:|:------------------------:|:--------------------:|:---------------------:|:------------------------:|
 | `num_envs`         |             8             |             8             |             8            |            8           |             8            |           8          |           8           |             8            |
 | `num_epochs`       |           312500          |           312500          |          312500          |         312500         |          312500          |        312500        |         312500        |          312500          |
@@ -66,9 +66,12 @@ python -m unstable_baselines.d.iqn.run --rank 0 --seed 1 --logdir='./log/{env_id
 | `num_gradsteps`    |             1             |             1             |             1            |            1           |             1            |           1          |           1           |             1            |
 | `batch_size`       |            256            |            256            |            256           |           256          |            256           |          256         |          256          |            256           |
 | `target_update`    |            625            |            625            |            625           |           625          |            625           |          625         |          625          |            625           |
-| `exploration`      |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)     |     Linear(1.0, 0.01)    |    Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |   Linear(1.0, 0.01)  |   Linear(1.0, 0.01)   |     Linear(1.0, 0.01)    |
+| `exploration`      |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)     |     Linear(1.0, 0.05)    |    Linear(1.0, 0.05)   |     Linear(1.0, 0.05)    |   Linear(1.0, 0.05)  |   Linear(1.0, 0.05)   |     Linear(1.0, 0.05)    |
 | `explore_progress` |            0.1            |            0.1            |            0.1           |           0.1          |            0.1           |          0.1         |          0.1          |            0.1           |
-| `num_quantiles`    |            200            |            200            |            200           |           200          |            200           |          200         |          200          |            200           | -->
+| `num_taus`         |             64            |             64            |            64            |           64           |            64            |          64          |           64          |            64            |
+| `num_target_taus`  |             64            |             64            |            64            |           64           |            64            |          64          |           64          |            64            |
+| `num_ks`           |             32            |             32            |            32            |           32           |            32            |          32          |           32          |            32            |
+| `embed_size`       |             64            |             64            |            64            |           64           |            64            |          64          |           64          |            64            |
 
 ## Architecture
 
