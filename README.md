@@ -111,10 +111,13 @@ pip install -r requirements.txt
 * 2021.04.27: Update to framework v2: supports saving/loading the best performed checkpoints.
 
 ## Benchmarks
+
+See [benchmark.md](benchmark.md).
+
 ### Atari 2600
 
 | Environments              |  Algo | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
-|---------------------------|:-----:|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+|---------------------------|-------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
 | `AsteroidsNoFrameskip-v4` | DQN   |        1530 |          667 |      265.68 |           10M |         1~8 |            20 |         0 |
 |                           | C51   |        1610 |        851.5 |       302.2 |           10M |         1~8 |            20 |         0 |
 |                           | QRDQN |        2030 |          985 |      363.23 |           10M |         1~8 |            20 |         0 |
@@ -160,7 +163,7 @@ pip install -r requirements.txt
 ### PyBullet
 
 | Environments              | Algo | Max rewards | Mean rewards | Std rewards | Train samples | Train seeds | Eval episodes | Eval seed |
-|---------------------------|:----:|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
+|---------------------------|------|------------:|-------------:|------------:|--------------:|------------:|--------------:|----------:|
 | `AntBulletEnv-v0`         | PPO  |    2247.002 |     2157.180 |     107.803 |            2M |           1 |            20 |         0 |
 |                           | TD3  |    2910.995 |     2707.637 |     504.815 |            1M |           1 |            20 |         0 |
 |                           | SD3  |    2659.900 |     2341.345 |     308.402 |            1M |           1 |            20 |         0 |
