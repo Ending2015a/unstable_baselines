@@ -2,9 +2,11 @@
 import os
 import abc
 import sys
+import copy
 import time
 import json
 import logging
+import collections
 
 # --- 3rd party ---
 import numpy as np
@@ -40,14 +42,29 @@ def _get_best_checkpoint_filename(save_dir, latest_filename):
 def _generate_best_checkpoint_state(save_dir,
                                     best_checkpoint_path,
                                     best_checkpoint_metrics=None,
+                                    all_checkpoint_paths=None,
+                                    all_checkpoint_metrics=None,
                                     last_preserved_timestamp=None):
+    if all_checkpoint_paths is None:
+        all_checkpoint_paths = []
+    if all_checkpoint_metrics is None:
+        all_checkpoint_metrics = []
+    
     if not os.path.isabs(save_dir):
         if not os.path.isabs(best_checkpoint_path):
             best_checkpoint_path = os.path.relpath(best_checkpoint_path, save_dir)
+        for i, p in enumerate(all_checkpoint_paths):
+            if not os.path.isabs(p):
+                all_checkpoint_paths[i] = os.path.relpath(p, save_dir)
+    
+    all_paths = all_checkpoint_paths
+    all_metrics = all_checkpoint_metrics
+    all_checkpoint_metrics = list(zip(all_paths, all_metrics))
 
     coord_best_checkpoint_state = utils.StateObject(
         best_checkpoint_path=best_checkpoint_path,
         best_checkpoint_metrics=best_checkpoint_metrics,
+        all_checkpoint_metrics=all_checkpoint_metrics,
         last_preserved_timestamp=last_preserved_timestamp)
 
     return coord_best_checkpoint_state
@@ -55,6 +72,8 @@ def _generate_best_checkpoint_state(save_dir,
 def _update_best_checkpoint_state(save_dir,
                                   best_checkpoint_path,
                                   best_checkpoint_metrics=None,
+                                  all_checkpoint_paths=None,
+                                  all_checkpoint_metrics=None,
                                   latest_filename=None,
                                   save_relative_paths=True,
                                   last_preserved_timestamp=None):
@@ -66,17 +85,26 @@ def _update_best_checkpoint_state(save_dir,
                 best_checkpoint_path, save_dir)
         else:
             rel_best_checkpoint_path = best_checkpoint_path
-        
+        rel_all_checkpoint_paths = []
+        for p in all_checkpoint_paths:
+            if os.path.isabs(p):
+                rel_all_checkpoint_paths.append(os.path.relpath(p, save_dir))
+            else:
+                rel_all_checkpoint_paths.append(p)
         ckpt = _generate_best_checkpoint_state(
             save_dir,
             rel_best_checkpoint_path,
             best_checkpoint_metrics=best_checkpoint_metrics,
+            all_checkpoint_paths=rel_all_checkpoint_paths,
+            all_checkpoint_metrics=all_checkpoint_metrics,
             last_preserved_timestamp=last_preserved_timestamp)
     else:
         ckpt = _generate_best_checkpoint_state(
             save_dir,
             best_checkpoint_path,
             best_checkpoint_metrics=best_checkpoint_metrics,
+            all_checkpoint_paths=all_checkpoint_paths,
+            all_checkpoint_metrics=all_checkpoint_metrics,
             last_preserved_timestamp=last_preserved_timestamp)
 
     if coord_checkpoint_filename == ckpt.best_checkpoint_path:
@@ -85,7 +113,7 @@ def _update_best_checkpoint_state(save_dir,
                                 best_checkpoint_path))
     
     file_io.atomic_write_string_to_file(coord_checkpoint_filename,
-                                        ckpt.tostring())
+                                        ckpt.tostring(2))
 
 def _get_best_checkpoint_state(checkpoint_dir, latest_filename=None):
 
@@ -99,9 +127,20 @@ def _get_best_checkpoint_state(checkpoint_dir, latest_filename=None):
             ckpt = utils.StateObject.fromstring(file_content)
             if not ckpt.get('best_checkpoint_path', None):
                 ckpt.best_checkpoint_path = ''
+            if not ckpt.get('all_checkpoint_metrics', None):
+                ckpt.all_checkpoint_metrics = []
             if not os.path.isabs(ckpt.best_checkpoint_path):
                 ckpt.best_checkpoint_path = os.path.join(checkpoint_dir,
                                                         ckpt.best_checkpoint_path)
+            all_checkpoint_paths = []
+            all_checkpoint_metrics = []
+            for filename, metrics in ckpt.all_checkpoint_metrics:
+                if not os.path.isabs(filename):
+                    filename = os.path.join(checkpoint_dir, filename)
+                all_checkpoint_paths.append(filename)
+                all_checkpoint_metrics.append(metrics)
+            ckpt.all_checkpoint_paths = all_checkpoint_paths
+            ckpt.all_checkpoint_metrics = all_checkpoint_metrics
     except Exception as e:
         LOG.warning('{}: {}'.format(type(e).__name__), e)
         LOG.warning('{}: Best checkpoint ignored'.format(coord_checkpoint_filename))
@@ -212,10 +251,12 @@ def _default_metric_compare_fn(last_metrics, new_metrics):
     try:
         better = not (last_metrics > new_metrics)
         return better
-    except Exception as e:
-        LOG.warning('{}: {}'.format(type(e).__name__, e))
-        LOG.warning('Metrics are not comparable: {} vs {}'.format(
+    except TypeError:
+        raise TypeError('Metrics are not comparable: {} vs {}'.format(
             type(last_metrics).__name__, type(new_metrics).__name__))
+    except:
+        # unknown error
+        raise
     return False
 
 class CheckpointManager(tf.train.CheckpointManager):
@@ -246,6 +287,7 @@ class CheckpointManager(tf.train.CheckpointManager):
         # Restore best checkpoint state
         recovered_state = _get_best_checkpoint_state(directory)
         current_clock = time.time()
+        self._preserved_metrics = collections.OrderedDict()
         if recovered_state is None:
             self._best_checkpoint = None
             self._best_checkpoint_metrics = None
@@ -255,7 +297,11 @@ class CheckpointManager(tf.train.CheckpointManager):
         else:
             self._best_checkpoint = recovered_state.best_checkpoint_path
             self._best_checkpoint_metrics = recovered_state.best_checkpoint_metrics
+            all_paths = recovered_state.all_checkpoint_paths
+            all_metrics = recovered_state.all_checkpoint_metrics
             del recovered_state
+            for (filename, metrics) in zip(all_paths, all_metrics):
+                self._preserved_metrics[filename] = metrics
 
     @property
     def best_checkpoint(self):
@@ -282,11 +328,14 @@ class CheckpointManager(tf.train.CheckpointManager):
     def _record_checkpoint_state(self):
         '''Replaces super()._record_state'''
         super()._record_state()
+        filenames, metrics = zip(*self._preserved_metrics.items())
         # save the best checkpoint infomation
         _update_best_checkpoint_state(
             self._directory,
             best_checkpoint_path=self.best_checkpoint,
             best_checkpoint_metrics=self.best_checkpoint_metrics,
+            all_checkpoint_paths=filenames,
+            all_checkpoint_metrics=metrics,
             last_preserved_timestamp=self._last_preserved_timestamp,
             save_relative_paths=True)
 
@@ -311,6 +360,15 @@ class CheckpointManager(tf.train.CheckpointManager):
 
             _delete_file_if_exists(filename + ".index")
             _delete_file_if_exists(filename + ".data-?????-of-?????")
+        # only preserve those checkpoints not been deleted
+        preserved_metrics = collections.OrderedDict()
+        for filename in self._maybe_delete.keys():
+            if filename in self._preserved_metrics.keys():
+                preserved_metrics[filename] = self._preserved_metrics[filename]
+        # update preserved metrics
+        del self._preserved_metrics
+        self._preserved_metrics = preserved_metrics
+
 
     def save(self, checkpoint_number=None,
                    checkpoint_metrics=None,
@@ -320,8 +378,8 @@ class CheckpointManager(tf.train.CheckpointManager):
         save_path = super().save(checkpoint_number=checkpoint_number,
                                  check_interval=check_interval)
         
-        # TODO: Deepcopy checkpoint metrics
-        _checkpoint_metrics = checkpoint_metrics
+        # Deepcopy checkpoint metrics
+        _checkpoint_metrics = copy.deepcopy(checkpoint_metrics)
         # save the best checkpoint
         # If best_checkpoint is empty -> replace it
         if (not self.best_checkpoint
@@ -334,11 +392,20 @@ class CheckpointManager(tf.train.CheckpointManager):
             better = self._metrics_compare_fn(
                 last_metrics=self._best_checkpoint_metrics,
                 new_metrics=checkpoint_metrics)
-
+            # replace the old checkpoint info
             if better:
                 self._best_checkpoint = save_path
                 self._best_checkpoint_metrics = _checkpoint_metrics
-
+        # insert the new checkpoint into perserved_metrics
+        if save_path in self._preserved_metrics:
+            # reinsert it to make sure it goes to the end of 
+            # the queue.
+            del self._preserved_metrics[save_path]
+        timestamp = self._maybe_delete[save_path]
+        self._preserved_metrics[save_path] = {
+            'metrics': _checkpoint_metrics,
+            'timestamp': timestamp
+        }
         self._record_checkpoint_state()
         # Delete old checkpoints
         self._sweep_checkpoints()
@@ -688,12 +755,10 @@ class TrainableModel(SavableModel):
             eps_rews: (list) episode rewards.
             eps_steps: (list) episode length.
         '''
-
         if n_episodes <= 0:
-            return [], []
+            return None
 
         eps_info = []
-
         for episode in range(n_episodes):
             obs = env.reset()
             total_rews  = 0
@@ -702,7 +767,6 @@ class TrainableModel(SavableModel):
             while total_steps != max_steps:
                 # predict action
                 acts = self.predict(obs)
-
                 # step environment
                 obs, rew, done, info = env.step(acts)
                 
@@ -711,12 +775,17 @@ class TrainableModel(SavableModel):
 
                 if done:
                     break
-        
-            eps_info.append([total_rews, total_steps])
+            eps_info.append([
+                total_rews,
+                total_steps
+            ])
 
         eps_rews, eps_steps = zip(*eps_info)
-
-        return eps_rews, eps_steps
+        eps_info = {
+            'rewards': eps_rews,
+            'steps': eps_steps
+        }
+        return eps_info
 
     @abc.abstractmethod
     def learn(self):
@@ -728,14 +797,16 @@ class TrainableModel(SavableModel):
         
         raise NotImplementedError('Method not implemented')
 
-    def get_eval_metrics(self, eps_rews, eps_steps):
-        '''Compute evaluation metrics (default: mean)
+    def get_eval_metrics(self, eps_info):
+        '''Compute evaluation metrics, default the mean of episode rews
         override this method to customize your evaluation metrics.
         '''
-        if len(eps_rews) == 0:
-            return None
+        if ((eps_info is not None)
+                and ('rewards' in eps_info)
+                and (len(eps_info['rewards']) > 0)):
+            return np.mean(eps_info['rewards'])
         else:
-            return np.mean(eps_rews)
+            return None
 
     def metrics_compare_fn(self, last_metrics, new_metrics):
         '''Compare two metrics

@@ -81,8 +81,8 @@ class StateObject(dict):
         self.__dict__ = self
         return self
     
-    def tostring(self):
-        return safe_json_dumps(self, indent=None)
+    def tostring(self, indent=None):
+        return safe_json_dumps(self, indent=indent)
 
     @classmethod
     def fromstring(cls, string):
