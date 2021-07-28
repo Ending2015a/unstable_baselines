@@ -299,3 +299,77 @@ def safe_json_load(filepath,
         obj = safe_json_loads(string, **kwargs)
 
     return obj
+
+
+# === nested ops ===
+
+def nested_iter(data, op, *args, first=False, **kwargs):
+    '''Iterate over nested data
+    NOTE: Use `tuple` instead of `list`. A list type 
+    object is treated as an item.
+
+    Args:
+        data (tuple or dict): A nested data
+        op (function): A function operate on each data
+        first (bool): Only iterate on the first item
+    '''
+    def _inner_nested_iter(data):
+        if isinstance(data, dict):
+            if first:
+                return _inner_nested_iter(
+                            next(iter(data.values())))
+            else:
+                return {k: _inner_nested_iter(v)
+                            for k, v in data.items()}
+        elif isinstance(data, tuple):
+            if first:
+                return _inner_nested_iter(
+                            next(iter(data)))
+            else:
+                return tuple(_inner_nested_iter(v)
+                                for v in data)
+        else:
+            return op(data, *args, **kwargs)
+    return _inner_nested_iter(data)
+
+def nested_iter_tuple(data_tuple, op, *args, **kwargs):
+    '''Iterate over a tuple of nested data. Each nested
+    data must have a same nested structure.
+    NOTE: Use `tuple` instead of `list`. A list type
+    object is treated as an item.
+
+    Args:
+        data_tuple (tuple): [description]
+        op ([type]): [description]
+    '''
+    if not isinstance(data_tuple, tuple):
+        raise ValueError('`data_tuple` only accepts tuple, '
+                'got {}'.format(type(tensor_tuple)))
+    
+    def _inner_nested_iter_tuple(data_tuple):
+        if isinstance(data_tuple[0], dict):
+            return {k: _inner_nested_iter_tuple(
+                            tuple(data[k]
+                            for data in data_tuple))
+                        for k in data_tuple[0].keys()}
+        elif isinstance(data_tuple[0], tuple):
+            return tuple(_inner_nested_iter_tuple(
+                            tuple(data[idx] 
+                                 for data in data_tuple))
+                        for idx in range(len(data_tuple[0])))
+        else:
+            return op(data_tuple, *args, **kwargs)
+    return _inner_nested_iter_tuple(data_tuple)
+
+def nested_to_numpy(data):
+    '''Convert all items in a nested data into 
+    numpy arrays
+
+    Args:
+        data (dict, tuple): A nested data
+
+    Returns:
+        dict, tuple: A nested data same as `data`
+    '''    
+    op = lambda arr: np.asarray(arr)
+    return nested_iter(data, op)

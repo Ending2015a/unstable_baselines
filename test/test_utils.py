@@ -12,6 +12,7 @@ import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import utils
+from test.utils import TestCase
 
 def to_json_from_json(obj):
     serialized_obj = utils.to_json_serializable(obj)
@@ -23,7 +24,7 @@ def safe_json_dumps_loads(obj):
     obj = utils.safe_json_loads(string)
     return obj
 
-class TestUtilsModule(unittest.TestCase):
+class TestUtilsModule(TestCase):
     '''Test unstable_baselines.utils module
 
     Class list:
@@ -43,6 +44,9 @@ class TestUtilsModule(unittest.TestCase):
     [x] safe_json_loads
     [x] safe_json_dump
     [x] safe_json_load
+    [x] nested_iter
+    [x] nested_iter_tuple
+    [x] nested_to_numpy
     '''
 
     def test_json_serializable_simple(self):
@@ -132,7 +136,7 @@ class TestUtilsModule(unittest.TestCase):
         self.assertTrue(np.array_equal(a, a2))
         self.assertEqual(a.dtype, a2.dtype)
 
-    def test_stateobject(self):
+    def test_state_object(self):
 
         # test state object
         s = utils.StateObject(a=10, b=20)
@@ -155,6 +159,40 @@ class TestUtilsModule(unittest.TestCase):
                 self.assertTrue(np.array_equal(s[k], s2[k]))
             else:
                 self.assertEqual(s[k], s2[k])
+
+    def test_nested_iter(self):
+        op = lambda v: len(v)
+        data = {'a': (np.arange(3), np.arange(4)), 
+                'b': np.arange(5)}
+        
+        res = utils.nested_iter(data, op, first=False)
+        self.assertEqual(res['a'][0], 3)
+        self.assertEqual(res['a'][1], 4)
+        self.assertEqual(res['b'], 5)
+
+        res = utils.nested_iter(data, op, first=True)
+        self.assertEqual(res, 3)
+
+    def test_nested_iter_tuple(self):
+        op = lambda data_tuple: np.asarray(data_tuple).shape
+        data1 = {'a': (np.arange(3), np.arange(4)), 
+                'b': np.arange(5)}
+        data2 = {'a': (np.arange(3), np.arange(4)), 
+                'b': np.arange(5)}
+
+        res = utils.nested_iter_tuple((data1, data2), op)
+        self.assertEqual(res['a'][0], (2, 3))
+        self.assertEqual(res['a'][1], (2, 4))
+        self.assertEqual(res['b'], (2, 5))
+
+    def test_nested_to_numpy(self):
+        data = {'a': (list(range(3)), list(range(4))),
+                'b': list(range(5))}
+        
+        res = utils.nested_to_numpy(data)
+        self.assertArrayEqual(res['a'][0], np.arange(3))
+        self.assertArrayEqual(res['a'][1], np.arange(4))
+        self.assertArrayEqual(res['b'], np.arange(5))
 
 
 if __name__ == '__main__':
