@@ -263,9 +263,35 @@ class ExponentialScheduler(Scheduler):
         else:
             return v
             
-        
-
 
 # alias
 ExpScheduler = ExponentialScheduler
 Exponential = ExponentialScheduler
+
+@Scheduler.register(['multi'])
+class MultiScheduler(Scheduler):
+    def __init__(self, schedulers, op='min', **kwargs):
+        super().__init__(**kwargs)
+        self.schedulers = [
+            Scheduler.get_scheduler(sche)
+            for sche in schedulers
+        ]
+        self.op = op.lower()
+        assert self.op in ['max', 'min', 'mean']
+        assert len(self.schedulers) > 0
+
+    def bind(self, state_object):
+        super().bind(state_object)
+        for sche in self.schedulers:
+            sche.bind(state_object)
+
+    def calc(self, steps):
+        vals = [sche(steps) for sche in self.schedulers]
+        if self.op == 'max':
+            return np.max(vals)
+        elif self.op == 'min':
+            return np.min(vals)
+        elif self.op == 'mean':
+            return np.mean(vals)
+        else:
+            raise NotImplementedError('Op not implemented: {}'.format(self.op))
