@@ -33,7 +33,8 @@ __all__ = ['Scheduler',
            'ConstScheduler',
            'LinearScheduler',
            'ExponentialScheduler',
-           'ExpScheduler']
+           'ExpScheduler',
+           'get_scheduler']
 
 # === Schedulers ===
 
@@ -56,8 +57,11 @@ class _RegisteredSchedulerClass(StateObject):
 _RegisteredScheduler = _RegisteredSchedulerClass()
 
 
+def get_scheduler(*args, **kwargs):
+    return Scheduler.get_scheduler(*args, **kwargs)
+
 class Scheduler(StateObject):
-    __slots__ = ['state_object']
+    __slots__ = ['state']
     
     @enum.unique
     class Unit(str, enum.Enum):
@@ -74,21 +78,21 @@ class Scheduler(StateObject):
 
         return sche
 
-    def __init__(self, unit='timestep', state_object=None):
+    def __init__(self, unit='timestep', state=None):
 
         if isinstance(unit, str):
             unit = self.Unit[unit]
         
         self.unit = unit
-        self.state_object = None
+        self.state = None
 
-        if state_object is not None:
-            self.bind(state_object)
+        if state is not None:
+            self.bind(state)
 
-    def bind(self, state_object):
-        assert state_object is not None
+    def bind(self, state):
+        assert state is not None
 
-        self.state_object = state_object
+        self.state = state
 
     @abc.abstractmethod
     def calc(self, steps):
@@ -103,18 +107,18 @@ class Scheduler(StateObject):
         raise NotImplementedError('Method not implemented')
 
     def get_steps(self):
-        if self.state_object is None:
-            raise RuntimeError('The state object is empty, call '
-                                    'attach() to set state object.')
+        if self.state is None:
+            raise RuntimeError('The `state` is empty, call '
+                                    'bind() to set `state`.')
         
         if self.unit == self.Unit.timestep:
-            steps = self.state_object.num_timesteps
+            steps = self.state.num_timesteps
         elif self.unit == self.Unit.epoch:
-            steps = self.state_object.num_epochs
+            steps = self.state.num_epochs
         elif self.unit == self.Unit.gradstep:
-            steps = self.state_object.num_gradsteps
+            steps = self.state.num_gradsteps
         elif self.unit == self.Unit.progress:
-            steps = self.state_object.progress
+            steps = self.state.progress
         else:
             raise RuntimeError('Unknown unit, unit must be either of '
                         '["timestep", "epoch", "gradstep", "progress"]'
@@ -158,7 +162,7 @@ class Scheduler(StateObject):
         return _register
 
     @classmethod
-    def get_scheduler(cls, *args, type=None, state_object=None, **kwargs):
+    def get_scheduler(cls, *args, type=None, state=None, **kwargs):
         sche = None
 
         if len(args) == 1:
@@ -180,8 +184,8 @@ class Scheduler(StateObject):
             
 
         if sche is not None:
-            if state_object is not None:
-                sche.bind(state_object)
+            if state is not None:
+                sche.bind(state)
 
             return sche
 
@@ -280,10 +284,10 @@ class MultiScheduler(Scheduler):
         assert self.op in ['max', 'min', 'mean']
         assert len(self.schedulers) > 0
 
-    def bind(self, state_object):
-        super().bind(state_object)
+    def bind(self, state):
+        super().bind(state)
         for sche in self.schedulers:
-            sche.bind(state_object)
+            sche.bind(state)
 
     def calc(self, steps):
         vals = [sche(steps) for sche in self.schedulers]

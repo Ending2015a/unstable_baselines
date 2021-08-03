@@ -36,15 +36,20 @@ __all__ = [
     'set_global_seeds',
     'normalize',
     'denormalize',
-    'flatten_obs',
+    'stack_obs',
     'soft_update',
     'is_json_serializable',
     'to_json_serializable',
     'from_json_serializable',
+    'get_tensor_ndims',
+    'flatten',
     'safe_json_dumps',
     'safe_json_loads',
     'safe_json_dump',
-    'safe_json_load'
+    'safe_json_load'.
+    'nested_iter',
+    'nested_iter_tuple',
+    'nested_to_numpy'
 ]
 
 
@@ -112,18 +117,30 @@ def denormalize(x, low, high, nlow=0.0, nhigh=1.0):
     return ((high-low)/(nhigh-nlow)) * (x-nlow) + low
 
 
-def flatten_obs(obs, space):
-    assert isinstance(obs, (list, tuple)), "expected list or tuple of observations per environment"
-    assert len(obs) > 0, "need observations from at least one environment"
+def stack_obs(obs, space):
+    if not isinstance(obs, (list, tuple)):
+        raise ValueError('Expecting a list or tuple of observations')
+    if len(obs) <= 0:
+        raise ValueError('Need observations from at least one environment')
 
     if isinstance(space, gym.spaces.Dict):
-        assert isinstance(space.spaces, OrderedDict), "Dict space must have ordered subspaces"
-        assert isinstance(obs[0], dict), "non-dict observation for environment with Dict observation space"
-        return OrderedDict([(k, np.stack([o[k] for o in obs])) for k in space.spaces.keys()])
+        if not isinstance(space.spaces, OrderedDict):
+            raise ValueError('Dict space must have ordered subspaces')
+        if not isinstance(obs[0], dict):
+            raise ValueError('non-dict observation for environment with '
+                    'Dict observation space')
+        return OrderedDict([
+            (k, stack_obs([o[k] for o in obs], space.spaces[k]))
+            for k in space.spaces.keys()
+        ])
     elif isinstance(space, gym.spaces.Tuple):
-        assert isinstance(obs[0], tuple), "non-tuple observation for environment with Tuple observation space"
-        obs_len = len(space.spaces)
-        return tuple((np.stack([o[i] for o in obs]) for i in range(obs_len)))
+        if not isinstance(obs[0], tuple):
+            raise ValueError('non-tuple observation for environment '
+                    'with Tuple observation space')
+        return tuple([
+            stack_obs([o[i] for o in obs], space.spaces[i])
+            for i in range(len(space.spaces))
+        ])
     else:
         return np.stack(obs)
 
@@ -150,27 +167,25 @@ def soft_update(target_vars, source_vars, polyak=0.005):
 
 
 def is_image_observation(obs_space):
-
     return (isinstance(obs_space, gym.spaces.Box) and
                 len(obs_space.shape) == 3)
 
 # === TensorFlow utils ===
 
-def preprocess_observation(inputs, obs_space, dtype=tf.float32):
-    # we only normalize non-float32 inputs
-    # Eg. image observation (Box, uint8)
-    if tf.as_dtype(inputs.dtype) == tf.float32:
-        return inputs
+def is_bounded(space):
+    if isinstance(space, gym.spaces.Box):
+        return (not np.any(np.isinf(space.low))
+                and not np.any(np.isinf(space.high))
+                and np.all(space.high-space.low > 0.))
+    return True
 
+def preprocess_observation(inputs, obs_space, dtype=tf.float32):
     if isinstance(obs_space, gym.spaces.Box):
         inputs = tf.cast(inputs, dtype=tf.float32)
-        low    = tf.constant(obs_space.low, dtype=tf.float32)
-        high   = tf.constant(obs_space.high, dtype=tf.float32)
-        if ((not tf.math.reduce_any(tf.math.is_inf(low)))
-                and (not tf.math.reduce_any(tf.math.is_inf(high)))
-                and tf.math.reduce_any(high-low != 0)):
-        # normalize observations [0, 1]
-            inputs = normalize(inputs, low=low, high=high, nlow=0., nhigh=1.)
+        if is_bounded(obs_space):
+            low    = tf.constant(obs_space.low, dtype=tf.float32)
+            high   = tf.constant(obs_space.high, dtype=tf.float32)
+            inputs = normalize(inputs, low, high, 0., 1.)
     elif isinstance(obs_space, gym.spaces.Discrete):
         depth  = tf.constant(obs_space.n, dtype=tf.int32)
         inputs = tf.one_hot(inputs, depth=depth)
@@ -217,6 +232,61 @@ def get_input_tensor_from_space(space: gym.Space, dtype=tf.float32):
         raise NotImplementedError("Input tensor not implemented "
                 "for {}".format(space))
     return inputs
+
+def get_tensor_ndims(tensor: tf.Tensor):
+    tensor = tf.convert_to_tensor(tensor)
+    ndims = tensor.get_shape().ndims or tf.rank(tensor)
+    return ndims
+
+
+def flatten(tensor: tf.Tensor, begin, end=None):
+    '''Collapse dims
+
+    Flatten tensor from dim `begin` to dim `end`
+
+    For example:
+        >>> tensor = tf.zeros((2, 3, 4))
+        >>> print(collapse_dims(tensor, 1).shape)
+        (2, 12)
+
+    Args:
+        tensor (tf.Tensor): [description]
+        begin ([type]): [description]
+        end ([type], optional): [description]. Defaults to None.
+
+    Returns:
+        [type]: [description]
+    '''    
+    tensor = tf.convert_to_tensor(tensor)
+    if end is None:
+        flat_shape = tf.concat((
+            tf.shape(tensor)[:begin],
+            [tf.math.reduce_prod(tf.shape(tensor)[begin:])],
+        ), axis=0)
+    else:
+        flat_shape = tf.concat((
+            tf.shape(tensor)[:begin],
+            [tf.math.reduce_prod(tf.shape(tensor)[begin:end])],
+            tf.shape(tensor)[end:]
+        ), axis=0)
+
+    return tf.reshape(tensor, flat_shape)
+
+
+def flatten_dicts(dicts: list):
+    '''Flatten a list of dicts
+
+    Args:
+        dicts (list): list of dicts
+
+    Returns:
+        dict: flattened dict
+    '''
+    agg_dict = {}
+    for d in dicts:
+        for k, v in d.itmes():
+            agg_dict.setdefault(k, []).append(v)
+    return agg_dict
 
 # === JSON utils ===
 
@@ -373,3 +443,4 @@ def nested_to_numpy(data):
     '''    
     op = lambda arr: np.asarray(arr)
     return nested_iter(data, op)
+
