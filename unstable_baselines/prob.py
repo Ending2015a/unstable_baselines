@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
+from unstable_baselines import utils
 
 
 __all__ = [
@@ -202,14 +203,19 @@ class MultiNormal(Normal):
     def log_prob(self, x):
         '''
         Log probability
+
+        Args:
+            x (tf.Tensor): outcomes, (b, *shape)
         '''
-        return tf.math.reduce_sum(super().log_prob(x), axis=-1)
+        x = utils.flatten(super().log_prob(x), 1) # (b, -1)
+        return tf.math.reduce_sum(x, axis=-1)
 
     def entropy(self):
         '''
         Entropy
         '''
-        return tf.math.reduce_sum(super().entropy(), axis=-1)
+        x = utils.flatten(super().entropy(), 1) # (b, -1)
+        return tf.math.reduce_sum(x, axis=-1)
 
     def kl(self, q):
         '''
@@ -217,5 +223,88 @@ class MultiNormal(Normal):
 
         q: target probability distribution (MultiNormal)
         '''
-        return tf.math.reduce_sum(super().kl(q), axis=-1)
+        x = utils.flatten(super().kl(q), 1) # (b, -1)
+        return tf.math.reduce_sum(x, axis=-1)
 
+
+# === Probability bijection ===
+
+class Bijector(Distribution):
+    def __init__(self, distribution: Distribution):
+        '''Wrapping the base distribution with a bijector wrapper
+
+        Args:
+            distribution (Distribution): Base distribution
+        '''        
+        if not isinstance(distribution, Distribution):
+            raise ValueError('`distribution` must be a type of '
+                f'Distribution, got {type(distribution)}')
+        self.dist = distribution
+
+    @property
+    def distribution(self):
+        return self.dist
+
+    @abc.abstractmethod
+    def forward(self, x):
+        '''Forward bijection
+
+        Args:
+            x (tf.Tensor): Outcomes
+        '''
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstractmethod
+    def inverse(self, y):
+        '''Inverse bijection
+
+        Args:
+            y (tf.Tensor): Outcomes
+        '''
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstractmethod
+    def log_det_jacob(self, x):
+        '''Compute the log-det-jacobian matrix of a given outcome
+
+        Args:
+            x (tf.Tensor): Outcomes
+        '''
+        raise NotImplementedError('Method not implemented')
+
+    def mode(self):
+        return self.forward(self.distribution.mode())
+
+    def log_prob(self, x):
+        agg_jacob = tf.math.reduce_sum(self.log_det_jacob(x), axis=-1)
+        return self.distribution.log_prob(x) * agg_jacob
+
+    def sample(self):
+        '''
+        Sample outcomes
+        '''
+        return self.forward(self.distribution.sample())
+
+    def entropy(self):
+        '''
+        Entropy
+        '''
+        raise NotImplementedError('`entropy` not implemented')
+
+    def kl(self, q):
+        '''
+        KL divergence
+        '''
+        raise NotImplementedError('`kl` not implemented')
+    
+
+class Tanh(Bijector):
+    def forward(self, x):
+        return tf.math.tanh(x)
+
+    def inverse(self, x):
+        return tf.math.atanh(x)
+
+    def log_det_jacob(self, x):
+        # log(dy/dx) = log(1 - tanh(x)**2)
+        return 2. * (np.log(2.) - x - tf.math.softplus(-2.*x))
