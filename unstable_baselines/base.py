@@ -18,7 +18,7 @@ from tensorflow.python.framework import errors
 
 # --- my module ---
 from unstable_baselines import logger
-from unstable_baselines import utils as utils
+from unstable_baselines import utils as ub_utils
 
 __all__ = ['SavableModel',
            'TrainableModel']
@@ -61,7 +61,7 @@ def _generate_best_checkpoint_state(save_dir,
     all_metrics = all_checkpoint_metrics
     all_checkpoint_metrics = list(zip(all_paths, all_metrics))
 
-    coord_best_checkpoint_state = utils.StateObject(
+    coord_best_checkpoint_state = ub_utils.StateObject(
         best_checkpoint_path=best_checkpoint_path,
         best_checkpoint_metrics=best_checkpoint_metrics,
         all_checkpoint_metrics=all_checkpoint_metrics,
@@ -124,7 +124,7 @@ def _get_best_checkpoint_state(checkpoint_dir, latest_filename=None):
         if file_io.file_exists(coord_checkpoint_filename):
             file_content = file_io.read_file_to_string(
                 coord_checkpoint_filename)
-            ckpt = utils.StateObject.fromstring(file_content)
+            ckpt = ub_utils.StateObject.fromstring(file_content)
             if not ckpt.get('best_checkpoint_path', None):
                 ckpt.best_checkpoint_path = ''
             if not ckpt.get('all_checkpoint_metrics', None):
@@ -420,7 +420,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
 
     SavableModel provides a common interface to handle 
     model save/load operations.
-    '''    
+    '''
 
     @abc.abstractmethod
     def get_config(self):
@@ -451,7 +451,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         '''
         config = self.get_config()
 
-        utils.safe_json_dump(filepath, config)
+        ub_utils.safe_json_dump(filepath, config)
 
     @classmethod
     def load_config(cls, filepath):
@@ -463,7 +463,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         Returns:
             : [description]
         '''
-        config = utils.safe_json_load(filepath)
+        config = ub_utils.safe_json_load(filepath)
 
         return cls.from_config(config)
 
@@ -705,17 +705,24 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             var = self.variables
             target_var = other_model.variables
         
-        utils.soft_update(var, target_var, polyak=polyak)
+        ub_utils.soft_update(var, target_var, polyak=polyak)
 
 
 
 class TrainableModel(SavableModel):
+    '''TrainableModel
+
+    TrainableModel provides a common interface for training/
+    evaluating model, predicting results and performing
+    simple model selection when saving trained models.
+    '''
     def __init__(self, **kwargs):
+        
         super().__init__(**kwargs)
         
         # Initialize state object
         #  store training states
-        s = utils.StateObject()
+        s = ub_utils.StateObject()
         s.num_timesteps = 0
         s.num_epochs    = 0
         s.num_subepochs = 0
@@ -723,6 +730,12 @@ class TrainableModel(SavableModel):
         s.progress      = 0
         
         self._state = s
+
+    def reset(self):
+        self.num_timesteps = 0
+        self.num_gradsteps = 0
+        self.num_epochs    = 0
+        self.progress      = 0
 
     @abc.abstractmethod
     def predict(self, inputs):
@@ -740,52 +753,9 @@ class TrainableModel(SavableModel):
         '''
         raise NotImplementedError('Method not implemented')
 
-    @abc.abstractmethod
-    def eval(self, env, n_episodes, max_steps):
-        '''
-        Evaluate model (default)
-
-        Args:
-            env (gym.Env): Environment for evaluation.
-            n_episodes (int): number of episodes to evaluate.
-            max_steps (int): Maximum steps in one episode. Set to -1 
-                to run episodes until done.
-
-        Return:
-            eps_rews: (list) episode rewards.
-            eps_steps: (list) episode length.
-        '''
-        if n_episodes <= 0:
-            return None
-
-        eps_info = []
-        for episode in range(n_episodes):
-            obs = env.reset()
-            total_rews  = 0
-            total_steps = 0
-
-            while total_steps != max_steps:
-                # predict action
-                acts = self.predict(obs)
-                # step environment
-                obs, rew, done, info = env.step(acts)
-                
-                total_rews += rew
-                total_steps += 1
-
-                if done:
-                    break
-            eps_info.append([
-                total_rews,
-                total_steps
-            ])
-
-        eps_rews, eps_steps = zip(*eps_info)
-        eps_info = {
-            'rewards': eps_rews,
-            'steps': eps_steps
-        }
-        return eps_info
+    def eval(self):
+        '''Evaluate model'''
+        raise NotImplementedError('Method not implemented')
 
     @abc.abstractmethod
     def learn(self):
@@ -793,20 +763,8 @@ class TrainableModel(SavableModel):
 
         Returns:
             TrainableModel: self
-        '''        
-        
-        raise NotImplementedError('Method not implemented')
-
-    def get_eval_metrics(self, eps_info):
-        '''Compute evaluation metrics, default the mean of episode rews
-        override this method to customize your evaluation metrics.
         '''
-        if ((eps_info is not None)
-                and ('rewards' in eps_info)
-                and (len(eps_info['rewards']) > 0)):
-            return np.mean(eps_info['rewards'])
-        else:
-            return None
+        raise NotImplementedError('Method not implemented')
 
     def metrics_compare_fn(self, last_metrics, new_metrics):
         '''Compare two metrics
@@ -827,12 +785,12 @@ class TrainableModel(SavableModel):
         '''
         if metrics_compare_fn is None:
             metrics_compare_fn = self.metrics_compare_fn
-        return super().save(directory=directory,
-                            weights_name=weights_name,
-                            checkpoint_number=checkpoint_number,
-                            checkpoint_metrics=checkpoint_metrics,
-                            metrics_compare_fn=metrics_compare_fn,
-                            max_to_keep=max_to_keep,
+        return super().save(directory          = directory,
+                            weights_name       = weights_name,
+                            checkpoint_number  = checkpoint_number,
+                            checkpoint_metrics = checkpoint_metrics,
+                            metrics_compare_fn = metrics_compare_fn,
+                            max_to_keep        = max_to_keep,
                             **kwargs)
 
     def save_config(self, filepath):
@@ -848,7 +806,7 @@ class TrainableModel(SavableModel):
             'config': _config
         }
 
-        utils.safe_json_dump(filepath, config)
+        ub_utils.safe_json_dump(filepath, config)
 
     @classmethod
     def load_config(cls, filepath):
@@ -860,7 +818,7 @@ class TrainableModel(SavableModel):
         Returns:
             TrainableModel: reconstrcted model
         '''
-        config = utils.safe_json_load(filepath)
+        config = ub_utils.safe_json_load(filepath)
 
         _config = config.get('config', {})
         state   = config.get('state', {})
@@ -913,3 +871,553 @@ class TrainableModel(SavableModel):
     @progress.setter
     def progress(self, value):
         self._state.progress = value
+
+
+# === RL Model ===
+
+class BaseAgent(SavableModel):
+    '''A general template for model-free RL agent
+    '''
+    support_obs_spaces = []
+    support_act_spaces = []
+    def __init__(self, observation_space,
+                       action_space,
+                       **kwargs):
+        super().__init__(**kwargs)
+
+        self.observation_space = None
+        self.action_space      = None
+
+        if observation_space is not None and action_space is not None:
+            self.set_spaces(observation_space, action_space)
+
+    def set_spaces(self, observation_space, action_space):
+        # check observation/action spaces
+        if observation_space is None:
+            raise ValueError('Observation space not provided, '
+                f'{observation_space}')
+        
+        if action_space is None:
+            raise ValueError('Action space not provided, '
+                f'{action_space}')
+        # check if observation/action spaces supportted
+        if not isinstance(observation_space, self.support_obs_spaces):
+            raise RuntimeError(f'{type(self).__name__} does not support the '
+                f'observation spaces of type {type(observation_space)}')
+        if not isinstance(action_space, self.support_act_spaces):
+            raise RuntimeError(f'{type(self).__name__} does not support the '
+                f'actions spaces of type {type(action_space)}')
+
+        self.observation_space = observation_space
+        self.action_space      = action_space
+
+    @abc.abstractmethod
+    def setup_model(self):
+        '''Setup agent
+        '''        
+        raise NotImplementedError('Method not implemented')
+
+    def map_observation(self, obs):
+        '''Normalizing observations. This function is called before
+        forwarding agent
+        '''
+        return ub_utils.preprocess_observations(obs, self.observation_space)
+
+    def map_action(self, act):
+        '''Denormalizing actions output from policy.
+        '''
+        if isinstance(self.action_space, gym.spaces.Box):
+            #TODO: how to do in one line for both tensor and non-tensor?
+            if tf.is_tensor(act):
+                act = tf.clip_by_value(act, self.action_space.low,
+                                            self.action_space.high)
+            else:
+                act = np.clip(act, self.action_space.low,
+                                    self.action_space.high)
+        return act
+
+    @abc.abstractmethod
+    def call(self, inputs, training=True):
+        '''Forward agent'''
+        raise NotImplementedError('Method not implemented')
+    
+    @abc.abstractmethod
+    def predict(self, inputs):
+        '''Predict actions'''
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstractmethod
+    def get_config(self):
+        return {}
+
+
+class OffPolicyModel(TrainableModel):
+    '''Off-policy model provides a common interface for off-policy RL
+    algorithms.
+    '''
+    support_obs_spaces = []
+    support_act_spaces = []
+    def __init__(self, env,
+                       n_steps:      int = 4,
+                       n_gradsteps:  int = 1,
+                       wramup_steps: int = int(1e4),
+                       batch_size:   int = 128,
+                       verbose:      int = 0,
+                       observation_space = None,
+                       action_space      = None,
+                       **kwargs):
+        super().__init__(**kwargs)
+
+        self.n_steps      = n_steps
+        self.n_gradsteps  = n_gradsteps
+        self.wramup_steps = wramup_steps
+        self.batch_size   = batch_size
+        self.verbose      = verbose
+
+        # initialize states
+        self.env               = None
+        self.buffer            = None
+        self.tb_writter        = None
+        self.n_envs            = 0
+
+        self.observation_space = observation_space
+        self.action_space      = action_space
+
+        if env is not None:
+            self.set_env(env)
+
+    def set_env(self, env):
+        '''Set environment
+
+        If the environment is already set, you can call this function
+        to change the environment. But the observation space and action
+        space must be consistent with the original one.
+
+        Args:
+            env (VecEnv): Training environment.
+        '''
+        # check observation/action spaces
+        if self.observation_space is not None:
+            if env.observation_space != self.observation_space:
+                raise RuntimeError('Observation space does not match, expected '
+                    f'{self.observation_space}, got {env.observation_space}')
+        if self.action_space is not None:
+            if env.action_space != self.action_space:
+                raise RuntimeError('Action space does not match, expected '
+                    f'{self.action_space}, got {env.action_space}')
+        # check if observation/action spaces supportted
+        if not isinstance(env.observation_space, self.support_obs_spaces):
+                raise RuntimeError('This algorithm does not support observation '
+                    f'spaces of type {type(env.observation_space)}')
+        if not isinstance(env.action_space, self.support_act_spaces):
+            raise RuntimeError('This algorithm does not support action space '
+                f'of type {type(env.action_space)}')
+
+        self.env               = env
+        self.n_envs            = env.n_envs
+        self.observation_space = env.observation_space
+        self.action_space      = env.action_space
+
+    @abc.abstractmethod
+    def setup_model(self):
+        '''Setup model
+        '''
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstractmethod
+    def call(self):
+        '''Predict batch actions
+        '''        
+        raise NotImplementedError('Method not implemented')
+    
+    @abc.abstractmethod
+    def predict(self):
+        '''Predict one action
+        '''        
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstracmethod
+    def _run_step(self, obs=None):
+        '''Collecting one sample
+
+        Args:
+            obs (np.ndarray, optional): Current observations. Defaults to None.
+
+        Returns:
+            np.ndarray: next observations
+        '''
+        raise NotImplementedError('Method not implemented')
+
+    def run(self, steps, obs=None):
+        '''Collecting rollouts
+
+        Args:
+            steps (int): number of steps to collect
+            obs (np.ndarray, optional): last observations. Defaults to None.
+
+        Returns:
+            np.ndarray: last observations.
+        '''
+        if obs is None:
+            obs = self.env.reset()
+        
+        for _ in range(steps):
+            obs = self._run_step(obs)
+            # update state
+            self.num_timesteps += self.n_envs
+
+        return obs
+
+    def get_eval_metrics(self, results):
+        '''Compute evaluation metrics from evaluation results
+
+        Args:
+            results (dict): evaluation results
+
+        Returns:
+            dict: evaluation metrics
+        '''        
+        if not results:
+            return None
+        
+        results = ub_utils.flatten_dicts(results)
+
+        rews  = results['rewards']
+        steps = results['steps']
+
+        metrics = {
+            'mean-reward': np.mean(rews),
+            'std-reward':  np.std(rews),
+            'max-reward':  np.max(rews),
+            'min-reward':  np.min(rews),
+            'mean-steps':  np.mean(steps),
+            'std-steps':   np.std(steps),
+            'max-steps':   np.max(steps),
+            'min-steps':   np.min(steps)
+        }
+        return metrics
+
+    def get_save_metrics(self, metrics):
+        '''Compute metrics for model selection, default 
+        the mean of episode rewards.
+
+        Args:
+            metrics (dict): evaluation metrics
+
+        Returns:
+            Any: metrics for selecting the best model.
+        '''
+        if (not isinstance(metrics, dict)
+                or 'mean-reward' not in metrics):
+            return None
+        return metrics['mean-reward']
+
+    def eval(self, env, n_episodes, max_steps):
+        '''
+        Evaluate model
+
+        Args:
+            env (gym.Env): Environment for evaluation.
+            n_episodes (int): number of episodes to evaluate.
+            max_steps (int): Maximum steps in one episode. Set to -1 
+                to run episodes until done.
+
+        Return:
+            eps_rews: (list) episode rewards.
+            eps_steps: (list) episode length.
+        '''
+        if n_episodes <= 0:
+            return None
+
+        eps_info = []
+        for episode in range(n_episodes):
+            obs = env.reset()
+            total_rews  = 0
+            total_steps = 0
+
+            while total_steps != max_steps:
+                # predict action
+                acts = self.predict(obs)
+                # step environment
+                obs, rew, done, info = env.step(acts)
+                
+                total_rews += rew
+                total_steps += 1
+
+                if done:
+                    break
+
+            eps_info.append({
+                'rewards': total_rews,
+                'steps':   total_steps
+            })
+        return eps_info
+
+    @abc.abstractmethod
+    def _train_step(self, batch_size):
+        '''Train one step
+
+        Args:
+            batch_size (int): mini-batch size.
+
+        Returns:
+            dict: loss dict
+        '''        
+        raise NotImplementedError('Method not implemented')
+
+    @abc.abstractmethod
+    def _update_target(self):
+        '''Update target networks here
+        '''        
+        raise NotImplementedError('Method not implemented')
+
+    def train(self, steps, batch_size, target_update):
+        '''Train one epoch
+
+        Args:
+            steps (int): Number of steps in this epoch.
+            batch_size (int): mini-batch size.
+            target_update (int): target networks update frequency.
+
+        Returns:
+            dict: loss dict
+        '''
+        all_losses = []
+
+        for gradient_steps in range(steps):
+            # train one step
+            losses = self._train_step(batch_size)
+            # update state
+            self.num_gradsteps += 1
+            # update target networks
+            if self.num_gradsteps % target_update == 0:
+                self._update_target()
+            
+            all_losses.append(losses)
+        # aggregate losses
+        all_losses = ub_utils.flatten_dicts(all_losses)
+        m_losses = {}
+        for key, losses in all_losses.items():
+            m_losses[key] = np.mean(np.hstack(np.asarray(losses)))
+        return m_losses
+
+    def is_warming_up(self):
+        return self.num_timesteps < self.wramup_steps
+
+    def learn(self, total_timesteps:  int, 
+                    log_interval:     int = 1,
+                    eval_env:     gym.Env = None, 
+                    eval_interval:    int = 1, 
+                    eval_episodes:    int = 5, 
+                    eval_max_steps:   int = 1000,
+                    save_interval:    int = 1,
+                    save_path:        str = None,
+                    target_update:    int = 2,
+                    tb_logdir:        str = None, 
+                    reset_timesteps: bool = False):
+        '''Train RL model
+
+        Args:
+            total_timesteps (int): total timesteps (sample from env) to train agent.
+            log_interval (int, optional): log frequency (unit: epoch)
+                Defaults to 1.
+            eval_env (gym.Env, optional): evaluation environment. Defaults to None.
+            eval_interval (int, optional): evaluation frequency (unit: epoch). 
+                Defaults to 1.
+            eval_episodes (int, optional): number of episodes per evaluation. 
+                Defaults to 5.
+            eval_max_steps (int, optional): number of maximum steps in each 
+                evaluation episode. Defaults to 1000.
+            save_interval (int, optional): checkpoint frequency (unit: epoch). 
+                Defaults to 1.
+            save_path (str, optional): path to save model. Defaults to None.
+            target_update (int, optional): target networks updating frequency
+                (unit: gradsteps). Defaults to 2.
+            tb_logdir (str, optional): tensorboard log directory. None to disable
+                tensorboard. Defaults to None.
+            reset_timesteps (bool, optional): reset model timesteps. Defaults 
+                to False.
+
+        Raises:
+            RuntimeError: [description]
+
+        Returns:
+            self
+        '''        
+        if self.env is None:
+            raise RuntimeError('Env not set, call `set_env` '
+                'before training')
+
+        # create tensorboard writer
+        if tb_logdir is not None:
+            self.tb_writer = tf.summary.create_file_writer(tb_logdir)
+
+        # initialize state
+        if reset_timesteps:
+            self.reset()
+        
+        # initialze
+        obs = None
+        time_start = time.time()
+        time_spent = 0
+        timesteps_per_epoch = self.n_steps * self.n_envs
+        total_epochs = int(float(total_timesteps - self.num_timesteps) /
+                        float(timesteps_per_epoch) + 0.5) + self.num_epochs
+        
+        while self.num_timesteps < total_timesteps:
+            # collect rollouts
+            obs = self._run(steps=self.n_steps, obs=obs)
+
+            # update state
+            self.num_epochs += 1
+            self.progress = float(self.num_timesteps) / float(total_timesteps)
+            # train one epoch
+            losses = {}
+            if not self.is_warming_up():
+                # training
+                losses = self.train(
+                    self.n_gradsteps,
+                    batch_size    = self.batch_size,
+                    target_update = target_update
+                )
+                # write tensorboard
+                if self.tb_writer is not None:
+                    with self.tb_writer.as_default():
+                        for name, loss in losses.items():
+                            tf.summary.scalar(f'train/{name}', loss, step=self.num_timesteps)
+                    self.tb_writer.flush()
+            # print training log
+            if (log_interval is not None) and (self.num_epochs % log_interval == 0):
+                # current time
+                time_now       = time.time()
+                # execution time (one epoch)
+                execution_time = (time_now - time_start) - time_spent
+                # total time spent
+                time_spent     = (time_now - time_start)
+                # remaining time
+                remaining_time = (time_spent / self.progress)*(1.0-self.progress)
+                # eta
+                eta            = (datetime.datetime.now() + datetime.timedelta(seconds=remaining_time)).strftime('%Y-%m-%d %H:%M:%S')
+                # average steps per second
+                fps            = float(self.num_timesteps) / time_spent
+
+                self.LOG.set_header(f'Epoch {self.num_epochs}/{total_epochs}')
+                self.LOG.add_line()
+                self.LOG.add_row(f'Timesteps: {self.num_timesteps}/{total_timesteps}')
+                self.LOG.add_row(f'Steps/sec: {fps:.2f}')
+                self.LOG.add_row(f'Progress: {self.progress*100.0:.2f}%')
+
+                if self.verbose > 0:
+                    self.LOG.add_row('Execution time', datetime.timedelta(seconds=execution_time))
+                    self.LOG.add_row('Elapsed time',   datetime.timedelta(seconds=time_spent))
+                    self.LOG.add_row('Remaining time', datetime.timedelta(seconds=remaining_time))
+                    self.LOG.add_row('ETA',            eta)
+                    self.LOG.add_line()
+
+                    if self.is_warming_up():
+                        self.LOG.add_row(f'Collecting rollouts')
+                    else:
+                        for name, loss in losses:
+                            self.LOG.add_row(f'{name}: {loss:.6f}')
+
+                LOG.add_line()
+                LOG.flush('INFO')
+            # evaluate model
+            eval_metrics = None
+            if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
+                eval_results = self.eval(
+                    env        = eval_env,
+                    n_episodes = eval_episodes,
+                    max_steps  = eval_max_steps
+                )
+
+                eval_metrics = self.get_eval_metrics(eval_results)
+
+                if self.tb_writer is not None:
+                    with self.tb_writer.as_default():
+                        for name, value in eval_metircs.items():
+                            tf.summary.scalar(f'eval/{name}', value, step=self.num_timesteps)
+                    self.tb_writer.flush()
+                
+                if self.verbose > 1:
+                    self.LOG.set_header(f'Eval results')
+                    for ep in range(eval_episodes):
+                        self.LOG.subgroup(f'Episode {ep+1}')
+                        labels = '\n'.join(eval_results[ep].keys())
+                        values = '\n'.join(map('{}'.format, eval_results[ep].values()))
+                        
+                        self.LOG.add_rows(fmt='{labels} {||} {values}', labels=labels, values=values)
+                
+                self.LOG.subgroup('Metrics')
+                labels = '\n'.join(eval_metrics.keys())
+                values = '\n'.join(map('{:.3f}'.format, eval_metrics.values()))
+                self.LOG.add_rows(fmt='{labels} {||} {values}', labels=labels, values=values)
+                self.LOG.add_line()
+                self.LOG.flush('INFO')
+
+            # save model
+            if ((save_path is not None) and (save_interval is not None)
+                    and (self.num_epochs % save_interval) == 0):
+                # compute metrics
+                checkpoint_metrics = self.get_save_metrics(eval_metrics)
+                saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
+                                        checkpoint_metrics=checkpoint_metrics)
+                if self.verbose > 0:
+                    self.LOG.info('Checkpoint saved to: {}'.format(saved_path))
+                
+                    # find the best model path
+                    best_path = self._preload(save_path, best=True)
+                    if best_path == os.path.abspath(saved_path):
+                        self.LOG.debug(' (Best)')
+        
+        return self
+
+    def get_config(self):
+        '''Get constructor configurations.
+
+        Returns:
+            dict: configurations
+        '''
+        config = {
+            'n_steps':           self.n_steps,
+            'n_gradsteps':       self.n_gradsteps,
+            'batch_size':        self.batch_size,
+            'verbose':           self.verbose,
+            'observation_space': self.observation_space,
+            'action_space':      self.action_space
+        }
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        '''Restore model from the given configurations
+
+        Args:
+            config (dict): configurations
+
+        Returns:
+            self
+        '''        
+        
+        # construct method
+        self = cls(env=None, **config)
+        # setup model
+        self.setup_model()
+
+        return self
+
+    def save_config(self, filepath):
+        '''Save model config to `filepath`
+
+        Args:
+            filepath (str): path to save configuration
+        '''
+        _config = self.get_config()
+        _config.update(OffPolicyModel.get_config(self))
+
+        config = {
+            'state': self.state,
+            'config': _config
+        }
+
+        ub_utils.safe_json_dump(filepath, config)
