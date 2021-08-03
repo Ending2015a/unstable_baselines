@@ -6,6 +6,7 @@ import logging
 
 # --- 3rd party ---
 import numpy as np
+import numba as nb
 
 # --- my module ---
 from unstable_baselines import utils
@@ -229,11 +230,48 @@ ReplayBuffer = DictReplayBuffer
 
 
 # === data utils ===
-def compute_advantages(rewards:    np.ndarray,
-                       values:     np.ndarray,
-                       dones:      np.ndarray,
-                       gamma:      float = 0.99,
-                       gae_lambda: float = 1.0):
+# def compute_advantages(rewards:    np.ndarray,
+#                        values:     np.ndarray,
+#                        dones:      np.ndarray,
+#                        gamma:      float = 0.99,
+#                        gae_lambda: float = 1.0):
+#     '''Compute GAE
+
+#     Args:
+#         rewards (np.ndarray): (steps, ...)
+#         values (np.ndarray): (steps, ...)
+#         dones (np.ndarray): (steps, ...)
+#         gamma (float, optional): discount factor. Defaults to 0.99.
+#         gae_lambda (float, optional): [description]. Defaults to 1.0.
+
+#     Returns:
+#         [type]: [description]
+#     '''    
+#     rewards = np.asarray(rewards).astype(np.float32)
+#     values  = np.asarray(values).astype(np.float32)
+#     dones   = np.asarray(dones).astype(np.float32)
+#     advantages = np.zeros_like(values)
+
+#     last_gae_lam = 0
+#     num_steps = len(dones)
+#     next_non_terminal = 1.0 - dones[-1]
+#     next_value = values[-1]
+
+#     for step in reversed(range(num_steps)):
+#         delta = rewards[step] + gamma * next_value * next_non_terminal - values[step]
+#         last_gae_lam = delta + gamma * gae_lambda * next_non_terminal * last_gae_lam
+#         advantages[step] = last_gae_lam
+#         # prepare for the next step
+#         next_non_terminal = 1.0 - dones[step]
+#         next_value = values[step]
+#     return advantages
+
+@nb.njit
+def compute_advantage(rew:        np.ndarray,
+                      val:        np.ndarray,
+                      done:       np.ndarray,
+                      gamma:      float = 0.99,
+                      gae_lambda: float = 1.0):
     '''Compute GAE
 
     Args:
@@ -244,23 +282,21 @@ def compute_advantages(rewards:    np.ndarray,
         gae_lambda (float, optional): [description]. Defaults to 1.0.
 
     Returns:
-        [type]: [description]
+        np.ndarray: GAE
     '''    
-    rewards = np.asarray(rewards).astype(np.float32)
-    values  = np.asarray(values).astype(np.float32)
-    dones   = np.asarray(dones).astype(np.float32)
-    advantages = np.zeros_like(values)
+    rew  = np.asarray(rew).astype(np.float32)
+    val  = np.asarray(val).astype(np.float32)
+    done = np.asarray(done).astype(np.float32)
+    adv  = np.zeros_like(rew)
 
-    last_gae_lam = 0
-    num_steps = len(dones)
-    next_non_terminal = 1.0 - dones[-1]
-    next_value = values[-1]
+    gae = 0.
+    next_ndone = 1.-done[-1]
+    next_val = val[-1]
 
-    for step in reversed(range(num_steps)):
-        delta = rewards[step] + gamma * next_value * next_non_terminal - values[step]
-        last_gae_lam = delta + gamma * gae_lambda * next_non_terminal * last_gae_lam
-        advantages[step] = last_gae_lam
-        # prepare for the next step
-        next_non_terminal = 1.0 - dones[step]
-        next_value = values[step]
-    return advantages
+    for t in reversed(range(len(dones))):
+        delta = rew[t] + gamma * next_val * next_ndone - val[t]
+        gae = delta + gamma * gae_lambda * next_ndone * gae
+        adv[t] = gae
+        next_done = 1.-done[t]
+        next_val = val[t]
+    return adv
