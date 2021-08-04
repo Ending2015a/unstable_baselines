@@ -9,7 +9,7 @@ import numpy as np
 import numba as nb
 
 # --- my module ---
-from unstable_baselines import utils
+from unstable_baselines import utils as ub_utils
 
 class NestedReplayBuffer():
     def __init__(self, buffer_size):
@@ -29,7 +29,7 @@ class NestedReplayBuffer():
     def add(self, data):
         # count the first dimension
         _len_op = lambda v: len(v)
-        n_samples = utils.nested_iter(data, _len_op, first=True)
+        n_samples = ub_utils.nested_iter(data, _len_op, first=True)
         # prepare indices
         inds = np.arange(self.pos, self.pos+n_samples) % self.buffer_size
         # copy data into the buffer
@@ -54,7 +54,7 @@ class NestedReplayBuffer():
             else:
                 shape = (self.buffer_size,)
             return np.zeros(shape, dtype=v.dtype)
-        self.data = utils.nested_iter(data, op=_create_space)
+        self.data = ub_utils.nested_iter(data, op=_create_space)
 
     def isnull(self):
         return self.data is None
@@ -108,7 +108,7 @@ class NestedReplayBuffer():
             raise RuntimeError('Buffer space not created, please `add` data, '
                     ' or calling `melloc_by_batch_samples` first.')
         _slice_op = lambda v: v[indices]
-        return utils.nested_iter(self.data, _slice_op)
+        return ub_utils.nested_iter(self.data, _slice_op)
 
     def _set_data(self, data, indices, _auto_create_space=True):
         # Create space or raise empty error, if the spae is not created
@@ -121,7 +121,7 @@ class NestedReplayBuffer():
         def _assign_op(data_tuple, idx):
             v, data = data_tuple
             data[idx, ...] = np.asarray(v).astype(data.dtype).copy()
-        utils.nested_iter_tuple((data, self.data), _assign_op, idx=indices)
+        ub_utils.nested_iter_tuple((data, self.data), _assign_op, idx=indices)
         
 
 class DictReplayBuffer(NestedReplayBuffer):
@@ -158,7 +158,7 @@ class TrajReplayBuffer(DictReplayBuffer):
     def make(self):
         if self.ready_for_sampling:
             raise RuntimeError('The buffer has already made.')
-        data = utils.nested_to_numpy(self.data)
+        data = ub_utils.nested_to_numpy(self.data)
         # flatten data (steps, n_samples, ...) -> (n_samples*steps, ...)
         def _swap_flatten(v):
             shape = v.shape
@@ -171,8 +171,8 @@ class TrajReplayBuffer(DictReplayBuffer):
                 v = v.swapaxes(0, 1).reshape(shape[0]*shape[1], *shape[2:])
             return v
         _len_op = lambda v: len(v)
-        data = utils.nested_iter(data, _swap_flatten)
-        n_samples = utils.nested_iter(data, _len_op, first=True)
+        data = ub_utils.nested_iter(data, _swap_flatten)
+        n_samples = ub_utils.nested_iter(data, _len_op, first=True)
         self.data = data
         self.n_samples = n_samples
         self.ready_for_sampling = True
@@ -180,7 +180,7 @@ class TrajReplayBuffer(DictReplayBuffer):
     def melloc_by_batch_samples(self, data):
         def _create_space(v):
             return []
-        self.data = utils.nested_iter(data, op=_create_space)
+        self.data = ub_utils.nested_iter(data, op=_create_space)
     
     def isnull(self):
         return self.data is None
@@ -208,7 +208,7 @@ class TrajReplayBuffer(DictReplayBuffer):
         def _append_op(data_tuple):
             v, data = data_tuple
             data.append(v)
-        utils.nested_iter_tuple((data, self.data), _append_op)
+        ub_utils.nested_iter_tuple((data, self.data), _append_op)
 
     def _sample_data(self, batch_size):
         n_samples = len(self)

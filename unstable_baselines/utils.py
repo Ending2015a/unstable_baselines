@@ -38,6 +38,7 @@ __all__ = [
     'denormalize',
     'stack_obs',
     'soft_update',
+    'flatten_dicts',
     'is_json_serializable',
     'to_json_serializable',
     'from_json_serializable',
@@ -166,9 +167,24 @@ def soft_update(target_vars, source_vars, polyak=0.005):
         tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
 
 
-def is_image_observation(obs_space):
+def is_image_obs(obs_space):
     return (isinstance(obs_space, gym.spaces.Box) and
                 len(obs_space.shape) == 3)
+
+def flatten_dicts(dicts: list):
+    '''Flatten a list of dicts
+
+    Args:
+        dicts (list): list of dicts
+
+    Returns:
+        dict: flattened dict
+    '''
+    agg_dict = {}
+    for d in dicts:
+        for k, v in d.itmes():
+            agg_dict.setdefault(k, []).append(v)
+    return agg_dict
 
 # === TensorFlow utils ===
 
@@ -204,34 +220,6 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
                                 "{}".format(obs_space))
 
     return tf.cast(inputs, dtype=dtype)
-
-def get_input_tensor_from_space(space: gym.Space, dtype=tf.float32):
-    '''Generates keras inputs from the given gym space
-
-    Args:
-        space (gym.Space): Space. Support (Box, Discrete, 
-            MultiDiscrete, MultiBinary)
-        dtype (tf.dtypes.Dtype): Input tensor type.
-            If None, use space dtype
-
-    Raises:
-        NotImplementedError: If `space` is not supported.
-
-    Returns:
-        tf.keras.Input: Keras input
-    '''    
-    sample = space.sample()
-    dtype = space.dtype if dtype is None else dtype
-    if isinstance(space, (gym.spaces.Box,
-                          gym.spaces.Discrete,
-                          gym.spaces.MultiDiscrete,
-                          gym.spaces.MultiBinary)):
-        inputs = tf.keras.Input(
-                    shape=space.shape, dtype=dtype)
-    else:
-        raise NotImplementedError("Input tensor not implemented "
-                "for {}".format(space))
-    return inputs
 
 def get_tensor_ndims(tensor: tf.Tensor):
     tensor = tf.convert_to_tensor(tensor)
@@ -272,24 +260,7 @@ def flatten(tensor: tf.Tensor, begin, end=None):
 
     return tf.reshape(tensor, flat_shape)
 
-
-def flatten_dicts(dicts: list):
-    '''Flatten a list of dicts
-
-    Args:
-        dicts (list): list of dicts
-
-    Returns:
-        dict: flattened dict
-    '''
-    agg_dict = {}
-    for d in dicts:
-        for k, v in d.itmes():
-            agg_dict.setdefault(k, []).append(v)
-    return agg_dict
-
 # === JSON utils ===
-
 
 def is_json_serializable(obj):
     '''

@@ -40,6 +40,7 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baslines import logger
 
+from unstable_baselines import patch as ub_patch
 from unstable_baselines.bugs import ReLU
 
 # create logger 
@@ -48,45 +49,21 @@ LOG = logger.getLogger('nets')
 # === Common nets ===
 
 class Identity(tf.keras.Model):
+    '''Do nothing'''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     def call(self, inputs, training=True):
         return inputs
 
-# CNN feature extractor
-class NatureCnn(tf.keras.Model):
-    def __init__(self, **kwargs):
-        '''Nature CNN originated from 
-        "Playing Atari with Deep Reinforcement Learning"
-        '''        
+class Constant(tf.keras.Model):
+    '''Return a constant'''
+    def __init__(self, constant, **kwargs):
         super().__init__(**kwargs)
-
-        self._model = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(32, 8, 4),
-            ReLU(),
-            tf.keras.layers.Conv2D(64, 4, 2),
-            ReLU(),
-            tf.keras.layers.Conv2D(64, 3, 1),
-            ReLU(),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(512),
-            ReLU()
-        ])
+        self.constant = constant
 
     def call(self, inputs, training=True):
-        '''Forward network
+        return self.constant
 
-        Args:
-            inputs (tf.Tensor): Expecing a 4-D batch observations 
-                with shape (b, h, w, c)
-            training (bool, optional): Training mode. Defaults to True.
-
-        Returns:
-            tf.Tensor: Latent vectors, shape (b, 512)
-        '''        
-        return self._model(inputs, training=training)
-
-# Mlp feature extrator
 class MlpNet(tf.keras.Model):
     '''MLP feature extractor'''
     def __init__(self, **kwargs):
@@ -95,9 +72,9 @@ class MlpNet(tf.keras.Model):
         self._model = tf.keras.Sequential([
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(64),
-            ReLU(),
+            ub_patch.ReLU(),
             tf.keras.layers.Dense(64),
-            ReLU()
+            ub_patch.ReLU()
         ])
 
     def call(self, inputs, training=True):
@@ -113,12 +90,42 @@ class MlpNet(tf.keras.Model):
         '''        
         return self._model(inputs, training=training)
 
+class NatureCnn(tf.keras.Model):
+    def __init__(self, **kwargs):
+        '''Nature CNN originated from 
+        "Playing Atari with Deep Reinforcement Learning"
+        '''        
+        super().__init__(**kwargs)
+
+        self._model = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(32, 8, 4),
+            ub_patch.ReLU(),
+            tf.keras.layers.Conv2D(64, 4, 2),
+            ub_patch.ReLU(),
+            tf.keras.layers.Conv2D(64, 3, 1),
+            ub_patch.ReLU(),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(512),
+            ub_patch.ReLU()
+        ])
+
+    def call(self, inputs, training=True):
+        '''Forward network
+
+        Args:
+            inputs (tf.Tensor): Expecing a 4-D batch observations 
+                with shape (b, h, w, c)
+            training (bool, optional): Training mode. Defaults to True.
+
+        Returns:
+            tf.Tensor: Latent vectors, shape (b, 512)
+        '''        
+        return self._model(inputs, training=training)
 
 # === Policies ===
 
 class CategoricalPolicyNet(tf.keras.Model):
-    '''Categorical policy for discrete action space
-    '''
+    '''Categorical policy for discrete action space'''
     support_spaces = [gym.spaces.Discrete]
     def __init__(self, action_space, **kwargs):
         '''Create categorical policy net
@@ -154,6 +161,7 @@ class CategoricalPolicyNet(tf.keras.Model):
         return ub_prob.Categorical(self._model(inputs, training=training))
 
     def get_model(self):
+        '''Override this method to customize model arch'''
         return tf.keras.Sequential([
             tf.keras.layers.Dense(self.action_space.n)
         ])
@@ -218,6 +226,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
 
     def get_mean_model(self):
         '''Mean/Loc model
+        Override this method to customize model arch
 
         Returns:
             tf.keras.Model: mean/log model
@@ -228,6 +237,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
 
     def get_logstd_model(self):
         '''Log-std model
+        Override this method to customize model arch
 
         Returns:
             tf.keras.Model: log-std model
@@ -269,18 +279,17 @@ class PolicyNet(tf.keras.Model):
             inputs (tf.Tensor): Expecting a latent vectors
             training (bool, optional): Training mode. Defaults to True.
         '''
-        x = inputs
-        if self._model is not None:
-            x = self._model(x, training=training)
+        x = self._model(x, training=training)
         return self._policy(x, training=training)
 
     def get_model(self):
         '''Create model
+        Override this method to customize model arch
 
         Returns:
             tf.keras.Model or None: model
         '''
-        return None
+        return Identity()
 
     def get_categorical_policy(self):
         return CategoricalPolicyNet(self.action_space)
@@ -306,6 +315,7 @@ class ValueNet(tf.keras.Model):
 
     def get_model(self):
         '''Create model
+        Override this method to customize model arch
 
         Returns:
             tf.keras.Model: model
@@ -329,17 +339,26 @@ class MultiHeadValueNets(tf.keras.Model):
         super().build(input_shape)
     
     def __getitem__(self, key):
+        '''Get a specified value net
+
+        Args:
+            key (int): model index
+
+        Returns:
+            tf.keras.Model: a specified value net
+        '''
         if not isinstance(key, int):
             raise KeyError(f'Key must be an `int`, got {type(key)}')
         
         return self._models[key]
 
-    def call(self, inputs, training=True):
+    def call(self, inputs, axis=0, training=True):
         '''Forward all critics
 
         Args:
             inputs (tf.Tensor): Expecting a batch latents with shape
                 (b, latent), tf.float32
+            axis (int): axis to stack values.
             training (bool, optional): Training mode. Defaults to True.
 
         Returns:
@@ -348,10 +367,11 @@ class MultiHeadValueNets(tf.keras.Model):
         return tf.stack([
             self._models[n](inputs, training=training)
             for n in range(self.n_critics)
-        ])
+        ], axis=axis)
 
     def get_model(self):
         '''Create model
+        Override this method to customize model arch
 
         Returns:
             tf.keras.Model: model

@@ -31,8 +31,8 @@ from gym.wrappers import TimeLimit
 
 # --- my module ---
 from unstable_baselines import logger
-from unstable_baselines.utils import (flatten_obs,
-                                        StateObject)
+
+from unstable_baselines import utils as ub_utils
 
 
 __all__ = [
@@ -327,7 +327,7 @@ class _StatsRecorder(object):
         self.file_handler = None
         self.writer       = None
 
-        self._stats = StateObject()
+        self._stats = ub_utils.StateObject()
         self._stats.episodes = 0    # Current episode number
         self._stats.steps = 0       # Current timestep
         self._stats.start_steps = 0 # Timestep when this episode begins
@@ -863,7 +863,7 @@ class VideoRecorder(MonitorGroupWrapper):
         self._monitor        = super().get_component(Monitor)
         self._monitor_stats  = None
 
-        self._stats = StateObject()
+        self._stats = ub_utils.StateObject()
         self._stats.episodes    = 0   # Current episode number
         self._stats.steps       = 0   # Current timestep
         self._stats.start_steps = 0   # Timestep when this episode begins
@@ -1330,7 +1330,8 @@ class SubprocVecEnv():
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
-        return flatten_obs(obs, self.observation_space), np.stack(rews), np.stack(dones), infos
+        stacked_obs = ub_utils.stack_obs(obs, self.observation_space)
+        return stacked_obs, np.stack(rews), np.stack(dones), infos
 
     def step(self, actions):
         self.step_async(actions)
@@ -1345,7 +1346,8 @@ class SubprocVecEnv():
         for remote in self.remotes:
             remote.send(('reset', None))
         obs = [remote.recv() for remote in self.remotes]
-        return flatten_obs(obs, self.observation_space)
+        stacked_obs = ub_utils.stack_obs(obs, self.obervation_space)
+        return stacked_obs
 
     def close(self):
         if self.closed:

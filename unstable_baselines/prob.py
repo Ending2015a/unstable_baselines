@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
-from unstable_baselines import utils
+from unstable_baselines import utils as ub_utils
 
 
 __all__ = [
@@ -207,14 +207,14 @@ class MultiNormal(Normal):
         Args:
             x (tf.Tensor): outcomes, (b, *shape)
         '''
-        x = utils.flatten(super().log_prob(x), 1) # (b, -1)
+        x = ub_utils.flatten(super().log_prob(x), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
     def entropy(self):
         '''
         Entropy
         '''
-        x = utils.flatten(super().entropy(), 1) # (b, -1)
+        x = ub_utils.flatten(super().entropy(), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
     def kl(self, q):
@@ -223,7 +223,7 @@ class MultiNormal(Normal):
 
         q: target probability distribution (MultiNormal)
         '''
-        x = utils.flatten(super().kl(q), 1) # (b, -1)
+        x = ub_utils.flatten(super().kl(q), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
 

@@ -24,22 +24,26 @@ import cloudpickle
 import numpy as np
 
 # --- my module ---
+from unstable_baselines import utils as ub_utils
 from unstable_baselines.utils import StateObject
 
 
 
-__all__ = ['Scheduler',
-           'ConstantScheduler',
-           'ConstScheduler',
-           'LinearScheduler',
-           'ExponentialScheduler',
-           'ExpScheduler',
-           'get_scheduler']
+__all__ = [
+    'get_scheduler',
+    'Scheduler',
+    'ConstantScheduler',
+    'ConstScheduler',
+    'LinearScheduler',
+    'ExponentialScheduler',
+    'ExpScheduler',
+    'MultiScheduler'
+]
 
 # === Schedulers ===
 
 
-class _RegisteredSchedulerClass(StateObject):
+class _RegisteredSchedulerClass(ub_utils.StateObject):
 
     default = None
 
@@ -60,7 +64,7 @@ _RegisteredScheduler = _RegisteredSchedulerClass()
 def get_scheduler(*args, **kwargs):
     return Scheduler.get_scheduler(*args, **kwargs)
 
-class Scheduler(StateObject):
+class Scheduler(ub_utils.StateObject):
     __slots__ = ['state']
     
     @enum.unique
