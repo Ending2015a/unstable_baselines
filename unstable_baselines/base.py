@@ -733,8 +733,9 @@ class TrainableModel(SavableModel):
 
     def reset(self):
         self.num_timesteps = 0
-        self.num_gradsteps = 0
         self.num_epochs    = 0
+        self.num_subepochs = 0
+        self.num_gradsteps = 0
         self.progress      = 0
 
     @abc.abstractmethod
@@ -951,17 +952,29 @@ class BaseAgent(SavableModel):
         return {}
 
 
-class OffPolicyModel(TrainableModel):
-    '''Off-policy model provides a common interface for off-policy RL
-    algorithms.
+class BaseRLModel(TrainableModel):
+    '''BaseRLModel provides a common interface for either
+    off-policy or on-policy RL algos.
+    
+    The main differences between off/on policy are:
+    * On-policy has no RB warming up stage while off-policy has.
+        So `is_wraming_up()` and `wramup_steps` are diabled
+        in default in on-policy template, but one can still
+         use them.
+    * On-policy may need to precompute rollout returns, this can
+        be implemented in `run()`.
+    * Some on-policy algo may need to iterate through all rollout
+        samples for many times, this can be implemented by setting
+        `n_subepochs` and overriding `_train_subepoch()`
     '''
     support_obs_spaces = []
     support_act_spaces = []
     def __init__(self, env,
-                       n_steps:      int = 4,
-                       n_gradsteps:  int = 1,
-                       wramup_steps: int = int(1e4),
-                       batch_size:   int = 128,
+                       n_steps:      int,
+                       n_subepochs:  int,
+                       n_gradsteps:  int,
+                       wramup_steps: int,
+                       batch_size:   int,
                        verbose:      int = 0,
                        observation_space = None,
                        action_space      = None,
@@ -969,6 +982,7 @@ class OffPolicyModel(TrainableModel):
         super().__init__(**kwargs)
 
         self.n_steps      = n_steps
+        self.n_subepochs  = n_subepochs
         self.n_gradsteps  = n_gradsteps
         self.wramup_steps = wramup_steps
         self.batch_size   = batch_size
@@ -1037,8 +1051,8 @@ class OffPolicyModel(TrainableModel):
         raise NotImplementedError('Method not implemented')
 
     @abc.abstracmethod
-    def _run_step(self, obs=None):
-        '''Collecting one sample
+    def _collect_step(self, obs=None):
+        '''Collect one step
 
         Args:
             obs (np.ndarray, optional): Current observations. Defaults to None.
@@ -1048,25 +1062,39 @@ class OffPolicyModel(TrainableModel):
         '''
         raise NotImplementedError('Method not implemented')
 
-    def run(self, steps, obs=None):
-        '''Collecting rollouts
+    def collect(self, steps, obs=None):
+        '''Collect rollouts
 
         Args:
             steps (int): number of steps to collect
-            obs (np.ndarray, optional): last observations. Defaults to None.
+            obs (np.ndarray, optional): current observations. Defaults to None.
+                set to None to reset the envs.
 
         Returns:
-            np.ndarray: last observations.
+            np.ndarray: current observations
         '''
         if obs is None:
             obs = self.env.reset()
         
         for _ in range(steps):
-            obs = self._run_step(obs)
+            obs = self._collect_step(obs)
             # update state
             self.num_timesteps += self.n_envs
 
         return obs
+
+    def run(self, steps, obs=None):
+        '''Run rollout collection procedure
+        You can do some buffer initialization here.
+
+        Args:
+            steps (int): number of steps to collect
+            obs (np.ndarray, optional): current observations. Defaults to None.
+        
+        Returns:
+            np.ndarray: current observations
+        '''
+        return self.collect(steps, obs=obs)
 
     def get_eval_metrics(self, results):
         '''Compute evaluation metrics from evaluation results
@@ -1123,8 +1151,7 @@ class OffPolicyModel(TrainableModel):
                 to run episodes until done.
 
         Return:
-            eps_rews: (list) episode rewards.
-            eps_steps: (list) episode length.
+            list: a list of dict which contains results per episode.
         '''
         if n_episodes <= 0:
             return None
@@ -1134,19 +1161,17 @@ class OffPolicyModel(TrainableModel):
             obs = env.reset()
             total_rews  = 0
             total_steps = 0
-
+            # eval one episode
             while total_steps != max_steps:
                 # predict action
                 acts = self.predict(obs)
                 # step environment
                 obs, rew, done, info = env.step(acts)
-                
                 total_rews += rew
                 total_steps += 1
-
                 if done:
                     break
-
+            # append eval results
             eps_info.append({
                 'rewards': total_rews,
                 'steps':   total_steps
@@ -1171,11 +1196,11 @@ class OffPolicyModel(TrainableModel):
         '''        
         raise NotImplementedError('Method not implemented')
 
-    def train(self, steps, batch_size, target_update):
-        '''Train one epoch
+    def _train_subepoch(self, gradsteps, batch_size, target_update):
+        '''Train one subepoch
 
         Args:
-            steps (int): Number of steps in this epoch.
+            gradsteps (int): Number of steps in this epoch.
             batch_size (int): mini-batch size.
             target_update (int): target networks update frequency.
 
@@ -1184,16 +1209,15 @@ class OffPolicyModel(TrainableModel):
         '''
         all_losses = []
 
-        for gradient_steps in range(steps):
+        for gradstep in range(gradsteps):
             # train one step
             losses = self._train_step(batch_size)
+            all_losses.append(losses)
             # update state
             self.num_gradsteps += 1
             # update target networks
             if self.num_gradsteps % target_update == 0:
                 self._update_target()
-            
-            all_losses.append(losses)
         # aggregate losses
         all_losses = ub_utils.flatten_dicts(all_losses)
         m_losses = {}
@@ -1201,7 +1225,118 @@ class OffPolicyModel(TrainableModel):
             m_losses[key] = np.mean(np.hstack(np.asarray(losses)))
         return m_losses
 
+    def train(self, subepochs, gradsteps, batch_size, target_update):
+        '''Train one epoch
+
+        Args:
+            subepochs (int): Number of subepochs
+            gradsteps (int): Number of gradients per subepoch
+            batch_size (int): batch size.
+            target_update (int): target networks update frequency.
+
+        Returns:
+            dict: loss dict
+        '''
+        all_losses = []
+        for subepoch in range(subepochs):
+            # train one subepoch
+            losses = self._train_subepoch(gradsteps, batch_size, target_update)
+            all_losses.append(losses)
+            # update states
+            self.num_subepochs += 1
+        # aggregate losses
+        all_losses = ub_utils.flatten_dicts(all_losses)
+        m_losses = {}
+        for name, losses in all_losses.items():
+            m_losses[name] = np.mean(np.hstack(np.asarray(losses)))
+        return m_losses
+
+    def _log_train(self, total_timesteps:   int,
+                         total_epochs:      int,
+                         time_start:      float, 
+                         last_time_spent: float,
+                         losses:           dict):
+        '''Print training log
+
+        Args:
+            total_timesteps (int): total training timesteps
+            total_epochs (int): total training epochs
+            time_start (float): timestamp when learning start (sec)
+            last_time_spent (float): time spent from learning started
+            losses (dict): loss dictionary
+        '''
+        # current time
+        time_now       = time.time()
+        # total time spent
+        time_spent     = (time_now - time_start)
+        # execution time (one epoch)
+        execution_time = time_spent - last_time_spent
+        # remaining time
+        remaining_time = (time_spent / self.progress)*(1.0-self.progress)
+        # eta
+        eta            = datetime.datetime.now() + datetime.timedelta(
+                                                        seconds=remaining_time)
+        # average steps per second
+        fps            = float(self.num_timesteps) / time_spent
+
+        self.LOG.set_header(f'Epoch {self.num_epochs}/{total_epochs}')
+        self.LOG.add_line()
+        self.LOG.add_row(f'Timesteps: {self.num_timesteps}/{total_timesteps}')
+        self.LOG.add_row(f'Steps/sec: {fps:.2f}')
+        self.LOG.add_row(f'Progress: {self.progress*100.0:.2f}%')
+
+        if self.verbose > 0:
+            self.LOG.add_row('Execution time', datetime.timedelta(seconds=execution_time))
+            self.LOG.add_row('Elapsed time',   datetime.timedelta(seconds=time_spent))
+            self.LOG.add_row('Remaining time', datetime.timedelta(seconds=remaining_time))
+            self.LOG.add_row('ETA',            eta.strftime('%Y-%m-%d %H:%M:%S'))
+            self.LOG.add_line()
+
+            if self.is_warming_up():
+                self.LOG.add_row(f'Collecting rollouts')
+            else:
+                for name, loss in losses.items():
+                    self.LOG.add_row(f'{name}: {loss:.6f}')
+
+        LOG.add_line()
+        LOG.flush('INFO')
+
+    def _log_eval(self, results, metrics):
+        '''Print evaluation log
+
+        Args:
+            results (list): evaluation results, returned from `eval()`
+            metrics (dict): evaluation metrics, returned from `get_eval_metrics()`
+        '''
+        n_episodes = len(results)
+        if self.verbose > 1:
+            self.LOG.set_header(f'Eval results')
+            for ep in range(n_episodes):
+                self.LOG.subgroup(f'Episode {ep+1}')
+                labels = '\n'.join(results[ep].keys())
+                values = '\n'.join(map('{}'.format, results[ep].values()))
+                
+                self.LOG.add_rows(fmt='{labels} {||} {values}', 
+                                    labels=labels, values=values)
+        self.LOG.subgroup('Metrics')
+        labels = '\n'.join(metrics.keys())
+        values = '\n'.join(map('{:.3f}'.format, metrics.values()))
+        self.LOG.add_rows(fmt='{labels} {||} {values}', 
+                            labels=labels, values=values)
+        self.LOG.add_line()
+        self.LOG.flush('INFO')
+
+    def _log_save(self, save_path, saved_path):
+        if self.verbose > 0:
+            # find the best model path
+            best_path = self._preload(save_path, best=True)
+            if best_path == os.path.abspath(saved_path):
+                self.LOG.info(f'[Best] Checkpoint saved to: {saved_path}')
+            else:
+                self.LOG.info(f'Checkpoint saved to: {saved_path}')
+
     def is_warming_up(self):
+        '''Return wraming up state'''
         return self.num_timesteps < self.wramup_steps
 
     def learn(self, total_timesteps:  int, 
@@ -1266,7 +1401,7 @@ class OffPolicyModel(TrainableModel):
         
         while self.num_timesteps < total_timesteps:
             # collect rollouts
-            obs = self._run(steps=self.n_steps, obs=obs)
+            obs = self.run(steps=self.n_steps, obs=obs)
 
             # update state
             self.num_epochs += 1
@@ -1276,52 +1411,26 @@ class OffPolicyModel(TrainableModel):
             if not self.is_warming_up():
                 # training
                 losses = self.train(
-                    self.n_gradsteps,
+                    subepochs     = self.n_subepochs,
+                    gradsteps     = self.n_gradsteps,
                     batch_size    = self.batch_size,
                     target_update = target_update
                 )
                 # write tensorboard
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
-                        for name, loss in losses.items():
-                            tf.summary.scalar(f'train/{name}', loss, step=self.num_timesteps)
+                        for name, value in losses.items():
+                            tf.summary.scalar(f'train/{name}', value, 
+                                                step=self.num_timesteps)
                     self.tb_writer.flush()
             # print training log
             if (log_interval is not None) and (self.num_epochs % log_interval == 0):
-                # current time
-                time_now       = time.time()
-                # execution time (one epoch)
-                execution_time = (time_now - time_start) - time_spent
-                # total time spent
-                time_spent     = (time_now - time_start)
-                # remaining time
-                remaining_time = (time_spent / self.progress)*(1.0-self.progress)
-                # eta
-                eta            = (datetime.datetime.now() + datetime.timedelta(seconds=remaining_time)).strftime('%Y-%m-%d %H:%M:%S')
-                # average steps per second
-                fps            = float(self.num_timesteps) / time_spent
+                # print log
+                self._log_train(total_timesteps, total_epochs, time_start, 
+                                time_spent, losses)
+                # update time_spent
+                time_spent = time.time() - time_start
 
-                self.LOG.set_header(f'Epoch {self.num_epochs}/{total_epochs}')
-                self.LOG.add_line()
-                self.LOG.add_row(f'Timesteps: {self.num_timesteps}/{total_timesteps}')
-                self.LOG.add_row(f'Steps/sec: {fps:.2f}')
-                self.LOG.add_row(f'Progress: {self.progress*100.0:.2f}%')
-
-                if self.verbose > 0:
-                    self.LOG.add_row('Execution time', datetime.timedelta(seconds=execution_time))
-                    self.LOG.add_row('Elapsed time',   datetime.timedelta(seconds=time_spent))
-                    self.LOG.add_row('Remaining time', datetime.timedelta(seconds=remaining_time))
-                    self.LOG.add_row('ETA',            eta)
-                    self.LOG.add_line()
-
-                    if self.is_warming_up():
-                        self.LOG.add_row(f'Collecting rollouts')
-                    else:
-                        for name, loss in losses:
-                            self.LOG.add_row(f'{name}: {loss:.6f}')
-
-                LOG.add_line()
-                LOG.flush('INFO')
             # evaluate model
             eval_metrics = None
             if (eval_env is not None) and (self.num_epochs % eval_interval == 0):
@@ -1339,21 +1448,7 @@ class OffPolicyModel(TrainableModel):
                             tf.summary.scalar(f'eval/{name}', value, step=self.num_timesteps)
                     self.tb_writer.flush()
                 
-                if self.verbose > 1:
-                    self.LOG.set_header(f'Eval results')
-                    for ep in range(eval_episodes):
-                        self.LOG.subgroup(f'Episode {ep+1}')
-                        labels = '\n'.join(eval_results[ep].keys())
-                        values = '\n'.join(map('{}'.format, eval_results[ep].values()))
-                        
-                        self.LOG.add_rows(fmt='{labels} {||} {values}', labels=labels, values=values)
-                
-                self.LOG.subgroup('Metrics')
-                labels = '\n'.join(eval_metrics.keys())
-                values = '\n'.join(map('{:.3f}'.format, eval_metrics.values()))
-                self.LOG.add_rows(fmt='{labels} {||} {values}', labels=labels, values=values)
-                self.LOG.add_line()
-                self.LOG.flush('INFO')
+                self._log_eval(eval_results, eval_metrics)
 
             # save model
             if ((save_path is not None) and (save_interval is not None)
@@ -1362,14 +1457,7 @@ class OffPolicyModel(TrainableModel):
                 checkpoint_metrics = self.get_save_metrics(eval_metrics)
                 saved_path = self.save(save_path, checkpoint_number=self.num_epochs,
                                         checkpoint_metrics=checkpoint_metrics)
-                if self.verbose > 0:
-                    self.LOG.info('Checkpoint saved to: {}'.format(saved_path))
-                
-                    # find the best model path
-                    best_path = self._preload(save_path, best=True)
-                    if best_path == os.path.abspath(saved_path):
-                        self.LOG.debug(' (Best)')
-        
+                self._log_save(save_path, saved_path)
         return self
 
     def get_config(self):
@@ -1380,6 +1468,7 @@ class OffPolicyModel(TrainableModel):
         '''
         config = {
             'n_steps':           self.n_steps,
+            'n_subepochs':       self.n_subepochs,
             'n_gradsteps':       self.n_gradsteps,
             'batch_size':        self.batch_size,
             'verbose':           self.verbose,
@@ -1413,7 +1502,7 @@ class OffPolicyModel(TrainableModel):
             filepath (str): path to save configuration
         '''
         _config = self.get_config()
-        _config.update(OffPolicyModel.get_config(self))
+        _config.update(BaseRLModel.get_config(self))
 
         config = {
             'state': self.state,
@@ -1421,3 +1510,73 @@ class OffPolicyModel(TrainableModel):
         }
 
         ub_utils.safe_json_dump(filepath, config)
+
+class OffPolicyModel(BaseRLModel):
+    def __init__(self, env,
+                       n_steps:      int = 4,
+                       n_subepochs:  int = 1,
+                       n_gradsteps:  int = 1,
+                       wramup_steps: int = int(1e4),
+                       batch_size:   int = 128,
+                       verbose:      int = 0,
+                       observation_space = None,
+                       action_space      = None,
+                       **kwargs):
+        super().__init__(
+            env               = env,
+            n_steps           = n_steps,
+            n_subepochs       = n_subepochs,
+            n_gradsteps       = n_gradsteps,
+            wramup_steps      = wramup_steps,
+            batch_size        = batch_size,
+            verbose           = verbose,
+            observation_space = observation_space,
+            action_space      = action_space,
+            **kwargs
+        )
+
+class OnPolicyModel(BaseRLModel):
+    def __init__(self, env,
+                       n_steps:      int = 256,
+                       n_subepochs:  int = 4,
+                       n_gradsteps:  int = None,
+                       wramup_steps: int = None,
+                       batch_size:   int = 128,
+                       verbose:      int = 0,
+                       observation_space = None,
+                       action_space      = None,
+                       **kwargs):
+        super().__init__(
+            env               = env,
+            n_steps           = n_steps,
+            n_subepochs       = n_subepochs,
+            n_gradsteps       = n_gradsteps,
+            wramup_steps      = wramup_steps,
+            batch_size        = batch_size,
+            verbose           = verbose,
+            observation_space = observation_space,
+            action_space      = action_space,
+            **kwargs
+        )
+
+    def run(self, steps, obs=None):
+        '''Run rollout collection procedure
+        One can do some buffer initialization/postprocessing here.
+        (eg. compute GAE) 
+
+        Args:
+            steps (int): number of steps to collect
+            obs (np.ndarray, optional): current observations. Defaults to None.
+        
+        Returns:
+            np.ndarray: current observations
+        '''
+        return self.collect(steps, obs=obs)
+
+    def _update_target(self):
+        '''Do nothing'''
+        pass
+
+    def is_warming_up(self):
+        '''On policy algo has no wram up stage'''
+        return False
