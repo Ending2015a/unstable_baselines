@@ -39,6 +39,7 @@ import tensorflow as tf
 
 # --- my module ---
 from unstable_baselines import logger
+from unstable_baselines import prob as ub_prob
 from unstable_baselines import patch as ub_patch
 
 # create logger 
@@ -134,7 +135,7 @@ class CategoricalPolicyNet(tf.keras.Model):
         '''
         super().__init__(**kwargs)
 
-        if not isinstance(action_space, self.support_spaces):
+        if not isinstance(action_space, tuple(self.support_spaces)):
             raise ValueError(f'{type(self).__name__} does not '
                 f'suprt action space of type `{type(action_space)}`')
 
@@ -143,7 +144,6 @@ class CategoricalPolicyNet(tf.keras.Model):
 
     def build(self, input_shape):
         self._model = self.get_model()
-        super().build(input_shape)
     
     def call(self, inputs, training=True):
         '''Forward network
@@ -179,13 +179,13 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         '''
         super().__init__(**kwargs)
 
-        if not isinstance(action_space, self.support_spaces):
+        if not isinstance(action_space, tuple(self.support_spaces)):
             raise ValueError(f'{type(self).__name__} does not '
                 f'suprt action space of type `{type(action_space)}`')
 
         self.action_space = action_space
         self.action_dims  = int(np.prod(action_space.shape))
-        self.output_shape = action_space.shape
+        self.action_shape = action_space.shape
         self.squash       = squash
 
         self._mean_model   = None
@@ -196,7 +196,6 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         '''
         self._mean_model   = self.get_mean_model()
         self._logstd_model = self.get_logstd_model()
-        super().build(input_shape)
 
     def call(self, inputs, training=True):
         '''Forward network
@@ -214,8 +213,9 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         logstd = self._logstd_model(inputs, training=training)
         std    = tf.math.softplus(logstd) + 1e-5
         # reshape as action space space
-        mean = tf.reshape(mean, self.output_shape)
-        std  = tf.reshape(std, self.output_shape)
+        output_shape = [-1] + list(self.action_shape)
+        mean = tf.reshape(mean, output_shape)
+        std  = tf.reshape(std, output_shape)
         # create multi variate gauss dist with tah squashed
         distrib = ub_prob.MultiNormal(mean, std)
         if self.squash:
@@ -249,7 +249,7 @@ class PolicyNet(tf.keras.Model):
     def __init__(self, action_space, squash=False, **kwargs):
         super().__init__(**kwargs)
 
-        if not isinstance(action_space, self.support_spaces):
+        if not isinstance(action_space, tuple(self.support_spaces)):
             raise ValueError(f'{type(self).__name__} does not '
                 f'support action space of type `{type(action_space)}`')
 
@@ -277,7 +277,7 @@ class PolicyNet(tf.keras.Model):
             inputs (tf.Tensor): Expecting a latent vectors
             training (bool, optional): Training mode. Defaults to True.
         '''
-        x = self._model(x, training=training)
+        x = self._model(inputs, training=training)
         return self._policy(x, training=training)
 
     def get_model(self):
@@ -301,12 +301,10 @@ class PolicyNet(tf.keras.Model):
 class ValueNet(tf.keras.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
         self._model       = None
 
     def build(self, input_shape):
         self._model = self.get_model()
-        super().build(input_shape)
 
     def call(self, inputs, training=True):
         return self._model(inputs, training=training)
@@ -323,18 +321,16 @@ class ValueNet(tf.keras.Model):
         ])
 
 class MultiHeadValueNets(tf.keras.Model):
-    def __init__(self, n_critics: int=2, **kwargs):
+    def __init__(self, n_heads: int=2, **kwargs):
         super().__init__(**kwargs)
-
-        self.n_critics    = n_critics
-        self._models      = None
+        self.n_heads = n_heads
+        self._models = None
 
     def build(self, input_shape):
         self._models = [
             self.get_model()
-            for n in range(n_critics)
+            for n in range(self.n_heads)
         ]
-        super().build(input_shape)
     
     def __getitem__(self, key):
         '''Get a specified value net
@@ -360,11 +356,11 @@ class MultiHeadValueNets(tf.keras.Model):
             training (bool, optional): Training mode. Defaults to True.
 
         Returns:
-            tf.Tensor: (n_critics, b, 1)
+            tf.Tensor: (n_heads, b, 1)
         '''
         return tf.stack([
             self._models[n](inputs, training=training)
-            for n in range(self.n_critics)
+            for n in range(self.n_heads)
         ], axis=axis)
 
     def get_model(self):

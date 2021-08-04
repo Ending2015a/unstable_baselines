@@ -32,7 +32,6 @@ WEIGHTS_NAME='weights'
 CONFIG_SUFFIX='.config.json'
 BEST_CHECKPOINT='best_checkpoint'
 
-
 # === Base model utils ===
 
 def _get_best_checkpoint_filename(save_dir, latest_filename):
@@ -148,12 +147,10 @@ def _get_best_checkpoint_state(checkpoint_dir, latest_filename=None):
     
     return ckpt
 
-
 def _prefix_to_checkpoint_path(prefix, format_version):
     if format_version == saver_pb2.SaverDef.V2:
         return prefix + '.index'
     return prefix
-
 
 def _checkpoint_exists(checkpoint_path):
     v2_path = _prefix_to_checkpoint_path(checkpoint_path,
@@ -197,28 +194,20 @@ def _delete_file_if_exists(filespec):
                 "process/thread is also deleting/moving the same file".format(
                     pathname))
 
-
-
 def _get_checkpoint_manager(checkpoint, 
                             directory,
                             max_to_keep=None,
                             checkpoint_name=WEIGHTS_NAME,
                             metrics_compare_fn=None,
                             **kwargs):
-    
-    # manager = tf.train.CheckpointManager(
-    #         checkpoint,
-    #         directory=directory,
-    #         checkpoint_name=checkpoint_name
-    #         max_to_keep=max_to_keep,
-    #         **kwargs)
-    manager = CheckpointManager(checkpoint=checkpoint,
-                                directory=directory,
-                                max_to_keep=max_to_keep,
-                                checkpoint_name=checkpoint_name,
-                                metrics_compare_fn=metrics_compare_fn,
-                                **kwargs)
-
+    manager = CheckpointManager(
+        checkpoint=checkpoint,
+        directory=directory,
+        max_to_keep=max_to_keep,
+        checkpoint_name=checkpoint_name,
+        metrics_compare_fn=metrics_compare_fn,
+        **kwargs
+    )
     return manager
 
 def _get_latest_checkpoint_number(latest_checkpoint):
@@ -227,14 +216,12 @@ def _get_latest_checkpoint_number(latest_checkpoint):
 
     if latest_checkpoint is None or failed to get number, return None
     '''
-
     checkpoint_number = None
     if latest_checkpoint and isinstance(latest_checkpoint, str):
         if '-' in latest_checkpoint:
             number_str = latest_checkpoint.rsplit('-', 1)[1]
             if number_str.isdigit():
                 checkpoint_number = int(number_str)
-
     return checkpoint_number
 
 
@@ -279,7 +266,8 @@ class CheckpointManager(tf.train.CheckpointManager):
             checkpoint_name=checkpoint_name,
             step_counter=step_counter,
             checkpoint_interval=checkpoint_interval,
-            init_fn=init_fn)
+            init_fn=init_fn
+        )
         
         if metrics_compare_fn is None:
             metrics_compare_fn = _default_metric_compare_fn
@@ -903,10 +891,10 @@ class BaseAgent(SavableModel):
             raise ValueError('Action space not provided, '
                 f'{action_space}')
         # check if observation/action spaces supportted
-        if not isinstance(observation_space, self.support_obs_spaces):
+        if not isinstance(observation_space, tuple(self.support_obs_spaces)):
             raise RuntimeError(f'{type(self).__name__} does not support the '
                 f'observation spaces of type {type(observation_space)}')
-        if not isinstance(action_space, self.support_act_spaces):
+        if not isinstance(action_space, tuple(self.support_act_spaces)):
             raise RuntimeError(f'{type(self).__name__} does not support the '
                 f'actions spaces of type {type(action_space)}')
 
@@ -1021,10 +1009,10 @@ class BaseRLModel(TrainableModel):
                 raise RuntimeError('Action space does not match, expected '
                     f'{self.action_space}, got {env.action_space}')
         # check if observation/action spaces supportted
-        if not isinstance(env.observation_space, self.support_obs_spaces):
+        if not isinstance(env.observation_space, tuple(self.support_obs_spaces)):
                 raise RuntimeError('This algorithm does not support observation '
                     f'spaces of type {type(env.observation_space)}')
-        if not isinstance(env.action_space, self.support_act_spaces):
+        if not isinstance(env.action_space, tuple(self.support_act_spaces)):
             raise RuntimeError('This algorithm does not support action space '
                 f'of type {type(env.action_space)}')
 
