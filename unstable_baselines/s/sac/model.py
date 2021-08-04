@@ -124,8 +124,8 @@ class Agent(ub.base.BaseAgent):
     support_obs_spaces = [gym.spaces.Box]
     def __init__(self, observation_space, 
                        action_space,
-                       n_critics:  int = 2,
                        squash:    bool = True,
+                       n_critics:  int = 2,
                        **kwargs):
         '''SAC Agent
 
@@ -135,11 +135,11 @@ class Agent(ub.base.BaseAgent):
         '''
         super().__init__(observation_space, action_space, **kwargs)
 
-        self.n_critics  = n_critics
-        self.squash     = squash
+        self.squash    = squash
+        self.n_critics = n_critics
 
-        self.critic = None
         self.actor  = None
+        self.critic = None
 
         if observation_space is not None and action_space is not None:
             self.setup_model()
@@ -153,13 +153,13 @@ class Agent(ub.base.BaseAgent):
         '''
         # --- setup model ---
         # create actor, critic net
-        self.critic = Critic(action_space, n_critics=self.n_critics)
         self.actor  = Actor(action_space, squash=self.squash)
+        self.critic = Critic(action_space, n_critics=self.n_critics)
         # construct networks
-        obs_inputs = ub.utils.get_input_tensor_from_space(observation_space)
-        act_inputs = ub.utils.get_input_tensor_from_space(action_space)
-        self._fwd_actor(obs_inputs, proc_obs=False)
-        self._fwd_critic([obs_inputs, act_inputs], proc_obs=False)
+        obs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
+        act = tf.keras.Input(shape=self.action_space.shape, dtype=tf.float32)
+        self._fwd_actor(obs, proc_obs=False)
+        self._fwd_critic([obs, act], proc_obs=False)
 
     def map_action(self, act):
         '''Map raw action (from policy) to env action range
@@ -177,6 +177,24 @@ class Agent(ub.base.BaseAgent):
                     act = np.clip(act, self.action_space.low,
                                        self.action_space.high)
         return act
+
+    def _fwd_actor(self, inputs, proc_obs=True, training=True):
+        '''Forward actor
+
+        Args:
+            inputs (tf.Tensor): batch observations in shape
+                (batch, obs_spce.shape), tf.float32
+            proc_obs (bool, optional): preprocess observations. Default
+                to True.
+            training (bool, optional): Training mode. Defaults to True.
+
+        Returns:
+            Distribution: Policy distribution
+        '''
+        if proc_obs:
+            # cast and normalize inputs (eg. image in uint8)
+            inputs = self.map_observation(inputs)
+        return self.actor(inputs, training=training)
 
     def _fwd_critic(self, inputs, proc_obs=True, training=True):
         '''Forward critic
@@ -200,24 +218,6 @@ class Agent(ub.base.BaseAgent):
         else:
             inputs = [obs]
         return self.critic(inputs, training=training)
-    
-    def _fwd_actor(self, inputs, proc_obs=True, training=True):
-        '''Forward actor
-
-        Args:
-            inputs (tf.Tensor): batch observations in shape
-                (batch, obs_spce.shape), tf.float32
-            proc_obs (bool, optional): preprocess observations. Default
-                to True.
-            training (bool, optional): Training mode. Defaults to True.
-
-        Returns:
-            Distribution: Policy distribution
-        '''
-        if proc_obs:
-            # cast and normalize inputs (eg. image in uint8)
-            inputs = self.map_observation(inputs)
-        return self.actor(inputs, training=training)
 
     def _fwd(self, inputs, proc_obs=True, training=True):
         return self._fwd_actor(inputs, proc_obs=proc_obs, training=training)
@@ -436,7 +436,7 @@ class SAC(ub.base.OffPolicyModel):
         self._setup_optimizer()
         # initialize target
         self.agent_target.update(self.agent)
-
+        # set up target entropy: dim(A)
         if self.target_ent is None:
             self.target_ent = -np.prod(self.action_space.shape)
 
@@ -446,8 +446,7 @@ class SAC(ub.base.OffPolicyModel):
                    proc_act: bool = False,
                    det:      bool = False,
                    training: bool = True):
-        '''See Agent.call
-        '''
+        '''See Agent.call'''
         return self.agent(
             inputs, 
             proc_obs = proc_obs,
@@ -460,8 +459,7 @@ class SAC(ub.base.OffPolicyModel):
                       proc_obs: bool = True,
                       proc_act: bool = True,
                       det:      bool = True):
-        '''See Agent.predict
-        '''
+        '''See Agent.predict'''
         return self.agent.predict(
             inputs, 
             proc_obs = proc_obs,
@@ -470,7 +468,7 @@ class SAC(ub.base.OffPolicyModel):
         )
 
     def _run_step(self, obs=None):
-        '''Collecting one sample
+        '''Collect one sample
 
         Args:
             obs (np.ndarray, optional): Current observations. Defaults to None.
