@@ -11,7 +11,7 @@ import numpy as np
 # --- my module ---
 
 class TestCase(unittest.TestCase):
-    def assertArrayEqual(self, a, b, msg=None):
+    def assertArrayEqual(self, a, b, msg=''):
         a = np.asarray(a)
         b = np.asarray(b)
         self.assertEqual(a.shape, b.shape,

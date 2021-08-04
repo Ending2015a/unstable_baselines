@@ -83,13 +83,13 @@ class TestBaseModule(TestCase):
     '''Test unstable_baselines.base module
 
     Class list:
-    [ ] CheckpointManager
-        [ ] best_checkpoint
-        [ ] best_checkpoint_metrics
-        [ ] _record_checkpoint_state
-        [ ] _sweep_checkpoints
-        [ ] save
-    [ ] SavableModel
+    [-] CheckpointManager
+        [-] best_checkpoint
+        [-] best_checkpoint_metrics
+        [-] _record_checkpoint_state
+        [-] _sweep_checkpoints
+        [-] save
+    [-] SavableModel
         [x] get_config
         [x] from_config
         [x] save_config
@@ -97,24 +97,24 @@ class TestBaseModule(TestCase):
         [x] save
         [x] _preload
         [x] load
-        [ ] update
+        [-] update
     [ ] TrainableModel
         [ ] eval
         [ ] save_config
         [ ] load_config
 
     Function list:
-    [ ] _get_best_checkpoint_filename
-    [ ] _generate_best_checkpoint_state
-    [ ] _update_best_checkpoint_state
-    [ ] _get_best_checkpoint_state
-    [ ] _prefix_to_checkpoint_path
-    [ ] _check_checkpoint_exists
-    [ ] _get_best_checkpoint
-    [ ] _delete_file_if_exists
+    [-] _get_best_checkpoint_filename
+    [-] _generate_best_checkpoint_state
+    [-] _update_best_checkpoint_state
+    [-] _get_best_checkpoint_state
+    [-] _prefix_to_checkpoint_path
+    [-] _check_checkpoint_exists
+    [-] _get_best_checkpoint
+    [-] _delete_file_if_exists
     [x] _get_checkpoint_manager
     [x] _get_latest_checkpoint_number
-    [ ] _default_metric_compare_fn
+    [-] _default_metric_compare_fn
     '''
     def check_save(self, model,
                          save_path, 
