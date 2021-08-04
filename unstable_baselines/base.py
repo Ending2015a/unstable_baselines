@@ -9,6 +9,7 @@ import logging
 import collections
 
 # --- 3rd party ---
+import gym
 import numpy as np
 import tensorflow as tf
 
@@ -1050,7 +1051,7 @@ class BaseRLModel(TrainableModel):
         '''        
         raise NotImplementedError('Method not implemented')
 
-    @abc.abstracmethod
+    @abc.abstractmethod
     def _collect_step(self, obs=None):
         '''Collect one step
 

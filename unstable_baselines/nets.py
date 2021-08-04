@@ -38,10 +38,8 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
-from unstable_baslines import logger
-
+from unstable_baselines import logger
 from unstable_baselines import patch as ub_patch
-from unstable_baselines.bugs import ReLU
 
 # create logger 
 LOG = logger.getLogger('nets')

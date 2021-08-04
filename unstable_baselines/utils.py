@@ -47,7 +47,7 @@ __all__ = [
     'safe_json_dumps',
     'safe_json_loads',
     'safe_json_dump',
-    'safe_json_load'.
+    'safe_json_load',
     'nested_iter',
     'nested_iter_tuple',
     'nested_to_numpy'
