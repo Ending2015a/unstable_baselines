@@ -98,10 +98,14 @@ class TestBaseModule(TestCase):
         [x] _preload
         [x] load
         [-] update
-    [ ] TrainableModel
-        [ ] eval
-        [ ] save_config
-        [ ] load_config
+    [-] TrainableModel
+        [-] eval
+        [-] save_config
+        [-] load_config
+    [-] BaseAgent
+    [-] BaseRLModel
+    [-] OffPolicyModel
+    [-] OnPolicyModel
 
     Function list:
     [-] _get_best_checkpoint_filename
