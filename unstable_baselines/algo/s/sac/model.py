@@ -44,7 +44,10 @@ import unstable_baselines as ub
 class Actor(ub.nets.PolicyNet):
     '''Actor network'''
     support_spaces = [gym.spaces.Box]
-    def __init__(self, action_space, squash=True, **kwargs):
+    def __init__(self, action_space, 
+                       squash: bool = True, 
+                       units:  list = [256, 256],
+                       **kwargs):
         '''Create actor
 
         Args:
@@ -54,6 +57,7 @@ class Actor(ub.nets.PolicyNet):
                 Defaults to True.
         '''        
         super().__init__(action_space, squash=squash, **kwargs)
+        self.units = units
 
     def call(self, inputs, training=True):
         '''Forward actor
@@ -70,22 +74,21 @@ class Actor(ub.nets.PolicyNet):
 
     def get_model(self):
         '''Base model'''
-        return tf.keras.Sequential([
-            tf.keras.layers.Dense(256),
-            ub.patch.ReLU(),
-            tf.keras.layers.Dense(256),
-            ub.patch.ReLU(),
-        ])
+        return ub.nets.MlpNet(self.units)
 
 class Critic(ub.nets.MultiHeadValueNets):
     '''Critic networks'''
-    def __init__(self, action_space, n_critics: int=2, **kwargs):
+    def __init__(self, action_space, 
+                       n_critics: int = 2, 
+                       units:    list = [256, 256],
+                       **kwargs):
         '''Create critics, state-action value function
 
         Args:
             n_critics (int, optional): number of critics. Defaults to 2.
         '''        
-        super().__init__(n_critics=n_critics, **kwargs)
+        super().__init__(n_heads=n_critics, **kwargs)
+        self.units = units
 
         if isinstance(action_space, gym.spaces.Box):
             self.action_dims = 1
@@ -111,10 +114,7 @@ class Critic(ub.nets.MultiHeadValueNets):
     def get_model(self):
         return tf.keras.Sequential([
             tf.keras.layers.Concatenate(),
-            tf.keras.layers.Dense(256),
-            ub.patch.ReLU(),
-            tf.keras.layers.Dense(256),
-            ub.patch.ReLU(),
+            ub.nets.MlpNet(self.units),
             tf.keras.layers.Dense(self.action_dims)
         ])
 
@@ -122,21 +122,29 @@ class Critic(ub.nets.MultiHeadValueNets):
 class Agent(ub.base.BaseAgent):
     support_obs_spaces = [gym.spaces.Box]
     support_obs_spaces = [gym.spaces.Box]
-    def __init__(self, observation_space, 
-                       action_space,
-                       squash:    bool = True,
-                       n_critics:  int = 2,
-                       **kwargs):
+    def __init__(self, 
+        observation_space, 
+        action_space,
+        squash:    bool = True,
+        n_critics:  int = 2,
+        units:     list = [256, 256],
+        **kwargs
+    ):
         '''SAC Agent
 
         Args:
             observation_space (gym.spaces): Observation space
             action_space (gym.spaces): Action space
+            squash (bool, optional): Squashed actor. Defaults to True.
+            n_critics (int, optional): Critic network count. Defaults to 2.
+            units (list, optional): The list of hidden layer units. Defaults to 
+                [256, 256].
         '''
         super().__init__(observation_space, action_space, **kwargs)
 
         self.squash    = squash
         self.n_critics = n_critics
+        self.units     = units
 
         self.actor  = None
         self.critic = None
@@ -144,24 +152,23 @@ class Agent(ub.base.BaseAgent):
         if observation_space is not None and action_space is not None:
             self.setup_model()
 
-    def setup_model(self):
-        '''Setup agent model
-
-        Args:
-            observation_space (gym.spaces): observation space.
-            action_space (gym.spaces): action space.
-        '''
-        # --- setup model ---
+    def _setup_model(self):
         # create actor, critic net
-        self.actor  = Actor(action_space, squash=self.squash)
-        self.critic = Critic(action_space, n_critics=self.n_critics)
+        self.actor  = Actor(self.action_space, squash=self.squash, 
+                            units=self.units)
+        self.critic = Critic(self.action_space, n_critics=self.n_critics, 
+                            units=self.units)
+
+    def setup_model(self):
+        '''Setup agent model'''
+        self._setup_model()
         # construct networks
         obs = tf.keras.Input(shape=self.observation_space.shape, dtype=tf.float32)
         act = tf.keras.Input(shape=self.action_space.shape, dtype=tf.float32)
-        self._fwd_actor(obs, proc_obs=False)
-        self._fwd_critic([obs, act], proc_obs=False)
+        self.call_actor(obs, proc_obs=False)
+        self.call_critic([obs, act], proc_obs=False)
 
-    def map_action(self, act):
+    def proc_action(self, act):
         '''Map raw action (from policy) to env action range
         '''
         if isinstance(self.action_space, gym.spaces.Box):
@@ -169,7 +176,8 @@ class Agent(ub.base.BaseAgent):
                 act = ub.utils.normalize(act, -1, 1, 
                         self.action_space.low, self.action_space.high)
             else:
-                #TODO: how to do in one line for both tensor and non-tensor?
+                #TODO: how to do this in one line for both 
+                # tensor and non-tensor types?
                 if tf.is_tensor(act):
                     act = tf.clip_by_value(act, self.action_space.low,
                                                 self.action_space.high)
@@ -178,37 +186,15 @@ class Agent(ub.base.BaseAgent):
                                        self.action_space.high)
         return act
 
-    def _fwd_actor(self, inputs, proc_obs=True, training=True):
-        '''Forward actor
-
-        Args:
-            inputs (tf.Tensor): batch observations in shape
-                (batch, obs_spce.shape), tf.float32
-            proc_obs (bool, optional): preprocess observations. Default
-                to True.
-            training (bool, optional): Training mode. Defaults to True.
-
-        Returns:
-            Distribution: Policy distribution
-        '''
+    def call_actor(self, inputs, proc_obs=True, training=True):
+        '''Forward actor'''
         if proc_obs:
             # cast and normalize inputs (eg. image in uint8)
-            inputs = self.map_observation(inputs)
+            inputs = self.proc_observation(inputs)
         return self.actor(inputs, training=training)
 
-    def _fwd_critic(self, inputs, proc_obs=True, training=True):
-        '''Forward critic
-
-        Args:
-            inputs (tuple): [obs, act] tuple.
-            proc_obs (bool, optional): preprocess observations. Default
-                to True.
-            training (bool, optional): Training mode. Defaults to True.
-        
-        Return:
-            tf.Tensor: predicted critic values (n_critics, b, 1)
-                or (n_critics, b, act_space.n)
-        '''
+    def call_critic(self, inputs, proc_obs=True, training=True):
+        '''Forward critic nets'''
         obs, act = inputs
         if proc_obs:
             # cast and normalize inputs (eg. image in uint8)
@@ -218,9 +204,6 @@ class Agent(ub.base.BaseAgent):
         else:
             inputs = [obs]
         return self.critic(inputs, training=training)
-
-    def _fwd(self, inputs, proc_obs=True, training=True):
-        return self._fwd_actor(inputs, proc_obs=proc_obs, training=training)
 
     @tf.function
     def call(self, inputs,
@@ -246,7 +229,7 @@ class Agent(ub.base.BaseAgent):
             tf.Tensor: log probabilities of predicted actions. (b,)
         '''
         # forward actor
-        distrib = self._fwd(inputs, proc_obs=proc_obs, training=training)
+        distrib = self.call_actor(inputs, proc_obs=proc_obs, training=training)
         # predict actions
         if det:
             actions = distrib.mode()
@@ -293,35 +276,38 @@ class Agent(ub.base.BaseAgent):
         config = {
             'squash':            self.squash,
             'n_critics':         self.n_critics,
+            'hiddens':           self.hiddens,
             'observation_space': self.observation_space, 
             'action_space':      self.action_space,
         }
         return config
 
-
 class SAC(ub.base.OffPolicyModel):
     support_obs_spaces = [gym.spaces.Box]
     support_act_spaces = [gym.spaces.Box]
-    def __init__(self, env, 
-                    # --- learning parameters ---
-                       learning_rate:       float = 3e-4,
-                       buffer_size:           int = int(1e6),
-                       gamma:               float = 0.99,
-                       polyak:              float = 0.005,
-                       clipnorm:            float = 0.5,
-                       reward_scale:        float = 1.0,
-                       weight_decay:        float = 1e-5,
-                       target_ent:          float = None,
-                    # --- architecture parameters ---
-                       squash:               bool = True,
-                       n_critics:             int = 2,
-                    # --- other parameters ---
-                       n_steps:               int = 4,
-                       n_gradsteps:           int = 1,
-                       wramup_steps:          int = int(1e4),
-                       batch_size:            int = 256,
-                       verbose:               int = 0,
-                       **kwargs):
+    def __init__(self, 
+        env, 
+    # --- hyper parameters ---
+        learning_rate: float = 3e-4,
+        buffer_size:     int = int(1e6),
+        gamma:         float = 0.99,
+        polyak:        float = 0.005,
+        clipnorm:      float = 0.5,
+        reward_scale:  float = 1.0,
+        weight_decay:  float = 1e-5,
+        target_ent:    float = None,
+    # --- architecture parameters ---
+        squash:         bool = True,
+        n_critics:       int = 2,
+        units:          list = [256, 256],
+    # --- other parameters ---
+        n_steps:         int = 4,
+        n_gradsteps:     int = 1,
+        wramup_steps:    int = int(1e4),
+        batch_size:      int = 256,
+        verbose:         int = 0,
+        **kwargs
+    ):
         '''Soft Actor-Critic (SAC)
 
         This implementation mainly follows this repo:
@@ -335,8 +321,8 @@ class SAC(ub.base.OffPolicyModel):
 
         Args:
             env (gym.Env): Training environment. Set to `None` for delayed setup.
-            learning_rate (float, Scheduler, optional): Learning rate. 
-                Defaults to 3e-4.
+            learning_rate (float, Scheduler, optional): Learning rate can be 
+                a ub.sche.Scheduler type. Defaults to 3e-4.
             buffer_size (int, optional): Replay buffer capacity. Defaults to 
                 int(1e6).
             gamma (float, optional): Discount factor. Defaults to 0.99.
@@ -344,6 +330,8 @@ class SAC(ub.base.OffPolicyModel):
             clipnorm (float, optional): Gradient clip range. Defaults to 0.5.
             squash (bool, optional): Squashed actor. Defaults to True.
             n_critics (int, optional): Critic network count. Defaults to 2.
+            units (list, optional): The list of hidden layer units. Defaults to 
+                [256, 256].
             n_steps (int, optional): Number of steps (samples) per env per 
                 epoch. Defaults to 4.
             n_gradsteps (int, optional): Number of gradient updates per epoch. 
@@ -363,25 +351,26 @@ class SAC(ub.base.OffPolicyModel):
             **kwargs
         )
 
-        self.learning_rate = learning_rate
-        self.buffer_size   = buffer_size
-        self.gamma         = gamma
-        self.polyak        = polyak
-        self.clipnorm      = clipnorm
-        self.reward_scale  = reward_scale
-        self.weight_decay  = weight_decay
-        self.target_ent    = target_ent
-        self.squash        = squash
-        self.n_critics     = n_critics
+        self.learning_rate    = learning_rate
+        self.buffer_size      = buffer_size
+        self.gamma            = gamma
+        self.polyak           = polyak
+        self.clipnorm         = clipnorm
+        self.reward_scale     = reward_scale
+        self.weight_decay     = weight_decay
+        self.target_ent       = target_ent
+        self.squash           = squash
+        self.n_critics        = n_critics
+        self.units            = units
 
         # initialize states
-        self.buffer            = None
-        self.agent             = None
-        self.agent_target      = None
-        self.log_alpha         = None
-        self.actor_optimizer   = None
-        self.alpha_optimizer   = None
-        self.critic_optimizer  = None
+        self.buffer           = None
+        self.agent            = None
+        self.agent_target     = None
+        self.log_alpha        = None
+        self.actor_optimizer  = None
+        self.alpha_optimizer  = None
+        self.critic_optimizer = None
 
         if env is not None:
             self.setup_model()
@@ -398,13 +387,15 @@ class SAC(ub.base.OffPolicyModel):
             self.observation_space,
             self.action_space,
             squash    = self.squash,
-            n_critics = self.n_critics
+            n_critics = self.n_critics,
+            units     = self.units
         )
         self.agent_target = Agent(
             self.observation_space,
             self.action_space,
             squash    = self.squash,
-            n_critics = self.n_critics
+            n_critics = self.n_critics,
+            units     = self.units
         )
         self.log_alpha = tf.Variable(0.0, dtype=tf.float32)
     
@@ -416,7 +407,7 @@ class SAC(ub.base.OffPolicyModel):
             state = self.state
         )
         # --- optimizers ---
-        self.actor_optimizer = tf.keras.optimizers.Adam(
+        self.actor_optimizer  = tf.keras.optimizers.Adam(
             learning_rate = self.learning_rate(),
             clipnorm      = self.clipnorm
         )
@@ -478,13 +469,13 @@ class SAC(ub.base.OffPolicyModel):
         '''        
         if self.is_wraming_up():
             # sample random actions
-            rawact = np.asarray([self.action_space.sample()
+            rawact   = np.asarray([self.action_space.sample()
                                  for n in range(self.n_envs)])
-            act = rawact
+            act      = rawact
         else:
             # sample actions from policy
-            rawact = self.predict(obs, proc_act=False, det=False)
-            act = self.agent.map_action(rawact)
+            rawact   = self.predict(obs, proc_act=False, det=False)
+            act      = self.agent.proc_action(rawact)
         # step environment
         next_obs, rew, done, infos = self.env.step(act)
         # add to buffer
@@ -509,7 +500,7 @@ class SAC(ub.base.OffPolicyModel):
             tf.Tensor: loss
         '''
         alpha = tf.math.exp(self.log_alpha)
-        x = tf.stop_gradient(log_ps + self.target_ent)
+        x     = tf.stop_gradient(log_ps + self.target_ent)
         return -tf.reduce_mean(tf.alpha * x, axis=0)
 
     def actor_loss(self, log_ps, qs):
@@ -521,7 +512,7 @@ class SAC(ub.base.OffPolicyModel):
             log_ps (tf.Tensor): log probabilities (b, 1)
             qs (tf.Tensor): Q-values (n_critics, b)
         '''
-        alpha = tf.stop_gradient(tf.math.exp(self.log_alpha))
+        alpha    = tf.stop_gradient(tf.math.exp(self.log_alpha))
         target_q = tf.math.reduce_mean(qs, axis=0)
         return tf.reduce_mean(alpha * log_ps - target_q)
 
@@ -541,25 +532,26 @@ class SAC(ub.base.OffPolicyModel):
         Returns:
             tf.Tensor: critic losses, shape (b,)
         '''
-        reward = tf.cast(reward, dtype=tf.float32)
-        done   = tf.cast(done,   dtype=tf.float32)
+        reward  = tf.cast(reward, dtype=tf.float32)
+        done    = tf.cast(done,   dtype=tf.float32)
 
-        alpha = tf.stop_gradinet(tf.math.exp(self.log_alpha))
+        alpha   = tf.stop_gradinet(tf.math.exp(self.log_alpha))
         next_act, next_log_p = self.agent_target(
             next_obs, proc_act=False, det=False
         )
-        next_qs = self.agent_target._fwd_critic([next_obs, next_act])
-        # compute V value for the next states
+        # compute Q(s', a')
+        next_qs = self.agent_target.call_critic([next_obs, next_act])
+        # compute V(s')
         next_q  = tf.math.reduce_min(next_qs, axis=0) # (b, 1)
         next_v  = next_q - alpha * next_log_p
-        # compute target Q value
-        rew  = self.reward_scale * rew
-        y    = rew + tf.stop_gradient((1.-done) * self.gamma * next_v)
-        # compute Q estimate
-        qs   = self.agent._fwd_critic([obs, act]) # (n, b, 1)
-        # compute critic loss
-        loss = tf.keras.losses.MSE(qs, y) # (n, b)
-        loss = 0.5 * tf.math.reduce_sum(losses, axis=0)
+        # compute target Y = r+g*V(s')
+        rew     = self.reward_scale * rew
+        y       = rew + tf.stop_gradient((1.-done) * self.gamma * next_v)
+        # compute Q = Q(s,a)
+        qs      = self.agent.call_critic([obs, act]) # (n, b, 1)
+        # compute critic loss 0.5*(Q-Y)^2
+        loss    = tf.keras.losses.MSE(qs, y) # (n, b)
+        loss    = 0.5 * tf.math.reduce_sum(losses, axis=0)
         return tf.reduce_mean(loss)
 
     def reg_loss(self, var_list, loss_type='l2'):
@@ -581,12 +573,12 @@ class SAC(ub.base.OffPolicyModel):
             obs = batch['obs']
             # predict critics and log probs
             act, log_ps = self.agent(obs, proc_act=False, det=False)
-            qs = self.agent._fwd_critic([obs, act])
+            qs  = self.agent.call_critic([obs, act])
             # compute losses
             actor_loss = self.actor_loss(log_ps, qs)
             alpha_loss = self.alpha_loss(log_ps)
             reg_loss   = self.reg_loss(actor_vars)
-            loss = actor_loss + reg_loss
+            loss       = actor_loss + reg_loss
         # perform gradient update
         grads = tape.gradient(loss, actor_vars)
         self.actor_optimizer.apply_gradients(zip(grads, actor_vars))
@@ -648,5 +640,6 @@ class SAC(ub.base.OffPolicyModel):
             'target_ent':    self.target_ent,
             'squash':        self.squash,
             'n_critics':     self.n_critics,
+            'hiddens':       self.hiddens
         }
         return config
