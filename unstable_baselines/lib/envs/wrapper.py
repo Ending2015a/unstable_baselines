@@ -4,6 +4,7 @@ import abc
 import cv2
 import time
 
+from typing import Union
 from collections import deque
 
 # --- 3rd party ---
@@ -16,7 +17,7 @@ from gym.wrappers import TimeLimit
 # --- my module ---
 from unstable_baselines import logger
 from unstable_baselines.lib import utils as ub_utils
-
+from unstable_baselines.lib.envs import vec as ub_vec
 
 __all__ = [
     'NoopResetEnv',
@@ -29,7 +30,8 @@ __all__ = [
     'FrameStack',
     'wrap_deepmind',
     'TimeFeatureWrapper',
-    'wrap_mujoco'
+    'wrap_mujoco',
+    'NormalizeObs',
 ]
 
 LOG = logger.getLogger()
@@ -316,3 +318,83 @@ def wrap_mujoco(env:       gym.Env,
     if time_feature:
         env = TimeFeatureWrapper(env, test_mode=test_mode)
     return env
+
+
+class NormalizeObs(gym.Wrapper):
+    def __init__(self, 
+        env: gym.Env,
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer,
+                        ub_vec.BaseVecEnv] = None,
+        update_rms: bool = None,
+    ):
+        '''Observation normalization wrapper
+
+        Args:
+            env (gym.Emv): Environment to wrap.
+            rms_norm (Union[str, ub_utils.RunningMeanStd, ub_vec.BaseVecEnv],
+                optional): Running mean and std for normalizing observations.
+                `str` is the path to the RunningMeanStd file. If it is a
+                BaseVecEnv then this wrapper calls BaseVecEnv's `normalize` 
+                method to perform normalizations. In this case, if BaseVecEnv's 
+                `enable_norm` is disabled then this wrapper is also disabled. 
+                Defaults to None.
+            update_rms (bool, optional): This value is used to prevent from 
+                updating others' rms normalizer. But you still can set this
+                value to True if you want to. In default, if `rms` is a 
+                BaseVecEnv, this value is set to False, otherwise to True.
+        '''
+        super().__init__(env)
+        self.observation_space = env.observation_space
+        self.action_space = env.action_space
+        self._rms_norm = self._get_rms_norm_opt(rms_norm)
+        # prevent from updating others' rms normalizer
+        self.update_rms = (not isinstance(rms_norm, ub_vec.BaseVecEnv)
+            if update_rms is None else bool(update_rms))
+
+    @property
+    def rms_norm(self):
+        return self._rms_norm
+
+    def reset(self, **kwargs):
+        obs = super().reset(**kwargs)
+        if self.update_rms:
+            self.rms_norm.update(obs)
+        return self.rms_norm(obs)
+
+    def step(self, act):
+        obs, rew, done, info = super().step(act)
+        if self.update_rms:
+            self.rms_norm.update(obs)
+        return self.rms_norm(obs), rew, done, info
+
+    def load(self, path:str):
+        '''load rms valu from path'''
+        self.rms_norm.load(path)
+        return self
+
+    def save(self, path:str):
+        self.rms_norm.save(path)
+
+    def _get_rms_opt(self, opt):
+        if isinstance(opt, ub_vec.BaseVecEnv):
+            opt = opt.rms_norm
+        if isinstance(opt, ub_utils.RMSNormalizer):
+            # setup RMS normalizer
+            if not opt.is_setup:
+                opt.setup(self.observation_space)
+            return opt
+        # select default RMS normalizer
+        if isinstance(self.observation_space, 
+                (gym.spaces.Dict, gym.spaces.Tuple)):
+            _rms_class = ub_utils.NestedRMSNormalizer
+        else:
+            _rms_class = ub_utils.RMSNormalizer
+        enable = None
+        if isinstance(opt, bool):
+            enable = opt
+        # Create RMSNormalizer
+        rms = _rms_class(space  = self.observation_space,
+                         enable = enable)
+        if isinstance(opt, str):
+            rms.load(opt)
+        return rms

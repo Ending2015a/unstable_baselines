@@ -1,3 +1,3 @@
 from .base import *
-from .vecenv import *
+from .dummy import *
 from .subproc import *
