@@ -49,7 +49,9 @@ __all__ = [
     'safe_json_load',
     'nested_iter',
     'nested_iter_tuple',
-    'nested_to_numpy'
+    'nested_to_numpy',
+    'extract_structure',
+    'pack_sequence'
 ]
 
 
