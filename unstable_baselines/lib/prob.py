@@ -207,14 +207,14 @@ class MultiNormal(Normal):
         Args:
             x (tf.Tensor): outcomes, (b, *shape)
         '''
-        x = ub_utils.flatten(super().log_prob(x), 1) # (b, -1)
+        x = ub_utils.flatten_tensor(super().log_prob(x), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
     def entropy(self):
         '''
         Entropy
         '''
-        x = ub_utils.flatten(super().entropy(), 1) # (b, -1)
+        x = ub_utils.flatten_tensor(super().entropy(), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
     def kl(self, q):
@@ -223,7 +223,7 @@ class MultiNormal(Normal):
 
         q: target probability distribution (MultiNormal)
         '''
-        x = ub_utils.flatten(super().kl(q), 1) # (b, -1)
+        x = ub_utils.flatten_tensor(super().kl(q), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
 

@@ -2,18 +2,15 @@
 import os
 import re
 import abc
-import cv2
-import csv
 import sys
-import glob
 import json
 import time
 import base64
-import pickle
 import random
-import inspect
 import datetime
-import tempfile
+import itertools
+
+from collections import OrderedDict
 
 # --- 3rd party ---
 import gym 
@@ -33,17 +30,19 @@ LOG = logger.getLogger()
 __all__ = [
     'NormalActionNoise',
     'StateObject',
+    'RunningMeanStd',
     'set_seed',
     'normalize',
     'denormalize',
     'stack_obs',
     'soft_update',
+    'is_image_space',
     'flatten_dicts',
     'is_json_serializable',
     'to_json_serializable',
     'from_json_serializable',
     'get_tensor_ndims',
-    'flatten',
+    'flatten_tensor',
     'safe_json_dumps',
     'safe_json_loads',
     'safe_json_dump',
@@ -76,7 +75,6 @@ class NormalActionNoise():
     def reset(self):
         pass
 
-
 # === StateObject ===
 class StateObject(dict):
     '''StateObject can store model states, and it can
@@ -95,6 +93,200 @@ class StateObject(dict):
         self = StateObject()
         self.update(safe_json_loads(string))
         return self
+
+# === RunningMeanStd ===
+class RunningMeanStd(StateObject):
+    def __init__(self, mean: float = 0.0, 
+                       std:  float = 1.0):
+        self.mean  = mean
+        self.var   = std ** 2.0
+        self.count = 0
+
+    def update(self, x: np.ndarray):
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = len(x)
+
+        delta = batch_mean - self.mean
+        total_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / total_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        m_2 = m_a + m_b + delta ** 2 * self.count * batch_count / total_count
+        new_var = m_2 / total_count
+
+        self.mean, self.var = new_mean, new_var
+        self.count = total_count
+
+# === RMS normalizer ===
+class RMSNormalizer():
+    def __init__(self,
+        space:    gym.Space = None,
+        enable:        bool = None,
+        fixed:         bool = None,
+        rms: RunningMeanStd = None,
+    ):
+        '''A RunningMeanStd normalizer for non-nested spaces.
+        This class provides an interface for `VecEnv`s to perform
+        running mean std observation normalization. Note that this
+        normalizer only supports non-nested spaces. 
+        (e.g. gym.spaces.Box)
+
+        Args:
+            space (gym.Space): Gym space, expecting a gym.spaces.Boxl, float32.
+            enable (bool, optional): Enable normalization. Default to True if
+                `space` can be normalized. (Box, float32, not image)
+            fixed (bool, optional): Whether to fix RMS value.
+                Defaults to False.
+            rms (RunningMeanStd, optional): RMS init value. Defaults to None.
+        '''
+        self.space    = space
+        self._enable  = enable
+        self._fixed   = fixed
+        self._rms     = rms
+        self.is_setup = False
+        if space is not None:
+            self.setup(space)
+
+    def setup(self, space: gym.Space=None):
+        '''Setup normalizer'''
+        assert not self.is_setup, 'This RMSNormalizer is already been setup'
+        self.space    = space
+        self._enable  = self._get_enable_opt(self._enable)
+        self._fixed   = self._get_fixed_opt(self._fixed)
+        self._rms     = self._get_rms_opt(self._rms)
+        self.is_setup = True
+        return self
+
+    @property
+    def rms(self):
+        return self._rms
+
+    @property
+    def enabled(self):
+        return self._enable
+
+    @property
+    def fixed(self):
+        return self._fixed
+
+    def normalize(self, x: np.ndarray, clip_max: float=10.0):
+        '''Normalize x with mean and var'''
+        # this magic number is from openai baselines
+        # see baselines/common/vec_env/vec_normalize.py#L10
+        if not self.enabled:
+            return x
+        rms = self.rms
+        eps = np.finfo(np.float32).eps.item()
+        x = (x-rms.mean)/np.sqrt(rms.var+eps)
+        x = np.clip(x, -clip_max, clip_max)
+        return x
+
+    def __call__(self, x:np.ndarray, clip_max: float=10.0):
+        '''Shortcut for `normalize()`'''
+        return self.normalize(x, clip_max)
+
+    def update(self, x:np.ndarray):
+        '''Update RMS value'''
+        if not self.fixed:
+            return
+        if len(x.shape) == len(self.space.shape):
+            # one sample, expand batch dim
+            x = np.expand_dims(x, axis=0)
+        self.rms.update(x)
+
+    def load(self, path: str):
+        '''Load RMS value from `path`
+        Usage:
+            >>> rms = RMSNormalizer(
+            ...     env.observation_space,
+            ...     enable = True,
+            ...     fixed = True
+            ... ).load('/saved_rms.json')
+        '''
+        d = safe_json_load(path)
+        assert set(['mean','var','count']) == set(d.keys())
+        #NOTE: RunningMeanStd is a dict type
+        self.rms.update(d) 
+        return self
+
+    def save(self, path: str):
+        '''Save RMS value to `path`'''
+        safe_json_dump(path, self.rms)
+
+    def _get_enable_opt(self, opt):
+        if opt is None:
+            if self.space is None:
+                # return True for unknown space
+                return True
+            # Enabled if space is a Box but not image.
+            return (not is_image_space(self.space)
+                and isinstance(self.space, gym.spaces.Box)
+                and np.dtype(self.space.dtype) == np.float32)
+        return bool(opt)
+    
+    def _get_fixed_opt(self, opt):
+        return (not self._enable) or (opt is True)
+
+    def _get_rms_opt(self, opt):
+        if isinstance(opt, RunningMeanStd):
+            return opt
+        return RunningMeanStd()
+
+
+class NestedRMSNormalizer(RMSNormalizer):
+    '''A Universal RunningMeanStd normalizer for both nested and 
+    non-nested spaces.
+    Since this normalizer may cause performance issue, we don't
+    encourage you to use this normalizer. Instead, you can implement
+    a custom RMSNormalizer for your custom space.
+    '''
+    def __init__(self, 
+        space:    gym.Space,
+        enable:        bool = None,
+        fixed:         bool = None,
+        rms: RunningMeanStd = None,
+    ):
+        print('WARN: We don\'t encourage you to use this RMS '
+                'normalizer for nested spaces (Dict/Tuple). '
+                'See ub.lib.utils.NestedRMSNormalizer')
+        #TODO
+        raise NotImplementedError
+    #     assert isinstance(space, gym.Space)
+    #     self.space = space
+
+    #     pyspace = nested_iter_space(self.space, lambda sp:sp)
+    #     self._pyspace = pyspace
+    #     self._enable_norm = self._get_enable_norm_opt(enable_norm)
+    #     self._update_norm = self._get_update_norm_opt(update_norm)
+    #     self._norm_rms    = self._get_norm_rms_opt(norm_rms)
+
+    # def _get_enable_norm_opt(self, opt):
+    #     nest_opt = self._form_nested_opt(opt, arg_name='enable_norm')
+    #     return nested_iter_tuple((nest_opt, self._pyspace),
+    #                 lambda t: (t[0] is not False) and is_image_obs(t[1]))
+
+    # def _get_update_norm_opt(self, opt):
+    #     nest_opt = self._form_nested_opt(opt, arg_name='update_norm')
+    #     return nested_iter_tuple((nest_opt, self._enable_norm),
+    #             lambda t: (t[0] is not False) and t[1])
+
+    # def _get_norm_rms_opt(self, opt):
+
+
+    # def _form_nested_opt(self, opt, arg_name):
+    #     if isinstance(opt, (list, tuple, dict)):
+    #         try:
+    #             nested_iter_tuple((self._pyspace, opt), 
+    #                     lambda _: 0)
+    #         except:
+    #             raise ValueError(f'If `{arg_name}` is a nested data, '
+    #                 'it must have a same structure as `space`')
+    #         nest_opt = opt
+    #     else:
+    #         nest_opt = nested_iter(self._pyspace, lambda _: opt)
+    #     return nest_opt
 
 
 # === Utils ===
@@ -167,9 +359,10 @@ def soft_update(target_vars, source_vars, polyak=0.005):
         tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
 
 
-def is_image_obs(obs_space):
-    return (isinstance(obs_space, gym.spaces.Box) and
-                len(obs_space.shape) == 3)
+def is_image_space(space):
+    return (isinstance(space, gym.spaces.Box)
+                and np.dtype(space.dtype) == np.uint8
+                and len(space.shape) == 3)
 
 def flatten_dicts(dicts: list):
     '''Flatten a list of dicts
@@ -227,7 +420,7 @@ def get_tensor_ndims(tensor: tf.Tensor):
     return ndims
 
 
-def flatten(tensor: tf.Tensor, begin, end=None):
+def flatten_tensor(tensor: tf.Tensor, begin, end=None):
     '''Collapse dims
 
     Flatten tensor from dim `begin` to dim `end`
@@ -333,7 +526,7 @@ def safe_json_dump(filepath,
 
 
 def safe_json_load(filepath,
-                    **kwargs):    
+                    **kwargs):
     obj = None
     if file_io.file_exists(filepath):
         string = file_io.read_file_to_string(filepath)
@@ -354,6 +547,9 @@ def nested_iter(data, op, *args, first=False, **kwargs):
         op (function): A function operate on each data
         first (bool): Only iterate on the first item
     '''
+    if not callable(op):
+        raise ValueError('`op` must be a callable')
+
     def _inner_nested_iter(data):
         if isinstance(data, dict):
             if first:
@@ -361,7 +557,7 @@ def nested_iter(data, op, *args, first=False, **kwargs):
                             next(iter(data.values())))
             else:
                 return {k: _inner_nested_iter(v)
-                            for k, v in data.items()}
+                    for k, v in data.items()}
         elif isinstance(data, tuple):
             if first:
                 return _inner_nested_iter(
@@ -373,6 +569,28 @@ def nested_iter(data, op, *args, first=False, **kwargs):
             return op(data, *args, **kwargs)
     return _inner_nested_iter(data)
 
+def nested_iter_space(space, op, *args, **kwargs):
+    if not callable(op):
+        raise ValueError('`op` must be a callable')
+    def _inner_nested_iter_space(space):
+        if isinstance(space, gym.spaces.Dict):
+            if first:
+                return _inner_nested_iter_space(
+                            next(iter(space.spaces.values())))
+            else:
+                return {k: _inner_nested_iter_space(v)
+                    for k, v in space.spaces.items()}
+        elif isinstance(space, tuple):
+            if first:
+                return _inner_nested_iter_space(
+                            next(iter(space.spaces)))
+            else:
+                return tuple(_inner_nested_iter_space(v)
+                                for v in space.spaces)
+        else:
+            return op(space, *args, **kwargs)
+    return _inner_nested_iter_space(space)
+
 def nested_iter_tuple(data_tuple, op, *args, **kwargs):
     '''Iterate over a tuple of nested data. Each nested
     data must have a same nested structure.
@@ -383,6 +601,9 @@ def nested_iter_tuple(data_tuple, op, *args, **kwargs):
         data_tuple (tuple): [description]
         op ([type]): [description]
     '''
+    if not callable(op):
+        raise ValueError('`op` must be a callable')
+        
     if not isinstance(data_tuple, tuple):
         raise ValueError('`data_tuple` only accepts tuple, '
                 'got {}'.format(type(tensor_tuple)))
@@ -415,3 +636,36 @@ def nested_to_numpy(data):
     op = lambda arr: np.asarray(arr)
     return nested_iter(data, op)
 
+
+def extract_structure(data):
+    '''Extract structure and flattened data from a nested data
+    For example:
+        >>> data = {'a': 'abc', 'b': (2.0, [3, 4, 5])}
+        >>> struct, flat_data = extract_struct(data)
+        >>> flat_data
+        ['abc', 2.0, [3, 4, 5]]
+        >>> struct
+        {'a': 0, 'b': (1, 2)}
+    '''
+    _count_op = lambda v, c: next(c)
+    counter = itertools.count(0)
+    struct = nested_iter(data, _count_op, counter)
+    size = next(counter)
+    flat_data = [None] * size
+    def _flat_op(ind_and_data, flat_data):
+        ind, data = ind_and_data
+        flat_data[ind] = data
+    nested_iter_tuple((struct, data), _flat_op, flat_data)
+    return struct, flat_data
+
+def pack_sequence(struct, flat_data):
+    '''An inverse operation of `extract_structure`
+
+    Args:
+        struct: A nested structure each data field contains
+            an index of elements in `flat_data`
+        flat_data (list): flattened data
+    '''
+    _struct_op = lambda ind, flat: flat[ind]
+    data = nested_iter(struct, _struct_op, flat_data)
+    return data
