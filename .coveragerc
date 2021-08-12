@@ -1,0 +1,13 @@
+[run]
+branch = False
+source = 
+    unstable_baselines/
+omit = 
+    test/*
+    unstable_baselines/logger/*
+    setup.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
