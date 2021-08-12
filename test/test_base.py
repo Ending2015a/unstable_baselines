@@ -147,11 +147,7 @@ class TestBaseModule(TestCase):
         ]
 
         for fname in filenames:
-            try:
-                self.assertTrue(os.path.isfile(fname))
-            except:
-                print('{} got False'.format(fname))
-                raise
+            self.assertTrue(os.path.isfile(fname))
 
         # check latest checkpoint
         latest_checkpoint = tf.train.latest_checkpoint(save_path)
@@ -184,11 +180,7 @@ class TestBaseModule(TestCase):
         checkpoint_path = SimpleSavableModel._preload(save_path, weights_name, best=best)
         
         basename = os.path.basename(checkpoint_path)
-        if '-' in weights_name:
-            exp_weights_name = '{}-{}'.format(weights_name.split('-')[0],
-                                        expected_number)
-        else:
-            exp_weights_name = '{}-{}'.format(weights_name, expected_number)
+        exp_weights_name = '{}-{}'.format(weights_name, expected_number)
         
         self.assertEqual(basename, exp_weights_name)
         
@@ -319,7 +311,3 @@ class TestBaseModule(TestCase):
             self.assertTrue(isinstance(model2.hparam5, A))
             self.assertEqual(model2.hparam5.a, A(3, 'abc').a)
             self.assertEqual(model2.hparam5.b, A(3, 'abc').b)
-            
-
-if __name__ == '__main__':
-    unittest.main()

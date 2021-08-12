@@ -115,7 +115,3 @@ class TestDataModule(TestCase):
             self.assertEqual(batch['b'].shape, (3,))
             batches.append(batch)
         self.assertEqual(len(batches), 7)
-
-
-if __name__ == '__main__':
-    unittest.main()

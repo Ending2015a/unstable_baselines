@@ -64,6 +64,7 @@ class Constant(tf.keras.Model):
         return self.constant
 
 class MlpNet(tf.keras.Model):
+    '''MLP feature extractor'''
     def __init__(self, hiddens=[64, 64], **kwargs):
         super().__init__(**kwargs)
 
@@ -321,10 +322,18 @@ class MultiHeadValueNets(tf.keras.Model):
         Returns:
             tf.keras.Model: a specified value net
         '''
+        if self._models is None:
+            raise ValueError(f'Models for {self.name} have not yet been'
+                'created. Models are created when the Model is first called'
+                'on inputs or `build()` is called with and `input_shape`')
         if not isinstance(key, int):
             raise KeyError(f'Key must be an `int`, got {type(key)}')
         
-        return self._models[key]
+        try:
+            return self._models[key]
+        except IndexError:
+            raise IndexError(f'Index out of range, n_heads={self.n_heads}'
+                f'got key={key}')
 
     def call(self, inputs, axis=0, training=True):
         '''Forward all critics

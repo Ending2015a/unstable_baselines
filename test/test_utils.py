@@ -193,7 +193,3 @@ class TestUtilsModule(TestCase):
         self.assertArrayEqual(res['a'][0], np.arange(3))
         self.assertArrayEqual(res['a'][1], np.arange(4))
         self.assertArrayEqual(res['b'], np.arange(5))
-
-
-if __name__ == '__main__':
-    unittest.main()
