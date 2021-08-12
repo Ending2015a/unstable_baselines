@@ -14,7 +14,9 @@ from unstable_baselines.lib import utils as ub_utils
 
 __all__ = [
     'Categorical',
-    'Normal'
+    'Normal',
+    'MultiNormal',
+    'Tanh'
 ]
 
 
