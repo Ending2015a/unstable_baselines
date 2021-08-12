@@ -15,5 +15,14 @@ class TestCase(unittest.TestCase):
         a = np.asarray(a)
         b = np.asarray(b)
         self.assertEqual(a.shape, b.shape,
-            f'Shape mismatch: expected {a.shape}, got {b.shape}')
+            f'Shape mismatch: {a.shape} vs {b.shape}')
         np.testing.assert_array_equal(a, b, msg)
+
+    def assertArrayClose(self, a, b, decimal=6, msg=''):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        self.assertEqual(a.shape, b.shape,
+            f'Shape mismatch: {a.shape} vs {b.shape}')
+        np.testing.assert_array_almost_equal(a, b, decimal, msg)
+
+

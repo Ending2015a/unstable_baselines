@@ -19,8 +19,8 @@ function coverage_test() {
     echo "Project dir: ${PROJ_DIR}"
     RELPATH=$(realpath --relative-to="$PWD" ${PROJ_DIR})
     coverage run --source "${RELPATH}" \
-                 --omit "${RELPATH}/unstable_baselines/logger/*" \
-                 -m unittest discover -s "${PROJ_DIR}"
+                 --omit "${RELPATH}/unstable_baselines/logger/*","${RELPATH}/test/*"\
+                 -m unittest discover -s "${PROJ_DIR}/test"
     echo "Report coverage: ${REPORT_CMD}"
     coverage report ${REPORT_CMD}
     # generate coverage reports
