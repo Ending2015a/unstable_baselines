@@ -72,7 +72,7 @@ class NormalActionNoise():
         return np.random.normal(self.mean, self.scale, size=shape)
 
     def __repr__(self):
-        return 'NormalActionNoise(mean={}, scale={})'.format(self.mean, self.scale)
+        return f'NormalActionNoise(mean={self.mean}, scale={self.scale})'
 
     def reset(self):
         pass
@@ -377,11 +377,9 @@ def flatten_dicts(dicts: list):
     '''
     agg_dict = {}
     for d in dicts:
-        for k, v in d.itmes():
+        for k, v in d.items():
             agg_dict.setdefault(k, []).append(v)
     return agg_dict
-
-# === TensorFlow utils ===
 
 def is_bounded(space):
     if isinstance(space, gym.spaces.Box):
@@ -389,6 +387,8 @@ def is_bounded(space):
                 and not np.any(np.isinf(space.high))
                 and np.all(space.high-space.low > 0.))
     return True
+
+# === TensorFlow utils ===
 
 def preprocess_observation(inputs, obs_space, dtype=tf.float32):
     if isinstance(obs_space, gym.spaces.Box):
@@ -497,8 +497,6 @@ def from_json_serializable(encoded_obj):
         obj = encoded_obj
     return obj
 
-
-
 def safe_json_dumps(obj, 
                     indent=4, 
                     ensure_ascii=False, 
@@ -576,19 +574,11 @@ def nested_iter_space(space, op, *args, **kwargs):
         raise ValueError('`op` must be a callable')
     def _inner_nested_iter_space(space):
         if isinstance(space, gym.spaces.Dict):
-            if first:
-                return _inner_nested_iter_space(
-                            next(iter(space.spaces.values())))
-            else:
-                return {k: _inner_nested_iter_space(v)
-                    for k, v in space.spaces.items()}
-        elif isinstance(space, tuple):
-            if first:
-                return _inner_nested_iter_space(
-                            next(iter(space.spaces)))
-            else:
-                return tuple(_inner_nested_iter_space(v)
-                                for v in space.spaces)
+            return {k: _inner_nested_iter_space(v)
+                for k, v in space.spaces.items()}
+        elif isinstance(space, gym.spaces.Tuple):
+            return tuple(_inner_nested_iter_space(v)
+                            for v in space.spaces)
         else:
             return op(space, *args, **kwargs)
     return _inner_nested_iter_space(space)
@@ -607,8 +597,8 @@ def nested_iter_tuple(data_tuple, op, *args, **kwargs):
         raise ValueError('`op` must be a callable')
         
     if not isinstance(data_tuple, tuple):
-        raise ValueError('`data_tuple` only accepts tuple, '
-                'got {}'.format(type(tensor_tuple)))
+        raise TypeError('`data_tuple` only accepts tuple, '
+                'got {}'.format(type(data_tuple)))
     
     def _inner_nested_iter_tuple(data_tuple):
         if isinstance(data_tuple[0], dict):
