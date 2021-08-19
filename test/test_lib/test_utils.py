@@ -27,7 +27,7 @@ def safe_json_dumps_loads(obj):
     return obj
 
 class TestUtilsModule(TestCase):
-    '''Test unstable_baselines.utils module
+    '''Test unstable_baselines.lib.utils module
     '''
 
     def test_normal_action_noise(self):
