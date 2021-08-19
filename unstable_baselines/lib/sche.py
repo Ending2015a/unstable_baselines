@@ -26,21 +26,9 @@ __all__ = [
 ]
 
 # === Units ===
-class MetaEnum(enum.EnumMeta):
-    def __contains__(cls, item):
-        '''
-        Allow to check if the Enum
-        contains an enum by name
-        '''
-        try:
-            cls(item)
-        except ValueError:
-            return False
-        return True
 
 @enum.unique
-class Unit(str, enum.Enum, 
-            metaclass=MetaEnum):
+class Unit(str, enum.Enum):
     '''Note: the enum value must match
     to its name, because json.dumps will
     dump enum's value.
