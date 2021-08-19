@@ -169,9 +169,17 @@ class RMSNormalizer():
     def enabled(self):
         return self._enable
 
+    @enabled.setter
+    def enabled(self, value: bool):
+        self._enable = bool(value)
+
     @property
     def fixed(self):
         return self._fixed
+
+    @fixed.setter
+    def fixed(self, value: bool):
+        self._fixed = bool(value)
 
     def normalize(self, x: np.ndarray, clip_max: float=10.0):
         '''Normalize x with mean and var'''
@@ -191,7 +199,7 @@ class RMSNormalizer():
 
     def update(self, x:np.ndarray):
         '''Update RMS value'''
-        if not self.fixed:
+        if self.fixed:
             return
         if len(x.shape) == len(self.space.shape):
             # one sample, expand batch dim

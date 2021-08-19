@@ -55,8 +55,62 @@ class TestUtilsModule(TestCase):
         self.assertArrayClose(rms.mean, np.mean(arr, axis=0), decimal=6)
         self.assertArrayClose(rms.var, np.var(arr, axis=0), decimal=6)
 
+    def test_running_mean_std_3d(self):
+        space = gym.spaces.Box(low=np.ones((64,64,3))*0.0,
+                               high=np.ones((64,64,3))*1.0,
+                               dtype=np.float32)
+        batch_size = 3
+        obs = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obs, space)
+        mean = 0.0
+        std = 1.0
+        rms = utils.RunningMeanStd(mean, std)
+        rms.update(obs)
+        self.assertArrayClose(rms.mean, np.mean(obs, axis=0), decimal=6)
+        self.assertArrayClose(rms.var, np.var(obs, axis=0), decimal=6)
+
     def test_rms_normalizer_box(self):
-        pass
+        # image box
+        space = gym.spaces.Box(low=np.zeros((64,64,3)),
+                               high=np.ones((64,64,3))*255, 
+                               dtype=np.uint8)
+        rms_norm = utils.RMSNormalizer(space)
+        self.assertFalse(rms_norm.enabled)
+        self.assertTrue(rms_norm.fixed)
+        batch_size = 3
+        obs = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obs, space)
+        res_obs = rms_norm.normalize(obs)
+        self.assertArrayEqual(obs, res_obs)
+        # non-image box
+        space = gym.spaces.Box(low=np.ones((64,64,3))*0.0,
+                               high=np.ones((64,64,3))*1.0,
+                               dtype=np.float32)
+        rms_norm = utils.RMSNormalizer(space)
+        self.assertTrue(rms_norm.enabled)
+        self.assertFalse(rms_norm.fixed)
+        batch_size = 3
+        obs = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obs, space)
+        rms_norm.update(obs)
+        res_obs = rms_norm.normalize(obs)
+        obs_mean = np.mean(obs, axis=0)
+        obs_var = np.var(obs, axis=0)
+        self.assertArrayClose(rms_norm.rms.mean, obs_mean)
+        self.assertArrayClose(rms_norm.rms.var, obs_var)
+        eps = np.finfo(np.float32).eps.item()
+        obs_norm = (obs-obs_mean)/np.sqrt(obs_var+eps)
+        self.assertArrayClose(obs_norm, res_obs, decimal=6)
+        # sampling
+        obs2 = [space.sample() for _ in range(batch_size)]
+        obs2 = utils.stack_obs(obs2, space)
+        rms_norm.update(obs2)
+        res_obs = rms_norm.normalize(obs2)
+        concat_obs = np.concatenate((obs, obs2), axis=0)
+        obs_mean = np.mean(concat_obs, axis=0)
+        obs_var = np.var(concat_obs, axis=0)
+        obs_norm = (obs2-obs_mean) / np.sqrt(obs_var+eps)
+        self.assertArrayClose(obs_norm, res_obs, decimal=4)
 
     def test_rms_normalizer_discrete(self):
         pass
@@ -273,6 +327,13 @@ class TestUtilsModule(TestCase):
         res_obs = utils.preprocess_observation(obs, space)
         self.assertArrayClose(norm_obs, res_obs)
 
+    def test_preprocess_observation_multibinary(self):
+        space_dim = 6
+        space = gym.spaces.MultiBinary(space_dim)
+        obs = space.sample()
+        norm_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(obs, norm_obs)
+
     def test_get_tensor_ndims(self):
         a = tf.zeros((1, 2, 3, 4), dtype=tf.float32)
         a = utils.get_tensor_ndims(a)
@@ -404,16 +465,26 @@ class TestUtilsModule(TestCase):
 
     def test_nested_iter(self):
         op = lambda v: len(v)
-        data = {'a': (np.arange(3), np.arange(4)), 
-                'b': np.arange(5)}
-        
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data = {'a': (d1, d2), 'b': d3}
         res = utils.nested_iter(data, op, first=False)
         self.assertEqual(res['a'][0], 3)
         self.assertEqual(res['a'][1], 4)
         self.assertEqual(res['b'], 5)
-
         res = utils.nested_iter(data, op, first=True)
         self.assertEqual(res, 3)
+
+    def test_nested_iter_exception(self):
+        # ValueError when op is not a callable type
+        op = True
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data = {'a': (d1, d2), 'b': d3}
+        with self.assertRaises(ValueError):
+            utils.nested_iter(data, op)
 
     def test_nested_iter_space(self):
         space1 = gym.spaces.Box(low=np.zeros((64,64,3)),
@@ -429,13 +500,25 @@ class TestUtilsModule(TestCase):
         self.assertTrue(isinstance(space['tuple'], tuple))
         self.assertEqual(space['tuple'], (space1, space2))
 
+    def test_nested_iter_space_exception(self):
+        # ValueError when op is not a callable type
+        space1 = gym.spaces.Box(low=np.zeros((64,64,3)),
+                                high=np.ones((64,64,3))*255, 
+                                dtype=np.uint8)
+        space2 = gym.spaces.MultiBinary(5)
+        spacet = gym.spaces.Tuple((space1, space2))
+        space  = gym.spaces.Dict({'tuple': spacet})
+        op = True
+        with self.assertRaises(ValueError):
+            utils.nested_iter_space(space, op)
+
     def test_nested_iter_tuple(self):
         op = lambda data_tuple: np.asarray(data_tuple).shape
-        data1 = {'a': (np.arange(3), np.arange(4)), 
-                'b': np.arange(5)}
-        data2 = {'a': (np.arange(3), np.arange(4)), 
-                'b': np.arange(5)}
-
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data1 = {'a': (d1, d2), 'b': d3}
+        data2 = {'a': (d1, d2), 'b': d3}
         res = utils.nested_iter_tuple((data1, data2), op)
         self.assertEqual(res['a'][0], (2, 3))
         self.assertEqual(res['a'][1], (2, 4))
@@ -443,23 +526,54 @@ class TestUtilsModule(TestCase):
 
     def test_nested_iter_tuple_exception(self):
         op = lambda data_tuple: np.asarray(data_tuple).shape
-        data1 = {'a': (np.arange(3), np.arange(4)), 
-                'b': np.arange(5)}
-        data2 = {'a': (np.arange(3), np.arange(4)), 
-                'b': np.arange(5)}
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data1 = {'a': (d1, d2), 'b': d3}
+        data2 = {'a': (d1, d2), 'b': d3}
         with self.assertRaises(TypeError):
             res = utils.nested_iter_tuple([data1, data2], op)
-
         with self.assertRaises(ValueError):
             op = None
             res = utils.nested_iter_tuple((data1, data2), op)
 
-
     def test_nested_to_numpy(self):
-        data = {'a': (list(range(3)), list(range(4))),
-                'b': list(range(5))}
+        d1 = list(range(3))
+        d2 = list(range(4))
+        d3 = list(range(5))
+        data = {'a': (d1, d2), 'b': d3}
         
         res = utils.nested_to_numpy(data)
         self.assertArrayEqual(res['a'][0], np.arange(3))
         self.assertArrayEqual(res['a'][1], np.arange(4))
         self.assertArrayEqual(res['b'], np.arange(5))
+
+    def test_extract_structure(self):
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data = {'a': (d1, d2), 'b': d3}
+        struct, flat_data = utils.extract_structure(data)
+
+        self.assertEqual(len(flat_data), 3)
+        self.assertArrayEqual(flat_data[0], d1)
+        self.assertArrayEqual(flat_data[1], d2)
+        self.assertArrayEqual(flat_data[2], d3)
+        self.assertEqual(list(struct.keys()), list(data.keys()))
+        self.assertTrue(isinstance(struct['a'], tuple))
+        self.assertEqual(struct['a'][0], 0)
+        self.assertEqual(struct['a'][1], 1)
+        self.assertEqual(struct['b'], 2)
+
+    def test_pack_sequence(self):
+        d1 = np.arange(3)
+        d2 = np.arange(4)
+        d3 = np.arange(5)
+        data = {'a': (d1, d2), 'b': d3}
+        struct, flat_data = utils.extract_structure(data)
+        res_data = utils.pack_sequence(struct, flat_data)
+        self.assertEqual(list(data.keys()), list(res_data.keys()))
+        self.assertTrue(isinstance(res_data['a'], tuple))
+        self.assertArrayEqual(res_data['a'][0], d1)
+        self.assertArrayEqual(res_data['a'][1], d2)
+        self.assertArrayEqual(res_data['b'], d3)
