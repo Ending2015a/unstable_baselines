@@ -27,43 +27,11 @@ def safe_json_dumps_loads(obj):
 
 class TestUtilsModule(TestCase):
     '''Test unstable_baselines.utils module
-
-    Class list:
-    [x] NormalActionNoise
-    [x] StateObject
-    [ ] RunningMeanStd
-    [ ] RMSNormalizer
-    [ ] NestedRMSNormalizer (NotImplemented)
-
-    Function list:
-    [ ] set_seed
-    [ ] normalize
-    [ ] denormalize
-    [ ] stack_obs
-    [ ] soft_update
-    [ ] is_image_space
-    [ ] flatten_dicts
-    [ ] is_bounded
-    [ ] preprocess_observation
-    [ ] get_tensor_ndims
-    [ ] flatten_tensor
-    [x] is_json_serializable
-    [x] to_json_serializable
-    [x] from_json_serializable
-    [x] safe_json_dumps
-    [x] safe_json_loads
-    [x] safe_json_dump
-    [x] safe_json_load
-    [x] nested_iter
-    [x] nested_iter_tuple
-    [x] nested_to_numpy
-    [ ] extract_structure
-    [ ] pack_sequence
     '''
 
     def test_normal_action_noise(self):
-        mean = 0.
-        scale = 1.
+        mean = 0.0
+        scale = 1.0
         shape = (2, 3)
         noise = utils.NormalActionNoise(mean, scale)
         self.assertArrayEqual(noise(shape).shape, shape)
@@ -130,6 +98,11 @@ class TestUtilsModule(TestCase):
         obs2 = space.sample()
         stacked = utils.stack_obs((obs1, obs2), space)
         self.assertArrayEqual(stacked, np.stack((obs1, obs2)))
+        # test exceptions
+        with self.assertRaises(ValueError):
+            utils.stack_obs(obs1, space)
+        with self.assertRaises(ValueError):
+            utils.stack_obs([], space)
 
     def test_stack_obs_dict(self):
         space1 = gym.spaces.Box(low=np.zeros((64,64,3)),
@@ -142,7 +115,12 @@ class TestUtilsModule(TestCase):
         stacked = utils.stack_obs((obs1, obs2), space)
         self.assertArrayEqual(stacked['pov'], np.stack((obs1['pov'], obs2['pov'])))
         self.assertArrayEqual(stacked['vec'], np.stack((obs1['vec'], obs2['vec'])))
-    
+        # test exceptions
+        with self.assertRaises(ValueError):
+            tuple_space = gym.spaces.Tuple((space1, space2))
+            utils.stack_obs((obs1, obs2), tuple_space)
+
+
     def test_stack_obs_tuple(self):
         space1 = gym.spaces.Box(low=np.zeros((64,64,3)),
                                 high=np.ones((64,64,3))*255, 
@@ -154,7 +132,11 @@ class TestUtilsModule(TestCase):
         stacked = utils.stack_obs((obs1, obs2), space)
         self.assertArrayEqual(stacked[0], np.stack((obs1[0], obs2[0])))
         self.assertArrayEqual(stacked[1], np.stack((obs1[1], obs2[1])))
-    
+        # test exceptions
+        with self.assertRaises(ValueError):
+            dict_space = gym.spaces.Dict({'pov': space1, 'vec': space2})
+            utils.stack_obs((obs1, obs2), dict_space)
+
     def test_soft_update(self):
         a = tf.Variable(0.0, dtype=tf.float32)
         b = tf.Variable(1.0, dtype=tf.float32)
@@ -227,8 +209,69 @@ class TestUtilsModule(TestCase):
         space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         self.assertFalse(utils.is_bounded(space))
 
-    def test_preprocess_observation(self):
-        pass
+    def test_preprocess_observation_box_bounded(self):
+        space = gym.spaces.Box(low=np.zeros((64,64,3)),
+                               high=np.ones((64,64,3))*255, 
+                               dtype=np.uint8)
+        obs = space.sample()
+        norm_obs = utils.normalize(obs, space.low, space.high, 0., 1.)
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
+        # batch
+        batch_size = 8
+        obses = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obses, space)
+        norm_obs = utils.normalize(obs, space.low, space.high, 0., 1.)
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
+
+    def test_preprocess_observation_box_unbounded(self):
+        space = gym.spaces.Box(low=np.full((64,), -np.inf, dtype=np.float32),
+                               high=np.full((64,), np.inf, dtype=np.float32),
+                               dtype=np.float32)
+        obs = space.sample()
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(obs, res_obs)
+
+    def test_preprocess_observation_discrete(self):
+        space_dim = 5
+        space = gym.spaces.Discrete(space_dim)
+        obs = space.sample()
+        # one hot
+        norm_obs = np.zeros((space_dim,), dtype=np.float32)
+        norm_obs[obs] = 1.0
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
+        # batch
+        batch_size = 8
+        obses = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obses, space)
+        # one hot
+        norm_obs = np.zeros((obs.size, space_dim), dtype=np.float32)
+        norm_obs[np.arange(obs.size), obs] = 1.0
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
+
+    def test_preprocess_observation_multidiscrete(self):
+        space_dims = [4, 7]
+        space = gym.spaces.MultiDiscrete(space_dims)
+        obs = space.sample()
+        # one hot
+        offset = np.cumsum([0] + space_dims)[:len(space_dims)]
+        norm_obs = np.zeros((np.sum(space_dims),), dtype=np.float32)
+        norm_obs[obs+offset] = 1.0
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
+        # batch
+        batch_size = 8
+        obses = [space.sample() for _ in range(batch_size)]
+        obs = utils.stack_obs(obses, space)
+        # one hot
+        norm_obs = np.zeros((batch_size, np.sum(space_dims)), dtype=np.float32)
+        for batch, item in zip(np.arange(batch_size), obs+offset):
+            norm_obs[batch, item] = 1.0
+        res_obs = utils.preprocess_observation(obs, space)
+        self.assertArrayClose(norm_obs, res_obs)
 
     def test_get_tensor_ndims(self):
         a = tf.zeros((1, 2, 3, 4), dtype=tf.float32)

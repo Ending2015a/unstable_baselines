@@ -405,7 +405,7 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
         # [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]
         nvec   = tf.constant(obs_space.nvec, dtype=tf.int32)
         inputs = tf.concat([
-                tf.one_hot(inputs[:, idx], depth=nvec[idx])
+                tf.one_hot(inputs[..., idx], depth=nvec[idx])
                 for idx in range(inputs.shape[-1])
             ], axis=-1)
     elif isinstance(obs_space, gym.spaces.MultiBinary):
