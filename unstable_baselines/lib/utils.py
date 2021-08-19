@@ -218,7 +218,7 @@ class RMSNormalizer():
         d = safe_json_load(path)
         assert set(['mean','var','count']) == set(d.keys())
         #NOTE: RunningMeanStd is a dict type
-        self.rms.update(d) 
+        dict.update(self.rms, d)
         return self
 
     def save(self, path: str):

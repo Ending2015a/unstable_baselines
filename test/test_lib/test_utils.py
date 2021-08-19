@@ -4,6 +4,7 @@ import sys
 import time
 import json
 import logging
+import tempfile
 import unittest
 
 # --- 3rd party ---
@@ -100,7 +101,7 @@ class TestUtilsModule(TestCase):
         self.assertArrayClose(rms_norm.rms.var, obs_var)
         eps = np.finfo(np.float32).eps.item()
         obs_norm = (obs-obs_mean)/np.sqrt(obs_var+eps)
-        self.assertArrayClose(obs_norm, res_obs, decimal=6)
+        self.assertArrayClose(obs_norm, res_obs, decimal=3)
         # sampling
         obs2 = [space.sample() for _ in range(batch_size)]
         obs2 = utils.stack_obs(obs2, space)
@@ -109,17 +110,16 @@ class TestUtilsModule(TestCase):
         concat_obs = np.concatenate((obs, obs2), axis=0)
         obs_mean = np.mean(concat_obs, axis=0)
         obs_var = np.var(concat_obs, axis=0)
+        self.assertArrayClose(rms_norm.rms.mean, obs_mean)
+        self.assertArrayClose(rms_norm.rms.var, obs_var)
         obs_norm = (obs2-obs_mean) / np.sqrt(obs_var+eps)
-        self.assertArrayClose(obs_norm, res_obs, decimal=4)
-
-    def test_rms_normalizer_discrete(self):
-        pass
-
-    def test_rms_normalizer_image(self):
-        pass
-
-    def test_nested_rms_normalizer(self):
-        pass
+        self.assertArrayClose(obs_norm, res_obs, decimal=3)
+        # test save/load
+        with tempfile.NamedTemporaryFile() as f:
+            rms_norm.save(f.name)
+            new_rms_norm = utils.RMSNormalizer(space).load(f.name)
+        res_obs = new_rms_norm.normalize(obs2)
+        self.assertArrayClose(obs_norm, res_obs, decimal=3)
 
     def test_set_seed(self):
         utils.set_seed(1)
