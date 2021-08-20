@@ -40,3 +40,10 @@ class TestCase(unittest.TestCase):
             return
         with self.assertRaises(AssertionError):
             np.testing.assert_array_almost_equal(a, b, decimal, msg)
+
+    def assertAllClose(self, a, b, rtol=1e-5, atol=1e-8, msg=''):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        self.assertEqual(a.shape, b.shape,
+            f'Shape mismatch: {a.shape} vs {b.shape}')
+        np.testing.assert_allclose(a, b, rtol=rtol, atol=atol, err_msg=msg)

@@ -39,28 +39,28 @@ class Distribution(tf.Module,
         '''
         Probability of given outcomes (x)
         '''
-        raise NotImplementedError("Method not implemented")
+        raise NotImplementedError
 
     @abc.abstractmethod
     def mode(self):
         '''
         Mode
         '''
-        raise NotImplementedError("Method not implemented")
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def sample(self):
+    def sample(self, n=None):
         '''
         Sample outcomes
         '''
-        raise NotImplementedError("Method not implemented")
+        raise NotImplementedError
 
     @abc.abstractmethod
     def entropy(self):
         '''
         Entropy
         '''
-        raise NotImplementedError("Method not implemented")
+        raise NotImplementedError
 
     @abc.abstractmethod
     def kl(self, q):
@@ -69,16 +69,12 @@ class Distribution(tf.Module,
 
         q: target probability ditribution (Categorical)
         '''
-        raise NotImplementedError("Method not implemented")
-
-
+        raise NotImplementedError
 
 class Categorical(Distribution):
-    def __init__(self, logits, **kwargs):
+    def __init__(self, logits: tf.Tensor, dtype=tf.int32, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
-
-        super().__init__(dtype=self._logits.dtype,
-                        **kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
     @property
     def logits(self):
@@ -104,22 +100,24 @@ class Categorical(Distribution):
         Log probability of given outcomes (x)
         '''
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(
-                                labels=tf.cast(x, dtype=tf.int64), 
+                                labels=tf.cast(x, dtype=self.dtype), 
                                 logits=self.logits)
 
     def mode(self):
         '''
         Mode
         '''
-        return tf.math.argmax(self.logits, axis=-1)
+        return tf.math.argmax(self.logits, axis=-1, output_type=self.dtype)
 
-    def sample(self):
+    def sample(self, n=None):
         '''
         Sample outcomes
         '''
-        e  = tf.random.uniform(tf.shape(self.logits))
+        n = [] if n is None else [n]
+        shape = tf.concat((n, tf.shape(self.logits)), axis=0)
+        e  = tf.random.uniform(shape, dtype=self.logits.dtype)
         it = self.logits - tf.math.log(-tf.math.log(e))
-        return tf.math.argmax(it, axis=-1)
+        return tf.math.argmax(it, axis=-1, output_type=self.dtype)
 
     def entropy(self):
         '''
@@ -132,7 +130,7 @@ class Categorical(Distribution):
         p   = tf.math.reduce_sum(xex, axis=-1) / z
         return m[..., 0] + tf.math.log(z) - p
 
-    def kl(self, q):
+    def kl(self, q: Distribution):
         '''
         KL divergence
 
@@ -141,7 +139,7 @@ class Categorical(Distribution):
         logp = self._log_p()
         logq = q._log_p()
         p    = tf.math.exp(logp)
-        return tf.math.reduce_sum(p * (logq-logp), axis=-1)
+        return tf.math.reduce_sum(p * (logp-logq), axis=-1)
 
 
 class Normal(Distribution):
@@ -177,11 +175,13 @@ class Normal(Distribution):
         '''
         return self.mean
 
-    def sample(self):
+    def sample(self, n=None):
         '''
         Sample outcomes
         '''
-        x = tf.random.normal(tf.shape(self.mean), dtype=self.dtype)
+        n = [] if n is None else [n]
+        shape = tf.concat((n, tf.shape(self.mean)), axis=0)
+        x = tf.random.normal(shape, dtype=self.dtype)
         return self.mean + self.scale * x
 
     def entropy(self):
@@ -191,7 +191,7 @@ class Normal(Distribution):
         c = tf.constant(0.5 * np.log(2. * np.pi), dtype=self.dtype) + 0.5
         return c + tf.math.log(self.scale)
 
-    def kl(self, q):
+    def kl(self, q: Distribution):
         '''
         KL divergence
 
@@ -219,7 +219,7 @@ class MultiNormal(Normal):
         x = ub_utils.flatten_tensor(super().entropy(), 1) # (b, -1)
         return tf.math.reduce_sum(x, axis=-1)
 
-    def kl(self, q):
+    def kl(self, q: Distribution):
         '''
         KL divergence
 
@@ -254,7 +254,7 @@ class Bijector(Distribution):
         Args:
             x (tf.Tensor): Outcomes
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def inverse(self, y):
@@ -263,7 +263,7 @@ class Bijector(Distribution):
         Args:
             y (tf.Tensor): Outcomes
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def log_det_jacob(self, x):
@@ -272,7 +272,7 @@ class Bijector(Distribution):
         Args:
             x (tf.Tensor): Outcomes
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def mode(self):
         return self.forward(self.distribution.mode())
@@ -287,17 +287,19 @@ class Bijector(Distribution):
         '''
         return self.forward(self.distribution.sample())
 
+    @abc.abstractmethod
     def entropy(self):
         '''
         Entropy
         '''
-        raise NotImplementedError('`entropy` not implemented')
+        raise NotImplementedError
 
+    @abc.abstractmethod
     def kl(self, q):
         '''
         KL divergence
         '''
-        raise NotImplementedError('`kl` not implemented')
+        raise NotImplementedError
     
 
 class Tanh(Bijector):
@@ -310,3 +312,17 @@ class Tanh(Bijector):
     def log_det_jacob(self, x):
         # log(dy/dx) = log(1 - tanh(x)**2)
         return 2. * (np.log(2.) - x - tf.math.softplus(-2.*x))
+    
+    def entropy(self):
+        '''
+        Entropy
+        '''
+        raise NotImplementedError('Entropy for Tanh squashed does not '
+            'exist an analytical solution')
+        
+    def kl(self, q: Distribution):
+        '''
+        KL divergence
+        '''
+        raise NotImplementedError('KL-divergence for Tanh squashed does not '
+            'exist an analytical solution')
