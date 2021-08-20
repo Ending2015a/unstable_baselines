@@ -28,23 +28,23 @@ class BaseEnvWorker(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def getattr(self, attrname: str):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def setattr(self, attrname: str, value):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def reset(self, **kwargs):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def step_async(self, act):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def step_wait(self):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def seed(self, seed):
@@ -52,15 +52,15 @@ class BaseEnvWorker(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def render(self):
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
     def close_async(self):
-        pass
+        raise NotImplementedError
     
     @abc.abstractmethod
     def close_wait(self):
-        pass
+        raise NotImplementedError
 
 
 # The implementation mainly follows tianshou/venvs.py
@@ -68,7 +68,7 @@ class BaseEnvWorker(metaclass=abc.ABCMeta):
 class BaseVecEnv(gym.Env):
     def __init__(self,
         env_fns: list,
-        worke_class: BaseEnvWorker,
+        worker_class: BaseEnvWorker,
         rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None
     ):
         self._worker_class = worker_class
@@ -103,7 +103,7 @@ class BaseVecEnv(gym.Env):
         '''Retrieve attributes from each environment
 
         Args:
-            attr_name (str): Attribute name
+            attrname (str): Attribute name
             id (list, optional): Environment indices. Defaults to None.
 
         Returns:
@@ -111,23 +111,31 @@ class BaseVecEnv(gym.Env):
         '''
         self._assert_not_closed()
         ids = self._get_ids(id)
-        return [self.workers[id].getattr(attr_name) for id in ids]
+        return [self.workers[id].getattr(attrname) for id in ids]
 
-    def setattrs(self, attr_name: str, value, id: list=None):
-        '''Set attributes of all environments
+    def setattrs(self, attrname:str, value=None, values: list=None, id: list=None):
+        '''Set attributes for each environments
 
         Args:
-            attr_name (str): Attribute name
-            value (Any): Attribute value. This value is used accross all envs
-                specified by `id`.
+            attrname (str): Attribute name
+            value (Any, optional): Attribute value. This value will be passed
+                to all envs specified by `id`. Defaults to None.
+            values (list, optional): A list of attribute values. Defaults to None.
             id (list, optional): Environment indices. Defaults to None.
-
+        
         Returns:
-            list: Return values
+            list: Returned values
         '''
         self._assert_not_closed()
+        if values is not None and value is not None:
+            raise ValueError('Both `value` and `values` are set. '
+                'Only one of them can be specified.')
         ids = self._get_ids(id)
-        return [self.workers[id].setattr(attr_name, value) for id in ids]
+        if values is not None:
+            assert len(values) == len(ids)
+            return [self.workers[id].setattr(attrname, v) 
+                    for id, v in zip(ids, values)]
+        return [self.workers[id].setattr(attrname, value) for id in ids]
 
     def reset(self, id: list=None, **kwargs):
         self._assert_not_closed()
@@ -166,7 +174,7 @@ class BaseVecEnv(gym.Env):
             seed_list = seed
         return [self.workers[id].seed(s) for id, s in zip(ids, seed_list)]
 
-    def render(self, **kwagrs):
+    def render(self, **kwargs):
         self._assert_not_closed()
         return [w.render(**kwargs) for w in self.workers]
 
@@ -176,15 +184,6 @@ class BaseVecEnv(gym.Env):
         [w.close_async() for w in self.workers]
         [w.close_wait()  for w in self.workers]
         self.closed = True
-
-    def load(self, path):
-        '''Load rms value from path'''
-        self.rms_norm.load(path)
-        return self
-    
-    def save(self, path):
-        '''Save rms value to path'''
-        self.rms_norm.save(path)
 
     def _flatten_obs(self, obs_list):
         obs = ub_utils.nested_iter_tuple(

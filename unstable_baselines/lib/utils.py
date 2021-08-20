@@ -325,7 +325,6 @@ def stack_obs(obs, space):
         raise ValueError('Expecting a list or tuple of observations')
     if len(obs) <= 0:
         raise ValueError('Need observations from at least one environment')
-
     if isinstance(space, gym.spaces.Dict):
         if not isinstance(space.spaces, OrderedDict):
             raise ValueError('Dict space must have ordered subspaces')
