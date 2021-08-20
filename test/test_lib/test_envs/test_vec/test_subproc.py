@@ -2,9 +2,8 @@
 import os
 import sys
 import time
-import logging
-import unittest
 import functools
+import multiprocessing
 
 # --- 3rd party ---
 import gym
@@ -13,7 +12,7 @@ import numpy as np
 from parameterized import parameterized
 
 # --- my module ---
-from unstable_baselines.lib.envs.vec import dummy
+from unstable_baselines.lib.envs.vec import subproc
 from unstable_baselines.lib import utils
 
 from test.utils import TestCase
@@ -22,14 +21,15 @@ from test.test_lib.test_envs.utils import FakeEnv
 def create_fake_env(rank, env_type):
     return FakeEnv(rank, env_type)
 
-class TestDummyVecEnvModule(TestCase):
-    def test_dummy_vec_env_without_rms(self):
+class TestSubprocVecEnvModule(TestCase):
+
+    def test_subproc_vec_env_without_rms(self):
         num_envs = 4
         env_fns = [
-            functools.partial(create_fake_env, i, 'Box') 
+            functools.partial(create_fake_env, i, 'Box')
             for i in range(num_envs)
         ]
-        envs = dummy.DummyVecEnv(env_fns, rms_norm=False)
+        envs = subproc.SubprocVecEnv(env_fns, rms_norm=False)
         # test properties
         self.assertTrue(isinstance(envs.rms_norm, utils.RMSNormalizer))
         self.assertFalse(envs.rms_norm.enabled)
@@ -91,13 +91,13 @@ class TestDummyVecEnvModule(TestCase):
         ('Discrete', False), 
         ('MultiBinary', False)
     ])
-    def test_dummy_vec_env_auto_rms(self, space_type, should_enable):
+    def test_subproc_vec_env_auto_rms(self, space_type, should_enable):
         num_envs = 4
         env_fns = [
-            functools.partial(create_fake_env, i, space_type)
+            functools.partial(create_fake_env, i, space_type) 
             for i in range(num_envs)
         ]
-        envs = dummy.DummyVecEnv(env_fns)
+        envs = subproc.SubprocVecEnv(env_fns)
         self.assertTrue(isinstance(envs.rms_norm, utils.RMSNormalizer))
         self.assertEqual(envs.rms_norm.enabled, should_enable)
         self.assertEqual(envs.rms_norm.fixed, not should_enable)
@@ -110,51 +110,3 @@ class TestDummyVecEnvModule(TestCase):
         self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
         envs.render()
         envs.close()
-
-    def test_dummy_vec_env_image_with_rms(self):
-        num_envs = 4
-        env_fns = [
-            functools.partial(create_fake_env, i, 'Image') 
-            for i in range(num_envs)
-        ]
-        rms_norm = utils.RMSNormalizer(None, enable=True)
-        envs = dummy.DummyVecEnv(env_fns, rms_norm)
-        self.assertTrue(isinstance(envs.rms_norm, utils.RMSNormalizer))
-        self.assertTrue(envs.rms_norm.enabled)
-        self.assertFalse(envs.rms_norm.fixed)
-        self.assertEqual(len(envs), num_envs)
-        envs.seed(1)
-        obs = envs.reset()
-        self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
-        acts = [space.sample() for space in envs.action_spaces]
-        obs, rew, done, info = envs.step(acts)
-        self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
-        envs.render()
-        envs.close()
-
-    @parameterized.expand([
-        ('Box', True), 
-        ('Image', False), 
-        ('Discrete', False), 
-        ('MultiBinary', False)
-    ])
-    def test_vec_env_auto_rms(self, space_type, should_enable):
-        num_envs = 4
-        envs = [
-            create_fake_env(i, space_type)
-            for i in range(num_envs)
-        ]
-        envs = dummy.VecEnv(envs)
-        self.assertTrue(isinstance(envs.rms_norm, utils.RMSNormalizer))
-        self.assertEqual(envs.rms_norm.enabled, should_enable)
-        self.assertEqual(envs.rms_norm.fixed, not should_enable)
-        self.assertEqual(len(envs), num_envs)
-        envs.seed(1)
-        obs = envs.reset()
-        self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
-        acts = [space.sample() for space in envs.action_spaces]
-        obs, rew, done, info = envs.step(acts)
-        self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
-        envs.render()
-        envs.close()
-

@@ -15,13 +15,11 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
-from unstable_baselines import logger
 
 __all__ = [
     'ReLU'
 ]
 
-LOG = logger.getLogger()
 
 
 # --- Some TensorFlow internal bugs fixes ---
@@ -30,9 +28,6 @@ LOG = logger.getLogger()
 # tf.keras.layers.ReLU will cause memory leaking, so use tf.maximum instead
 # refer to this github issue: https://github.com/tensorflow/tensorflow/issues/46475
 if Version(tf.__version__) > '2.4.0':
-    LOG.warn('TensorFlow version {} > 2.4.0 detected, use tf.maximum instead of ReLU'
-             ' to avoid memory leaking. This may hurt some performance.'.format(tf.__version__))
-    
     class ReLU(tf.keras.layers.Layer):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)

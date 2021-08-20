@@ -42,7 +42,6 @@ class CMD:
     render  = 6
     close   = 7
 
-
 def _worker(_p, p, env_fn_wrapper):
     _p.close()
     env = env_fn_wrapper.fn()
@@ -54,16 +53,18 @@ def _worker(_p, p, env_fn_wrapper):
                 p.close()
                 break
             if cmd == CMD.getattr:
-                p.send(getattr(env, data, None))
+                p.send(getattr(env, data[0], None))
             elif cmd == CMD.setattr:
                 p.send(setattr(env, data[0], data[1]))
             elif cmd == CMD.reset:
-                p.send(env.reset(**data))
+                p.send(env.reset(**data[0]))
             elif cmd == CMD.step:
-                obs, rew, done, info = env.step(data)
+                obs, rew, done, info = env.step(data[0])
                 p.send((obs, rew, done, info))
+            elif cmd == CMD.seed:
+                p.send(env.seed(data[0]))
             elif cmd == CMD.render:
-                p.send(env.render(**data))
+                p.send(env.render(**data[0]))
             elif cmd == CMD.close:
                 p.send(env.close())
                 p.close()
@@ -73,7 +74,6 @@ def _worker(_p, p, env_fn_wrapper):
                 raise NotImplementedError
     except KeyboardInterrupt:
         p.close()
-
 
 class SubprocEnvWorker(vec_base.BaseEnvWorker):
     def __init__(self, env_fn):
@@ -86,7 +86,7 @@ class SubprocEnvWorker(vec_base.BaseEnvWorker):
         args = (
             self.p, _p, CloudpickleWrapper(env_fn)
         )
-        self.process = ctx.Process(traget=_worker, args=args, daemon=True)
+        self.process = ctx.Process(target=_worker, args=args, daemon=True)
         self.process.start()
         self._waiting_cmd = None
         _p.close()
