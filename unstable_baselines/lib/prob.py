@@ -202,22 +202,25 @@ class Normal(Distribution):
                 0.5 * tf.math.expm1(2. * log_diff) - log_diff)
 
 class MultiNormal(Normal):
+    def __init__(self, mean, scale, dtype=tf.float32, **kwargs):
+        self._mean = tf.cast(tf.convert_to_tensor(mean), dtype=dtype)
+        self._scale = tf.cast(tf.convert_to_tensor(scale), dtype=dtype)
+        shape = ub_utils.broadcast_shape(self._mean.shape, self._scale.shape)
+        if len(shape) < 1:
+            raise RuntimeError('MultiNormal needs at least 1 dimension')
+        Distribution.__init__(self, dtype=dtype, **kwargs)
+
     def log_prob(self, x):
         '''
         Log probability
-
-        Args:
-            x (tf.Tensor): outcomes, (b, *shape)
         '''
-        x = ub_utils.flatten_tensor(super().log_prob(x), 1) # (b, -1)
-        return tf.math.reduce_sum(x, axis=-1)
+        return tf.math.reduce_sum(super().log_prob(x), axis=-1)
 
     def entropy(self):
         '''
         Entropy
         '''
-        x = ub_utils.flatten_tensor(super().entropy(), 1) # (b, -1)
-        return tf.math.reduce_sum(x, axis=-1)
+        return tf.math.reduce_sum(super().entropy(), axis=-1)
 
     def kl(self, q: Distribution):
         '''
@@ -225,8 +228,7 @@ class MultiNormal(Normal):
 
         q: target probability distribution (MultiNormal)
         '''
-        x = ub_utils.flatten_tensor(super().kl(q), 1) # (b, -1)
-        return tf.math.reduce_sum(x, axis=-1)
+        return tf.math.reduce_sum(super().kl(q), axis=-1)
 
 
 # === Probability bijection ===
