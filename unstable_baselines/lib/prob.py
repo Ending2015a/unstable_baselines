@@ -49,7 +49,7 @@ class Distribution(tf.Module,
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample(self, n=None):
+    def sample(self, n: int=[]):
         '''
         Sample outcomes
         '''
@@ -109,11 +109,11 @@ class Categorical(Distribution):
         '''
         return tf.math.argmax(self.logits, axis=-1, output_type=self.dtype)
 
-    def sample(self, n=None):
+    def sample(self, n: int=[]):
         '''
         Sample outcomes
         '''
-        n = [] if n is None else [n]
+        n = tf.TensorShape(n)
         shape = tf.concat((n, tf.shape(self.logits)), axis=0)
         e  = tf.random.uniform(shape, dtype=self.logits.dtype)
         it = self.logits - tf.math.log(-tf.math.log(e))
@@ -144,12 +144,9 @@ class Categorical(Distribution):
 
 class Normal(Distribution):
     def __init__(self, mean, scale, dtype=tf.float32, **kwargs):
-
         self._mean = tf.cast(tf.convert_to_tensor(mean), dtype=dtype)
         self._scale = tf.cast(tf.convert_to_tensor(scale), dtype=dtype)
-
-        super().__init__(dtype=dtype, 
-                        **kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
     @property
     def mean(self):
@@ -163,7 +160,7 @@ class Normal(Distribution):
         '''
         Probability of given outcomes (x)
         '''
-        x = tf.cast(x, dtype=self.dtype)
+        x = tf.cast(tf.convert_to_tensor(x), dtype=self.dtype)
         p = 0.5 * tf.math.squared_difference(x/self.scale, self.mean/self.scale)
         c = tf.constant(0.5 * np.log(2. * np.pi), dtype=self.dtype)
         z = c + tf.math.log(self.scale)
@@ -173,15 +170,17 @@ class Normal(Distribution):
         '''
         Mode
         '''
-        return self.mean
+        return self.mean * tf.ones_like(self.scale)
 
-    def sample(self, n=None):
+    def sample(self, n: int=[]):
         '''
         Sample outcomes
         '''
-        n = [] if n is None else [n]
-        shape = tf.concat((n, tf.shape(self.mean)), axis=0)
-        x = tf.random.normal(shape, dtype=self.dtype)
+        n = tf.TensorShape(n)
+        shape = ub_utils.broadcast_shape(self.mean.shape, self.scale.shape)
+        shape = tf.concat((n, shape), axis=0)
+        x = tf.random.normal(shape=shape, mean=0., stddev=1.,
+                            dtype=self.dtype)
         return self.mean + self.scale * x
 
     def entropy(self):
@@ -189,7 +188,7 @@ class Normal(Distribution):
         Entropy
         '''
         c = tf.constant(0.5 * np.log(2. * np.pi), dtype=self.dtype) + 0.5
-        return c + tf.math.log(self.scale)
+        return c + tf.math.log(self.scale) * tf.ones_like(self.mean)
 
     def kl(self, q: Distribution):
         '''
@@ -197,8 +196,9 @@ class Normal(Distribution):
 
         q: target probability distribution (Normal)
         '''
-        log_diff = tf.math.log(self.scale) - tf.math.log(q.scale)
-        return (0.5 * tf.math.square_difference(self.mean/q.scale, q.mean/q.scale) +
+        log_diff = (tf.math.log(self.scale * tf.ones_like(self.mean)) 
+                    - tf.math.log(q.scale * tf.ones_like(q.mean)))
+        return (0.5 * tf.math.squared_difference(self.mean/q.scale, q.mean/q.scale) +
                 0.5 * tf.math.expm1(2. * log_diff) - log_diff)
 
 class MultiNormal(Normal):

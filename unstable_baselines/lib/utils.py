@@ -22,10 +22,6 @@ import tensorflow as tf
 from tensorflow.python.lib.io import file_io
 
 # --- my module ---
-from unstable_baselines import logger
-
-LOG = logger.getLogger()
-
 
 __all__ = [
     'NormalActionNoise',
@@ -346,28 +342,6 @@ def stack_obs(obs, space):
     else:
         return np.stack(obs)
 
-
-def soft_update(target_vars, source_vars, polyak=0.005):
-    '''Perform soft updates
-
-    target_var = (1-polyak) * target_var + polyak * source_var
-
-    Args:
-        target_vars (list): A list of tf.Variable update to.
-        source_vars (list): A list of tf.Variable update from. 
-            The length must be equal to target_vars.
-        polyak (float, optional): Smooth rate. Defaults to 0.005.
-    '''
-
-
-    if len(target_vars) != len(source_vars):
-        raise ValueError('Length does not match, got {} and {}'.format(
-                        len(target_vars), len(source_vars)))
-
-    for (tar_var, src_var) in zip(target_vars, source_vars):
-        tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
-
-
 def is_image_space(space):
     return (isinstance(space, gym.spaces.Box)
                 and np.dtype(space.dtype) == np.uint8
@@ -461,6 +435,32 @@ def flatten_tensor(tensor: tf.Tensor, begin, end=None):
         ), axis=0)
 
     return tf.reshape(tensor, flat_shape)
+
+def soft_update(target_vars, source_vars, polyak=0.005):
+    '''Perform soft updates
+
+    target_var = (1-polyak) * target_var + polyak * source_var
+
+    Args:
+        target_vars (list): A list of tf.Variable update to.
+        source_vars (list): A list of tf.Variable update from. 
+            The length must be equal to target_vars.
+        polyak (float, optional): Smooth rate. Defaults to 0.005.
+    '''
+    if len(target_vars) != len(source_vars):
+        raise ValueError('Length does not match, got {} and {}'.format(
+                        len(target_vars), len(source_vars)))
+
+    for (tar_var, src_var) in zip(target_vars, source_vars):
+        tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
+
+def broadcast_shape(x_shape, y_shape):
+    x_shape_static = tf.get_static_value(x_shape)
+    y_shape_static = tf.get_static_value(y_shape)
+    if (x_shape_static is None) or (y_shape_static is None):
+        return tf.broadcast_dynamic_shape(x_shape, y_shape)
+    return tf.broadcast_static_shape(
+        tf.TensorShape(x_shape_static), tf.TensorShape(y_shape_static))
 
 # === JSON utils ===
 
