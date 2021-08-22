@@ -24,9 +24,31 @@ __all__ = [
 
 class Distribution(tf.Module, 
                     metaclass=abc.ABCMeta):
-    def __init__(self, dtype, **kwargs):
+    def __init__(self, dtype, event_ndims=0, **kwargs):
+        '''Distribution base class
+
+        Args:
+            dtype (tf.dtype): type of outcomes.
+            event_ndims (int, optional): Number of event dimensions. Defaults to 0.
+        '''        
         super().__init__(**kwargs)
         self.dtype = dtype
+        self.event_ndims = event_ndims
+
+    @property
+    @abc.abstractmethod
+    def shape(self):
+        raise NotImplementedError
+
+    def event_shape(self):
+        if self.event_ndims == 0:
+            return tf.TensorShape([])
+        return self.shape[-self.event_ndims:]
+
+    def batch_shape(self):
+        if self.event_ndims == 0:
+            return self.shape
+        return self.shape[:-self.event_ndims]
 
     def prob(self, x):
         '''
@@ -74,11 +96,15 @@ class Distribution(tf.Module,
 class Categorical(Distribution):
     def __init__(self, logits: tf.Tensor, dtype=tf.int32, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
-        super().__init__(dtype=dtype, **kwargs)
+        super().__init__(dtype=dtype, event_ndims=1, **kwargs)
 
     @property
     def logits(self):
         return self._logits
+
+    @property
+    def shape(self):
+        return self._logits.shape
 
     def _p(self):
         '''
@@ -146,7 +172,8 @@ class Normal(Distribution):
     def __init__(self, mean, scale, dtype=tf.float32, **kwargs):
         self._mean = tf.cast(tf.convert_to_tensor(mean), dtype=dtype)
         self._scale = tf.cast(tf.convert_to_tensor(scale), dtype=dtype)
-        super().__init__(dtype=dtype, **kwargs)
+        self._shape = ub_utils.broadcast_shape(self._mean.shape, self._scale.shape)
+        super().__init__(dtype=dtype, event_ndims=0, **kwargs)
 
     @property
     def mean(self):
@@ -155,6 +182,10 @@ class Normal(Distribution):
     @property
     def scale(self):
         return self._scale
+
+    @property
+    def shape(self):
+        return self._shape
 
     def log_prob(self, x):
         '''
@@ -177,8 +208,7 @@ class Normal(Distribution):
         Sample outcomes
         '''
         n = tf.TensorShape(n)
-        shape = ub_utils.broadcast_shape(self.mean.shape, self.scale.shape)
-        shape = tf.concat((n, shape), axis=0)
+        shape = tf.concat((n, self.shape), axis=0)
         x = tf.random.normal(shape=shape, mean=0., stddev=1.,
                             dtype=self.dtype)
         return self.mean + self.scale * x
@@ -205,10 +235,14 @@ class MultiNormal(Normal):
     def __init__(self, mean, scale, dtype=tf.float32, **kwargs):
         self._mean = tf.cast(tf.convert_to_tensor(mean), dtype=dtype)
         self._scale = tf.cast(tf.convert_to_tensor(scale), dtype=dtype)
-        shape = ub_utils.broadcast_shape(self._mean.shape, self._scale.shape)
-        if len(shape) < 1:
+        self._shape = ub_utils.broadcast_shape(self._mean.shape, self._scale.shape)
+        if len(self._shape) < 1:
             raise RuntimeError('MultiNormal needs at least 1 dimension')
-        Distribution.__init__(self, dtype=dtype, **kwargs)
+        Distribution.__init__(self, dtype=dtype, event_ndims=1, **kwargs)
+
+    @property
+    def shape(self):
+        return self._shape
 
     def log_prob(self, x):
         '''
@@ -234,16 +268,22 @@ class MultiNormal(Normal):
 # === Probability bijection ===
 
 class Bijector(Distribution):
-    def __init__(self, distribution: Distribution):
+    def __init__(self, dist: Distribution, **kwargs):
         '''Wrapping the base distribution with a bijector wrapper
 
         Args:
-            distribution (Distribution): Base distribution
+            dist (Distribution): Base distribution
         '''        
-        if not isinstance(distribution, Distribution):
-            raise ValueError('`distribution` must be a type of '
-                f'Distribution, got {type(distribution)}')
-        self.dist = distribution
+        if not isinstance(dist, Distribution):
+            raise ValueError('`dist` must be a type of '
+                f'Distribution, got {type(dist)}')
+        self.dist = dist
+        super().__init__(self.dist.dtype, event_ndims=self.dist.event_ndims,
+                        **kwargs)
+
+    @property
+    def shape(self):
+        return self.dist.shape
 
     @property
     def distribution(self):
@@ -280,7 +320,11 @@ class Bijector(Distribution):
         return self.forward(self.distribution.mode())
 
     def log_prob(self, x):
-        agg_jacob = tf.math.reduce_sum(self.log_det_jacob(x), axis=-1)
+        # broadcast jacob
+        agg_jacob = self.log_det_jacob(x) * tf.ones(self.shape, dtype=self.dtype)
+        if self.event_ndims > 0:
+            axes = (np.arange(1, 1+self.event_ndims))*(-1)
+            agg_jacob = tf.math.reduce_sum(agg_jacob, axis=axes)
         return self.distribution.log_prob(x) * agg_jacob
 
     def sample(self):
@@ -306,12 +350,15 @@ class Bijector(Distribution):
 
 class Tanh(Bijector):
     def forward(self, x):
+        x = tf.cast(tf.convert_to_tensor(x), dtype=self.dtype)
         return tf.math.tanh(x)
 
     def inverse(self, x):
+        x = tf.cast(tf.convert_to_tensor(x), dtype=self.dtype)
         return tf.math.atanh(x)
 
     def log_det_jacob(self, x):
+        x = tf.cast(tf.convert_to_tensor(x), dtype=self.dtype)
         # log(dy/dx) = log(1 - tanh(x)**2)
         return 2. * (np.log(2.) - x - tf.math.softplus(-2.*x))
     

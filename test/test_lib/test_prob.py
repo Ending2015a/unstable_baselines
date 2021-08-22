@@ -55,6 +55,10 @@ class TestProbModuleCategorical(TestCase):
     def test_shapes(self, batch_shape):
         shape = list(batch_shape) + [10]
         dist = make_categorical(batch_shape, 10, dtype=tf.int32)
+        self.assertEqual(1, dist.event_ndims)
+        self.assertArrayEqual(shape, dist.shape)
+        self.assertArrayEqual(batch_shape, dist.batch_shape())
+        self.assertArrayEqual([10], dist.event_shape())
         self.assertArrayEqual(shape, dist.logits.shape)
         self.assertArrayEqual(shape, dist._p().shape)
         self.assertArrayEqual(batch_shape, dist.log_prob(np.zeros(batch_shape)).shape)
@@ -205,6 +209,10 @@ class TestProbModuleNormal(TestCase):
         batch_shape = utils.broadcast_shape(tf.TensorShape(mean_shape), 
                                             tf.TensorShape(scale_shape))
         dist = make_normal(mean_shape, scale_shape, dtype=tf.float32)
+        self.assertEqual(0, dist.event_ndims)
+        self.assertArrayEqual(batch_shape, dist.shape)
+        self.assertArrayEqual(batch_shape, dist.batch_shape())
+        self.assertArrayEqual([], dist.event_shape())
         self.assertArrayEqual(mean_shape, dist.mean.shape)
         self.assertArrayEqual(scale_shape, dist.scale.shape)
         self.assertArrayEqual(batch_shape, dist.log_prob(np.zeros(batch_shape)).shape)
@@ -373,7 +381,12 @@ class TestProbModuleMultiNormal(TestCase):
     def test_shapes(self, mean_shape, scale_shape):
         full_shape = (np.ones(mean_shape) * np.ones(scale_shape)).shape
         batch_shape = full_shape[:-1]
+        event_shape = full_shape[-1:]
         dist = make_multinormal(mean_shape, scale_shape, dtype=tf.float32)
+        self.assertEqual(1, dist.event_ndims)
+        self.assertArrayEqual(full_shape, dist.shape)
+        self.assertArrayEqual(batch_shape, dist.batch_shape())
+        self.assertArrayEqual(event_shape, dist.event_shape())
         self.assertArrayEqual(mean_shape, dist.mean.shape)
         self.assertArrayEqual(scale_shape, dist.scale.shape)
         self.assertArrayEqual(batch_shape, dist.log_prob(np.zeros(full_shape)).shape)
@@ -449,3 +462,95 @@ class TestProbModuleMultiNormal(TestCase):
         sample_kl = dist_a.log_prob(draws) - dist_b.log_prob(draws)
         sample_kl = tf.reduce_mean(sample_kl, axis=0)
         self.assertAllClose(expected_kl, sample_kl, atol=0.0, rtol=1e-2)
+
+
+class TestProbModuleBijectorTanh(TestCase):
+    def test_bijector_init_exception(self):
+        with self.assertRaises(ValueError):
+            prob.Tanh(object())
+
+    def test_bijector_init_no_exception(self):
+        dist = prob.Normal(mean=1.0, scale=2.0)
+        dist = prob.Tanh(dist)
+    
+    @parameterized.expand([
+        ([], []), 
+        ([1], [1]), 
+        ([2, 3, 4], [1, 1, 4]),
+        ([2, 3, 4], [1]),
+        ([2, 3, 4], []),
+        ([1, 1, 4], [2, 3, 4]),
+        ([1], [2, 3, 4]),
+        ([], [2, 3, 4])
+    ])
+    def test_shapes_normal(self, mean_shape, scale_shape):
+        batch_shape = utils.broadcast_shape(tf.TensorShape(mean_shape), 
+                                            tf.TensorShape(scale_shape))
+        dist = make_normal(mean_shape, scale_shape, dtype=tf.float32)
+        dist = prob.Tanh(dist)
+        self.assertEqual(0, dist.event_ndims)
+        self.assertArrayEqual(batch_shape, dist.shape)
+        self.assertArrayEqual(batch_shape, dist.batch_shape())
+        self.assertArrayEqual([], dist.event_shape())
+        self.assertArrayEqual(batch_shape, dist.log_prob(np.zeros(batch_shape)).shape)
+        self.assertArrayEqual(batch_shape, dist.mode().shape)
+        self.assertArrayEqual(batch_shape, dist.sample().shape)
+
+    @parameterized.expand([
+        (tf.float16,),
+        (tf.float32,),
+        (tf.float64,),
+    ])
+    def test_dtypes_normal(self, dtype):
+        dist = make_normal([], [], dtype=dtype)
+        self.assertEqual(dtype, dist.dtype)
+        self.assertEqual(dtype, dist.log_prob(0).dtype)
+        self.assertEqual(dtype, dist.mode().dtype)
+        self.assertEqual(dtype, dist.sample().dtype)
+
+    @parameterized.expand([
+        ([1], [1]), 
+        ([2, 3, 4], [1, 1, 4]),
+        ([2, 3, 4], [1]),
+        ([2, 3, 4], []),
+        ([1, 1, 4], [2, 3, 4]),
+        ([1], [2, 3, 4]),
+        ([], [2, 3, 4])
+    ])
+    def test_shapes_multinormal(self, mean_shape, scale_shape):
+        full_shape = (np.ones(mean_shape) * np.ones(scale_shape)).shape
+        batch_shape = full_shape[:-1]
+        event_shape = full_shape[-1:]
+        dist = make_multinormal(mean_shape, scale_shape, dtype=tf.float32)
+        dist = prob.Tanh(dist)
+        self.assertEqual(1, dist.event_ndims)
+        self.assertArrayEqual(full_shape, dist.shape)
+        self.assertArrayEqual(batch_shape, dist.batch_shape())
+        self.assertArrayEqual(event_shape, dist.event_shape())
+        self.assertArrayEqual(batch_shape, dist.log_prob(np.zeros(full_shape)).shape)
+        self.assertArrayEqual(full_shape, dist.mode().shape)
+        self.assertArrayEqual(full_shape, dist.sample().shape)
+
+    @parameterized.expand([
+        (tf.float16,),
+        (tf.float32,),
+        (tf.float64,),
+    ])
+    def test_dtypes_multinormal(self, dtype):
+        dist = make_multinormal([1], [1], dtype=dtype)
+        dist = prob.Tanh(dist)
+        self.assertEqual(dtype, dist.dtype)
+        self.assertEqual(dtype, dist.log_prob(0).dtype)
+        self.assertEqual(dtype, dist.mode().dtype)
+        self.assertEqual(dtype, dist.sample().dtype)
+
+    def test_tanh(self):
+        dist = make_normal([], [], dtype=np.float64)
+        dist_tanh = prob.Tanh(dist)
+        x = np.linspace(-3., 3., 100).reshape([2, 5, 10]).astype(np.float64)
+        y = np.tanh(x)
+        ildj = -np.log1p(-np.square(np.tanh(x)))
+        self.assertAllClose(y, dist_tanh.forward(x), atol=0., rtol=1e-6)
+        self.assertAllClose(x, dist_tanh.inverse(y), atol=0., rtol=1e-4)
+        self.assertAllClose(-ildj, dist_tanh.log_det_jacob(x), atol=0., rtol=1e-4)
+        
