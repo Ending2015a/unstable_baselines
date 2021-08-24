@@ -542,8 +542,8 @@ class TestPPOModule(TestCase):
         total_gradsteps = (int((n_envs * n_steps)/batch_size+0.5)
                             * n_subepochs * n_epochs)
         envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
-        eval_env = FakeEnv(0, 'Box')
         env = ub_vec.VecEnv(envs)
+        eval_env = FakeEnv(0, 'Box')
         env.seed(1)
         ub_utils.set_seed(1)
         model = ppo_model.PPO(
@@ -561,7 +561,8 @@ class TestPPOModule(TestCase):
                 eval_episodes=1,
                 eval_max_steps=10,
                 save_path=save_path,
-                tb_logdir=save_path
+                tb_logdir=save_path,
+                reset_timesteps=True
             )
             # test load weights
             ppo_model.PPO.load(save_path)
@@ -571,3 +572,19 @@ class TestPPOModule(TestCase):
             self.assertEqual(n_subepochs*n_epochs, model.num_subepochs)
             self.assertEqual(total_gradsteps, model.num_gradsteps)
             self.assertEqual(1.0, model.progress)
+
+    def test_ppo_reset_spaces_conflict(self):
+        n_envs = 4
+        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        model = ppo_model.PPO(env)
+        envs = [FakeEnv(0, 'Image') for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        with self.assertRaises(RuntimeError):
+            # space conflict
+            model.set_env(env)
+    
+    def test_ppo_not_vec_env(self):
+        env = FakeEnv(0, 'Box')
+        with self.assertRaises(RuntimeError):
+            ppo_model.PPO(env)

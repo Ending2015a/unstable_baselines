@@ -21,7 +21,23 @@ class A():
         self.a = a
         self.b = b
 
+
 class SimpleSavableModel(base.SavableModel):
+    '''This class is used to test parameter updates'''
+    def __init__(self, trainable_param: float = 1.0,
+                       param: float = 1.0):
+        super().__init__()
+
+        self.trainable_param = tf.Variable(trainable_param, dtype=tf.float32,
+                                        trainable=True)
+        self.param = tf.Variable(param, dtype=tf.float32,
+                                trainable=False)
+
+    def get_config(self):
+        return {}
+
+class SavableModel(base.SavableModel):
+    '''This class is used to test model save/load'''
     def __init__(self, delayed_param: float,
                        hparam1: int=1,
                        hparam2: float=2.4,
@@ -38,9 +54,9 @@ class SimpleSavableModel(base.SavableModel):
         self.hparam5 = hparam5 # A(3, 'abc')
     
         if delayed_param is not None:
-            self.setup_model(delayed_param)
+            self.setup(delayed_param)
 
-    def setup_model(self, delayed_param):
+    def setup(self, delayed_param):
         self.delayed_param = delayed_param
 
         vparam1 = np.array([self.hparam1, self.hparam1], dtype=np.uint8)
@@ -75,7 +91,7 @@ class SimpleSavableModel(base.SavableModel):
         delayed_config = config.get('delayed_config', {})
 
         self = cls(None, **init_config)
-        self.setup_model(**delayed_config)
+        self.setup(**delayed_config)
 
         return self
 
@@ -124,7 +140,7 @@ class TestBaseModule(TestCase):
                             expected_number,
                             best=False):
         
-        checkpoint_path = SimpleSavableModel._preload(save_path, weights_name, best=best)
+        checkpoint_path = SavableModel._preload(save_path, weights_name, best=best)
         basename = os.path.basename(checkpoint_path)
         if '-' in weights_name:
             exp_weights_name = '{}-{}'.format(weights_name.split('-')[0],
@@ -146,14 +162,14 @@ class TestBaseModule(TestCase):
         
         self.assertEqual(basename, exp_weights_name)
         
-        new_model = SimpleSavableModel.load(save_path, weights_name, best=best)
+        new_model = SavableModel.load(save_path, weights_name, best=best)
 
         return new_model
 
     def test_savable_model(self):
         s = utils.StateObject(a=10, b=100, c=np.array([1,2,3]))
         a = A(3, 'abc')
-        model = SimpleSavableModel(10, hparam3='wow', hparam4=s, hparam5=a)
+        model = SavableModel(10, hparam3='wow', hparam4=s, hparam5=a)
 
         # test save/load
         with tempfile.TemporaryDirectory() as tempdir:
@@ -273,3 +289,24 @@ class TestBaseModule(TestCase):
             self.assertTrue(isinstance(model2.hparam5, A))
             self.assertEqual(model2.hparam5.a, A(3, 'abc').a)
             self.assertEqual(model2.hparam5.b, A(3, 'abc').b)
+
+    def test_savable_model_update(self):
+        a = SimpleSavableModel(0.0, 0.0)
+        b = SimpleSavableModel(1.0, 1.0)
+        self.assertEqual(0.0, a.trainable_param)
+        self.assertEqual(0.0, a.param)
+        self.assertEqual(1.0, b.trainable_param)
+        self.assertEqual(1.0, b.param)
+        # soft update (only trainable params)
+        a.update(b, polyak=0.9, all_vars=False)
+        self.assertEqual(0.9, a.trainable_param)
+        self.assertEqual(0.0, a.param)
+        self.assertEqual(1.0, b.trainable_param)
+        self.assertEqual(1.0, b.param)
+        # soft update(all params)
+        a.update(b, polyak=0.9, all_vars=True)
+        self.assertAllClose(0.99, a.trainable_param) # 0.9899999995~0.9
+        self.assertEqual(0.9, a.param)
+        self.assertEqual(1.0, b.trainable_param)
+        self.assertEqual(1.0, b.param)
+
