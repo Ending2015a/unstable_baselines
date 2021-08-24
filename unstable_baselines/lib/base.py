@@ -142,9 +142,9 @@ def _get_best_checkpoint_state(checkpoint_dir, latest_filename=None):
             ckpt.all_checkpoint_paths = all_checkpoint_paths
             ckpt.all_checkpoint_metrics = all_checkpoint_metrics
     except Exception as e:
-        LOG.warning('{}: {}'.format(type(e).__name__), e)
-        LOG.warning('{}: Best checkpoint ignored'.format(coord_checkpoint_filename))
-    
+        LOG.warning('Failed to load checkpoint states from '
+                        f'{coord_checkpoint_filename}')
+        LOG.warning(f'  {type(e).__name__}: {e}')
     return ckpt
 
 def _prefix_to_checkpoint_path(prefix, format_version):
@@ -902,7 +902,7 @@ class BaseAgent(SavableModel):
         self.action_space      = action_space
 
     @abc.abstractmethod
-    def setup_model(self):
+    def setup(self):
         '''Setup agent
         '''        
         raise NotImplementedError('Method not implemented')
@@ -956,7 +956,7 @@ class BaseRLModel(TrainableModel):
         be implemented in `run()`.
     * Some on-policy algo may need to iterate through all rollout
         samples for many times, this can be implemented by setting
-        `n_subepochs` and overriding `_train_subepoch()`
+        `n_subepochs`
     '''
     support_obs_spaces = []
     support_act_spaces = []
@@ -978,7 +978,6 @@ class BaseRLModel(TrainableModel):
         self.wramup_steps = wramup_steps
         self.batch_size   = batch_size
         self.verbose      = verbose
-
         # initialize states
         self.env               = None
         self.buffer            = None
@@ -987,7 +986,9 @@ class BaseRLModel(TrainableModel):
 
         self.observation_space = observation_space
         self.action_space      = action_space
-
+        # create default logger
+        if not hasattr(self, 'LOG') or self.LOG is None:
+            self.LOG = logger.getLogger(f'{type(self).__name__}')
         if env is not None:
             self.set_env(env)
 
@@ -1024,7 +1025,7 @@ class BaseRLModel(TrainableModel):
         self.action_space      = env.action_space
 
     @abc.abstractmethod
-    def setup_model(self):
+    def setup(self):
         '''Setup model
         '''
         raise NotImplementedError('Method not implemented')
@@ -1066,12 +1067,10 @@ class BaseRLModel(TrainableModel):
         '''
         if obs is None:
             obs = self.env.reset()
-        
         for _ in range(steps):
             obs = self._collect_step(obs)
             # update state
             self.num_timesteps += self.n_envs
-
         return obs
 
     def run(self, steps, obs=None):
@@ -1187,42 +1186,13 @@ class BaseRLModel(TrainableModel):
         '''        
         raise NotImplementedError('Method not implemented')
 
-    def _train_subepoch(self, gradsteps, batch_size, target_update):
-        '''Train one subepoch
-
-        Args:
-            gradsteps (int): Number of steps in this epoch.
-            batch_size (int): mini-batch size.
-            target_update (int): target networks update frequency.
-
-        Returns:
-            dict: loss dict
-        '''
-        all_losses = []
-
-        for gradstep in range(gradsteps):
-            # train one step
-            losses = self._train_step(batch_size)
-            all_losses.append(losses)
-            # update state
-            self.num_gradsteps += 1
-            # update target networks
-            if self.num_gradsteps % target_update == 0:
-                self._update_target()
-        # aggregate losses
-        all_losses = ub_utils.flatten_dicts(all_losses)
-        m_losses = {}
-        for key, losses in all_losses.items():
-            m_losses[key] = np.mean(np.hstack(np.asarray(losses)))
-        return m_losses
-
-    def train(self, subepochs, gradsteps, batch_size, target_update):
+    def train(self, batch_size, subepochs, gradsteps, target_update):
         '''Train one epoch
 
         Args:
+            batch_size (int): batch size.
             subepochs (int): Number of subepochs
             gradsteps (int): Number of gradients per subepoch
-            batch_size (int): batch size.
             target_update (int): target networks update frequency.
 
         Returns:
@@ -1230,9 +1200,15 @@ class BaseRLModel(TrainableModel):
         '''
         all_losses = []
         for subepoch in range(subepochs):
-            # train one subepoch
-            losses = self._train_subepoch(gradsteps, batch_size, target_update)
-            all_losses.append(losses)
+            for gradstep in range(gradsteps):
+                # train one step
+                losses = self._train_step(batch_size)
+                all_losses.append(losses)
+                # update state
+                self.num_gradsteps += 1
+                # update target networks
+                if self.num_gradsteps % target_update == 0:
+                    self._update_target()
             # update states
             self.num_subepochs += 1
         # aggregate losses
@@ -1405,9 +1381,9 @@ class BaseRLModel(TrainableModel):
             if not self.is_warming_up():
                 # training
                 losses = self.train(
+                    batch_size    = self.batch_size,
                     subepochs     = self.n_subepochs,
                     gradsteps     = self.n_gradsteps,
-                    batch_size    = self.batch_size,
                     target_update = target_update
                 )
                 # write tensorboard

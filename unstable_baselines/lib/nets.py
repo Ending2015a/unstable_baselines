@@ -22,7 +22,6 @@ __copyright__ = '''
 '''
 __license__ = 'MIT'
 
-
 # --- built in ---
 import os
 import sys
@@ -38,12 +37,8 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
-from unstable_baselines import logger
 from unstable_baselines.lib import prob as ub_prob
 from unstable_baselines.lib import patch as ub_patch
-
-# create logger 
-LOG = logger.getLogger('nets')
 
 # === Common nets ===
 
@@ -59,9 +54,11 @@ class Constant(tf.keras.Model):
     def __init__(self, constant, **kwargs):
         super().__init__(**kwargs)
         self.constant = constant
-
     def call(self, inputs, training=True):
-        return self.constant
+        # broadcast shape to batch shape (b, *constant.shape)
+        batch_shape = tf.shape(inputs)[0]
+        value = tf.expand_dims(self.constant, axis=0)
+        return tf.repeat(value, batch_shape, axis=0)
 
 class MlpNet(tf.keras.Model):
     '''MLP feature extractor'''
@@ -117,14 +114,14 @@ class CategoricalPolicyNet(tf.keras.Model):
         super().__init__(**kwargs)
 
         if not isinstance(action_space, tuple(self.support_spaces)):
-            raise ValueError(f'{type(self).__name__} does not '
-                f'suprt action space of type `{type(action_space)}`')
+            raise ValueError(f'{type(self)} does not support '
+                f'action spaces of type `{type(action_space)}`')
 
         self.action_space = action_space
         self._model = None
 
     def build(self, input_shape):
-        self._model = self.get_model()
+        self._model = self.create_model()
     
     def call(self, inputs, training=True):
         '''Forward network
@@ -139,7 +136,7 @@ class CategoricalPolicyNet(tf.keras.Model):
         '''        
         return ub_prob.Categorical(self._model(inputs, training=training))
 
-    def get_model(self):
+    def create_model(self):
         '''Override this method to customize model arch'''
         return tf.keras.Sequential([
             tf.keras.layers.Dense(self.action_space.n)
@@ -175,8 +172,8 @@ class DiagGaussianPolicyNet(tf.keras.Model):
     def build(self, input_shape):
         '''Build model
         '''
-        self._mean_model   = self.get_mean_model()
-        self._logstd_model = self.get_logstd_model()
+        self._mean_model   = self.create_mean_model()
+        self._logstd_model = self.create_logstd_model()
 
     def call(self, inputs, training=True):
         '''Forward network
@@ -203,7 +200,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
             distrib = ub_prob.Tanh(distrib)
         return distrib
 
-    def get_mean_model(self):
+    def create_mean_model(self):
         '''Mean/Loc model
         Override this method to customize model arch
 
@@ -214,7 +211,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
             tf.keras.layers.Dense(self.action_dims)
         ])
 
-    def get_logstd_model(self):
+    def create_logstd_model(self):
         '''Log-std model
         Override this method to customize model arch
 
@@ -227,71 +224,105 @@ class DiagGaussianPolicyNet(tf.keras.Model):
 
 class PolicyNet(tf.keras.Model):
     support_spaces = [gym.spaces.Box, gym.spaces.Discrete]
-    def __init__(self, action_space, squash=False, **kwargs):
+    #TODO: support other spaces
+    def __init__(self, action_space, squash=False, net=None, **kwargs):
+        '''Base Policy net
+        Override `create_model` or `create_*_policy` method to customize
+        model architecture
+
+        Args:
+            action_space (gym.Space): The action space.
+            squash (bool, optional): Apply Tanh squash for continuous (Box) 
+                action space. Defaults to False.
+            net (tf.keras.Model, optional): Base network, feature extractor.
+                Defaults to None.
+
+        Raises:
+            ValueError: if the given action space type does not contain in the 
+                `support_spaces` list
+        '''
         super().__init__(**kwargs)
-
+        # check if space supported
         if not isinstance(action_space, tuple(self.support_spaces)):
-            raise ValueError(f'{type(self).__name__} does not '
-                f'support action space of type `{type(action_space)}`')
-
-        self.squash       = squash
+            raise ValueError(f'{type(self)} does not '
+                f'support the action space of type {type(action_space)}')
+        
         self.action_space = action_space
-        self._model  = None
+        self.squash  = squash
+        self._model  = net
         self._policy = None
-
+    
     def build(self, input_shape):
-        self._model = self.get_model()
-
+        # create feature extraction model
+        if self._model is None:
+            self._model = Identity()
+        # create policy
         if isinstance(self.action_space, gym.spaces.Discrete):
-            self._policy = self.get_categorical_policy()
+            self._policy = self.create_categorical_policy()
         elif isinstance(self.action_space, gym.spaces.Box):
-            self._policy = self.get_gaussian_policy()
+            self._policy = self.create_gaussian_policy()
         else:
-            raise ValueError(f'{type(self).__name__} does not '
-                f'support action space of type `{type(action_space)}`')
-        super().build(input_shape)
+            raise ValueError(f'{type(self)} dose not '
+                f'support the action space of type {type(action_space)}')
 
     def call(self, inputs, training=True):
         '''Forward network
 
         Args:
-            inputs (tf.Tensor): Expecting a latent vectors
+            inputs (tf.Tensor): Input tensors, shape (b, *)
             training (bool, optional): Training mode. Defaults to True.
+
+        Returns:
+            Distribution: Action distributions.
         '''
         x = self._model(inputs, training=training)
         return self._policy(x, training=training)
-
-    def get_model(self):
-        '''Create model
-        Override this method to customize model arch
-
-        Returns:
-            tf.keras.Model or None: model
-        '''
-        return Identity()
-
-    def get_categorical_policy(self):
+    
+    def create_categorical_policy(self):
+        '''Policy for Discrete action spaces'''
         return CategoricalPolicyNet(self.action_space)
 
-    def get_gaussian_policy(self):
+    def create_gaussian_policy(self):
+        '''Policy for Box action space'''
         return DiagGaussianPolicyNet(self.action_space, self.squash)
 
 
 # === Value networks ===
 
 class ValueNet(tf.keras.Model):
-    def __init__(self, **kwargs):
+    def __init__(self, net=None, **kwargs):
+        '''Base value net
+
+        Args:
+            net (tf.keras.Model, optional): Base network, feature extractor. 
+                Defaults to None.
+        '''        
         super().__init__(**kwargs)
-        self._model       = None
+        self._model = net
 
     def build(self, input_shape):
-        self._model = self.get_model()
+        # create empty net
+        if self._model is None:
+            self._model = Identity()
+        self._model = tf.keras.Sequential([
+            self._model,
+            self.create_value_model()
+        ])
 
     def call(self, inputs, training=True):
-        return self._model(inputs, training=training)
+        '''Forward value net
 
-    def get_model(self):
-        '''Create model
+        Args:
+            inputs (tf.Tensor): Input tensors, shape (b, *).
+            training (bool, optional): Training mode. Defaults to True.
+
+        Returns:
+            tf.Tensor: value predictions, (Default) shape (b, 1)
+        '''        
+        return self._model(inputs, training=training)
+    
+    def create_value_model(self):
+        '''Create value model
         Override this method to customize model arch
 
         Returns:
@@ -302,15 +333,44 @@ class ValueNet(tf.keras.Model):
         ])
 
 class MultiHeadValueNets(tf.keras.Model):
-    def __init__(self, n_heads: int=2, **kwargs):
+    def __init__(self, n_heads: int=2, nets=None, **kwargs):
+        '''Base multi head value net
+
+        Args:
+            n_heads (int, optional): Number of heads. Defaults to 2.
+            nets (tf.keras.Model, list, optional): Base networks, 
+                feature extractors. Can be a tf.keras.Model or a list
+                of tf.keras.Model. Note that if only a tf.keras.Model 
+                was provided, it is shared across all heads. The count 
+                of tf.keras.Model of the list must match to `n_heads`. 
+                Defaults to None.
+        '''
         super().__init__(**kwargs)
-        self.n_heads = n_heads
-        self._models = None
+        self.n_heads   = n_heads
+        self._models   = nets
 
     def build(self, input_shape):
+        if self._models is None:
+            self._models = [
+                Identity()
+                for n in range(self.n_heads)
+            ]
+        elif isinstance(self._models, (list, tuple)):
+            pass
+        else:
+            # share net, copy the same net multiple times
+            self._models = [
+                self._models
+                for n in range(self.n_heads)
+            ]
+        assert len(self._models) == self.n_heads
+        # create value nets
         self._models = [
-            self.get_model()
-            for n in range(self.n_heads)
+            tf.keras.Sequential([
+                model,
+                self.create_value_model()
+            ])
+            for model in self._models
         ]
     
     def __getitem__(self, key):
@@ -345,14 +405,14 @@ class MultiHeadValueNets(tf.keras.Model):
             training (bool, optional): Training mode. Defaults to True.
 
         Returns:
-            tf.Tensor: (n_heads, b, 1)
+            tf.Tensor: Value predictions. (Default) shape (n_heads, b, 1)
         '''
         return tf.stack([
             self._models[n](inputs, training=training)
             for n in range(self.n_heads)
         ], axis=axis)
 
-    def get_model(self):
+    def create_value_model(self):
         '''Create model
         Override this method to customize model arch
 
