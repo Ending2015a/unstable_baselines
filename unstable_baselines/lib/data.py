@@ -11,9 +11,15 @@ import numba as nb
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
 
+__all__ = [
+    'NestedReplayBuffer',
+    'ReplayBuffer',
+    'SequentialBuffer'
+]
+
 class NestedReplayBuffer():
     def __init__(self, buffer_size):
-        if buffer_size <= 0:
+        if not isinstance(buffer_size, int) or buffer_size <= 0:
             raise ValueError('`buffer_size` must be greater than 0')
         
         self.buffer_size = buffer_size
@@ -86,10 +92,7 @@ class NestedReplayBuffer():
         return self._get_data(batch_inds)
 
     def __len__(self):
-        if self.full:
-            return self.buffer_size
-        else:
-            return self.pos
+        return self.buffer_size if self.full else self.pos
 
     def __getitem__(self, key):
         '''Get slice
@@ -136,8 +139,7 @@ class DictReplayBuffer(NestedReplayBuffer):
     def update(self, _indices=None, **kwargs):
         return super().update(kwargs, indices=_indices)
 
-
-class TrajReplayBuffer(DictReplayBuffer):
+class SequentialReplayBuffer(DictReplayBuffer):
     def __init__(self):
         self.reset()
 
@@ -227,45 +229,9 @@ class TrajReplayBuffer(DictReplayBuffer):
 
 # alias
 ReplayBuffer = DictReplayBuffer
-
+SequentialBuffer = SequentialReplayBuffer
 
 # === data utils ===
-# def compute_advantages(rewards:    np.ndarray,
-#                        values:     np.ndarray,
-#                        dones:      np.ndarray,
-#                        gamma:      float = 0.99,
-#                        gae_lambda: float = 1.0):
-#     '''Compute GAE
-
-#     Args:
-#         rewards (np.ndarray): (steps, ...)
-#         values (np.ndarray): (steps, ...)
-#         dones (np.ndarray): (steps, ...)
-#         gamma (float, optional): discount factor. Defaults to 0.99.
-#         gae_lambda (float, optional): [description]. Defaults to 1.0.
-
-#     Returns:
-#         [type]: [description]
-#     '''    
-#     rewards = np.asarray(rewards).astype(np.float32)
-#     values  = np.asarray(values).astype(np.float32)
-#     dones   = np.asarray(dones).astype(np.float32)
-#     advantages = np.zeros_like(values)
-
-#     last_gae_lam = 0
-#     num_steps = len(dones)
-#     next_non_terminal = 1.0 - dones[-1]
-#     next_value = values[-1]
-
-#     for step in reversed(range(num_steps)):
-#         delta = rewards[step] + gamma * next_value * next_non_terminal - values[step]
-#         last_gae_lam = delta + gamma * gae_lambda * next_non_terminal * last_gae_lam
-#         advantages[step] = last_gae_lam
-#         # prepare for the next step
-#         next_non_terminal = 1.0 - dones[step]
-#         next_value = values[step]
-#     return advantages
-
 def compute_advantage(rew:        np.ndarray,
                       val:        np.ndarray,
                       done:       np.ndarray,
@@ -274,11 +240,11 @@ def compute_advantage(rew:        np.ndarray,
     '''Compute GAE
 
     Args:
-        rewards (np.ndarray): (steps, ...)
-        values (np.ndarray): (steps, ...)
-        dones (np.ndarray): (steps, ...)
-        gamma (float, optional): discount factor. Defaults to 0.99.
-        gae_lambda (float, optional): gae lambda. Defaults to 1.0.
+        rewards (np.ndarray): Rewards (steps, ...)
+        values (np.ndarray): Predicted values (steps, ...)
+        dones (np.ndarray): Done flags (steps, ...)
+        gamma (float, optional): Discount factor. Defaults to 0.99.
+        gae_lambda (float, optional): GAE lambda. Defaults to 1.0.
 
     Returns:
         np.ndarray: GAE
@@ -289,7 +255,6 @@ def compute_advantage(rew:        np.ndarray,
     done = np.asarray(done).astype(np.float32)
     return _compute_advantage(rew=rew, val=val, done=done,
                     gamma=gamma, gae_lambda=gae_lambda)
-
 @nb.njit
 def _compute_advantage(rew:        np.ndarray,
                        val:        np.ndarray,
@@ -300,12 +265,10 @@ def _compute_advantage(rew:        np.ndarray,
     gae = 0.
     next_ndone = 1.-done[-1]
     next_val = val[-1]
-    for t in reversed(range(len(dones))):
+    for t in range(len(done)-1, -1, -1):
         delta = rew[t] + gamma * next_val * next_ndone - val[t]
         gae = delta + gamma * gae_lambda * next_ndone * gae
         adv[t] = gae
-        next_done = 1.-done[t]
+        next_ndone = 1.-done[t]
         next_val = val[t]
     return adv
-
-    

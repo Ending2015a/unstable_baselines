@@ -118,8 +118,13 @@ class TestUtilsModule(TestCase):
         with tempfile.NamedTemporaryFile() as f:
             rms_norm.save(f.name)
             new_rms_norm = utils.RMSNormalizer(space).load(f.name)
+            new_rms_norm.fixed = True
+            new_rms_norm.enabled = True
         res_obs = new_rms_norm.normalize(obs2)
         self.assertArrayClose(obs_norm, res_obs, decimal=3)
+        new_rms_norm.enabled = False
+        rew_obs = new_rms_norm.normalize(obs2)
+        self.assertArrayClose(obs2, rew_obs, decimal=3)
 
     def test_set_seed(self):
         utils.set_seed(1)
