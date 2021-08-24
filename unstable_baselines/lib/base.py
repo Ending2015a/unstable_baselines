@@ -6,6 +6,7 @@ import copy
 import time
 import json
 import logging
+import datetime
 import collections
 
 # --- 3rd party ---
@@ -20,6 +21,7 @@ from tensorflow.python.framework import errors
 # --- my module ---
 from unstable_baselines import logger
 from unstable_baselines.lib import utils as ub_utils
+from unstable_baselines.lib.envs import vec as ub_vec
 
 __all__ = ['SavableModel',
            'TrainableModel']
@@ -883,13 +885,14 @@ class BaseAgent(SavableModel):
 
     def set_spaces(self, observation_space, action_space):
         # check observation/action spaces
-        if observation_space is None:
-            raise ValueError('Observation space not provided, '
-                f'{observation_space}')
-        
-        if action_space is None:
-            raise ValueError('Action space not provided, '
-                f'{action_space}')
+        if self.observation_space is not None:
+            if observation_space != self.observation_space:
+                raise RuntimeError('Observation space does not match, expected '
+                    f'{self.observation_space}, got {observation_space}')
+        if self.action_space is not None:
+            if action_space != self.action_space:
+                raise RuntimeError('Action space does not match, expected '
+                    f'{self.action_space}, got {action_space}')
         # check if observation/action spaces supportted
         if not isinstance(observation_space, tuple(self.support_obs_spaces)):
             raise RuntimeError(f'{type(self).__name__} does not support the '
@@ -911,7 +914,7 @@ class BaseAgent(SavableModel):
         '''Preprocess observations before forwarding into nets
         e.g. normalizing observations
         '''
-        return ub_utils.preprocess_observations(obs, self.observation_space)
+        return ub_utils.preprocess_observation(obs, self.observation_space)
 
     def proc_action(self, act):
         '''Postprocess actions output from policy
@@ -1002,6 +1005,8 @@ class BaseRLModel(TrainableModel):
         Args:
             env (VecEnv): Training environment.
         '''
+        if not isinstance(env, ub_vec.BaseVecEnv):
+            raise RuntimeError('Envrionement must be a vectorized env')
         # check observation/action spaces
         if self.observation_space is not None:
             if env.observation_space != self.observation_space:
@@ -1414,11 +1419,11 @@ class BaseRLModel(TrainableModel):
 
                 if self.tb_writer is not None:
                     with self.tb_writer.as_default():
-                        for name, value in eval_metircs.items():
+                        for name, value in eval_metrics.items():
                             tf.summary.scalar(f'eval/{name}', value, step=self.num_timesteps)
                     self.tb_writer.flush()
                 
-                self.log_eval(eval_results, eval_metrics)
+                self.log_eval(eval_episodes, eval_results, eval_metrics)
 
             # save model
             if ((save_path is not None) and (save_interval is not None)
@@ -1461,7 +1466,7 @@ class BaseRLModel(TrainableModel):
         # construct method
         self = cls(env=None, **config)
         # setup model
-        self.setup_model()
+        self.setup()
 
         return self
 

@@ -37,6 +37,7 @@ __all__ = [
     'is_json_serializable',
     'to_json_serializable',
     'from_json_serializable',
+    'input_tensor',
     'get_tensor_ndims',
     'flatten_tensor',
     'safe_json_dumps',
@@ -370,6 +371,12 @@ def is_bounded(space):
     return True
 
 # === TensorFlow utils ===
+
+def input_tensor(shape, dtype=np.float32, batch_size=1):
+    # dummy input tensor
+    shape = tf.TensorShape(shape).as_list()
+    shape = tf.TensorShape([batch_size] + shape)
+    return tf.zeros(shape, dtype=dtype)
 
 def preprocess_observation(inputs, obs_space, dtype=tf.float32):
     if isinstance(obs_space, gym.spaces.Box):
