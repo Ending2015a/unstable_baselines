@@ -67,7 +67,7 @@ class ValueNet(ub.nets.ValueNet):
         '''
         return super().call(inputs, training=training)
 
-    def create_value_net(self):
+    def create_value_model(self):
         return tf.keras.layers.Dense(1)
 
 # === Agent ===

@@ -10,6 +10,7 @@ import tempfile
 import gym
 import numpy as np
 import tensorflow as tf
+tf.config.run_functions_eagerly(True)
 
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
@@ -588,3 +589,16 @@ class TestPPOModule(TestCase):
         env = FakeEnv(0, 'Box')
         with self.assertRaises(RuntimeError):
             ppo_model.PPO(env)
+
+    def test_ppo_dual_clip_valu_clip(self):
+        n_envs = 4
+        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        model = ppo_model.PPO(env, value_clip=0.1, dual_clip=0.1)
+        n_samples = 10
+        batch_size = 10
+        n_subepochs = 4
+        exp_gradsteps = n_samples * n_envs * 1 / batch_size
+        model.run(n_samples)
+        model.train(batch_size, n_subepochs)
+
