@@ -18,6 +18,7 @@ function coverage_test() {
     echo "Start running coverage test"
     echo "Project dir: ${PROJ_DIR}"
     RELPATH=$(realpath --relative-to="$PWD" ${PROJ_DIR})
+    export NUMBA_DISABLE_JIT='1'
     coverage run --source "${RELPATH}" \
                  --omit "${RELPATH}/unstable_baselines/logger/*","${RELPATH}/test/*"\
                  -m unittest discover -s "${PROJ_DIR}/test"
@@ -25,6 +26,7 @@ function coverage_test() {
     coverage report ${REPORT_CMD}
     # generate coverage reports
     coverage xml -o "${PROJ_DIR}/coverage.xml"
+    unset NUMBA_DISABLE_JIT
 }
 
 function upload_report() {

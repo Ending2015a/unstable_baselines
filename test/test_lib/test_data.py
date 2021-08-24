@@ -118,6 +118,11 @@ class TestDataModule(TestCase):
             buf = ub_data.NestedReplayBuffer(0)
         with self.assertRaises(ValueError):
             buf = ub_data.NestedReplayBuffer(None)
+        buf = ub_data.NestedReplayBuffer(1)
+        with self.assertRaises(RuntimeError):
+            buf[0]
+        with self.assertRaises(RuntimeError):
+            buf._set_data(1, indices=0, _auto_create_space=False)
 
     def test_dict_replay_buffer(self):
         capacity = 10
@@ -235,6 +240,8 @@ class TestDataModule(TestCase):
         with self.assertRaises(RuntimeError):
             buf(3)
         buf.make()
+        with self.assertRaises(RuntimeError):
+            buf.make()
         self.assertEqual(n_samples, buf.n_samples)
         self.assertEqual(n_samples, len(buf))
         self.assertFalse(buf.isfull())
@@ -292,6 +299,11 @@ class TestDataModule(TestCase):
             self.assertEqual((n_samples, 1), batch['b'].shape)
             batches.append(batch)
         self.assertEqual(1, len(batches))
+
+    def test_sequential_replay_buffer_exception(self):
+        buf = ub_data.SequentialReplayBuffer()
+        with self.assertRaises(RuntimeError):
+            buf._append_data({'a':0}, _auto_create_space=False)
 
     def test_compute_advantage(self):
         rew = np.asarray([0, 0, 1, 0, 1], dtype=np.float32)
