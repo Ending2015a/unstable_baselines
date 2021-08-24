@@ -11,14 +11,12 @@ import tensorflow as tf
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
 
-
 __all__ = [
     'Categorical',
     'Normal',
     'MultiNormal',
     'Tanh'
 ]
-
 
 # === tf probability ===
 

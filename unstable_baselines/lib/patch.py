@@ -20,8 +20,6 @@ __all__ = [
     'ReLU'
 ]
 
-
-
 # --- Some TensorFlow internal bugs fixes ---
 
 # TODO: TensorFlow 2.4 Internal bugs (or caused by CUDA 11?)
