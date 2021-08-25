@@ -588,7 +588,7 @@ class _VideoRecorder(object):
             with open(self.meta_path, 'wt') as f:
                 json.dump(self.metadata, f, indent=4)
         except FileNotFoundError:
-            LOG.exception(f'Failed to write metadata to path: {self.meta_path}\n'
+            LOG.error(f'Failed to write metadata to path: {self.meta_path}\n'
                 'This error may caused by trying to write files in a __del__'
                 ' function')
 
@@ -816,9 +816,10 @@ class VideoRecorder(MonitorToolChain):
     def _close_and_save_recorder(self):
         if not self._recorder:
             return
-        self._recorder.close()
         if not self._recorder.functional:
+            self._recorder.close()
             return
+        self._recorder.close()
 
         video_path = self._make_path(
             root_dir = self._root_dir,

@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+import typing
 import logging
 import unittest
 import tempfile
@@ -9,7 +10,6 @@ import tempfile
 # --- 3rd party --
 import gym
 import numpy as np
-import pybullet_envs
 
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
@@ -62,8 +62,8 @@ class TestMonitorModule(TestCase):
             self.assertTrue('55,10' in lines[2])
             self.assertTrue('55,10' in lines[3])
             self.assertTrue('15,5' in lines[4]) # early reset episode
-            # test auto close statsrecorder
-            # env.close()
+            env.close()
+            self.assertTrue(env.tools[0].closed)
     
     def test_monitor_wo_video_recorder_exception(self):
         env = FakeImageEnv(max_steps=10)
@@ -109,8 +109,13 @@ class TestMonitorModule(TestCase):
                         break
             env.close()
             video_path = os.path.join(root_dir, 'videos')
-            records = sorted(os.listdir(video_path))
-            self.assertEqual(10*2, len(records)) # json + mp4
+            files = sorted(os.listdir(video_path))
+            self.assertEqual(10*2, len(files)) # json + mp4
+            for filename in files:
+                self.assertTrue(
+                    filename.endswith('metadata.json') or
+                    filename.endswith('video.mp4')
+                , filename)
             env.close()
             self.assertTrue(env.tools[0].closed)
             self.assertFalse(env.tools[1]._enabled)
@@ -198,9 +203,9 @@ class TestMonitorModule(TestCase):
             self.assertTrue(env.tools[1].stats is not None)
             env.reset()
             # The brokwn image env returns None when capture the frame
-            print('>>> Test broken image env')
+            print('\n>>> Test broken image env')
             env.step(env.action_space.sample())
-            print('<<<')
+            print('<<<\n')
             self.assertTrue(env.tools[1]._recorder.broken)
             self.assertFalse(env.tools[1]._recorder.functional)
             for i in range(10):
@@ -230,9 +235,9 @@ class TestMonitorModule(TestCase):
             self.assertTrue(env.tools[1].stats is not None)
             env.reset()
             # The non-recordable image env has no 'rgb_array' mode
-            print('>>> Test non-recordable image env')
+            print('\n>>> Test non-recordable image env')
             env.step(env.action_space.sample())
-            print('<<<')
+            print('<<<\n')
             self.assertFalse(env.tools[1]._recorder.enabled)
             self.assertFalse(env.tools[1]._recorder.functional)
             for i in range(10):
@@ -308,25 +313,24 @@ class TestMonitorModule(TestCase):
             self.assertTrue(env.tools[0].closed)
             self.assertFalse(env.tools[1]._enabled)
 
-    def test_monitor_pybullet_set_width_height(self):
-        import pybullet_envs
-        width, height = 100, 200
-        env = gym.make('HalfCheetahBulletEnv-v0')
-        with tempfile.TemporaryDirectory() as tempdir:
-            root_dir = os.path.join(tempdir, 'test_monitor_pybullet_set_width_height')
-            root_dir = os.path.join(root_dir, 'monitor/')
-            # always record
-            video_kwargs = dict(interval=1, width=width, height=height)
-            env = ub_envs.Monitor(env, root_dir=root_dir, video=True,
-                                    video_kwargs=video_kwargs)
-            env.reset()
-            env.step(env.action_space.sample())
-            self.assertEqual(width, env.unwrapped._render_width)
-            self.assertEqual(height, env.unwrapped._render_height)
-            env.close()
-            self.assertTrue(env.tools[0].closed)
-            self.assertFalse(env.tools[1]._enabled)
-            self.assertTrue(env.tools[1]._recorder.closed)
+    # def test_monitor_pybullet_set_width_height(self):
+    #     width, height = 100, 200
+    #     env = gym.make('HalfCheetahBulletEnv-v0')
+    #     with tempfile.TemporaryDirectory() as tempdir:
+    #         root_dir = os.path.join(tempdir, 'test_monitor_pybullet_set_width_height')
+    #         root_dir = os.path.join(root_dir, 'monitor/')
+    #         # always record
+    #         video_kwargs = dict(interval=1, width=width, height=height)
+    #         env = ub_envs.Monitor(env, root_dir=root_dir, video=True,
+    #                                 video_kwargs=video_kwargs)
+    #         env.reset()
+    #         env.step(env.action_space.sample())
+    #         self.assertEqual(width, env.unwrapped._render_width)
+    #         self.assertEqual(height, env.unwrapped._render_height)
+    #         env.close()
+    #         self.assertTrue(env.tools[0].closed)
+    #         self.assertFalse(env.tools[1]._enabled)
+    #         self.assertTrue(env.tools[1]._recorder.closed)
 
     def test_video_recorder_invalid_frame(self):
         env = FakeImageEnv(max_steps=10)
@@ -344,11 +348,11 @@ class TestMonitorModule(TestCase):
             # start video encoder
             env.step(env.action_space.sample())
             # test invalid frame
-            print('>>> Test invalid frame type np.float32')
+            print('\n>>> Test invalid frame type np.float32')
             env.tools[1]._recorder._encode_image_frame(
                 np.random.normal(size=(64, 64, 3)).astype(np.float32)
             )
-            print('<<<')
+            print('<<<\n')
             self.assertTrue(env.tools[1]._recorder.broken)
             with self.assertRaises(RuntimeError):
                 # Not a np.ndarray
@@ -357,9 +361,10 @@ class TestMonitorModule(TestCase):
                 )
             with self.assertRaises(RuntimeError):
                 env.tools[1]._recorder.encoder.capture_frame(
-                    np.zeros((64, 32, 3), dtype=np.int32)
+                    np.zeros((64, 32, 3), dtype=np.uint8)
                 )
-            env.close()
-            self.assertTrue(env.tools[0].closed)
-            self.assertFalse(env.tools[1]._enabled)
-            self.assertTrue(env.tools[1]._recorder.closed)
+            # Test statsrecorder, videorecorder
+            # auto closed
+            self.assertFalse(env.tools[0].closed)
+            self.assertTrue(env.tools[1]._enabled)
+            self.assertFalse(env.tools[1]._recorder.closed)

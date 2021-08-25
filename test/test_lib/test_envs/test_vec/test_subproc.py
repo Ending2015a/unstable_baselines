@@ -5,6 +5,8 @@ import time
 import functools
 import multiprocessing
 
+import typing
+
 # --- 3rd party ---
 import gym
 import numpy as np
