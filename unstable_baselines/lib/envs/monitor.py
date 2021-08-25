@@ -243,7 +243,7 @@ class StatsRecorder(MonitorToolChain):
 
         # write header
         self.file_handler = open(self.filepath, 'wt')
-        self.file_handler.write('#{}\n'.format(self.header))
+        self.file_handler.write(f'#{self.header}\n')
 
         # create csv writer
         self.writer = csv.DictWriter(self.file_handler, 
@@ -254,6 +254,10 @@ class StatsRecorder(MonitorToolChain):
     @property
     def stats(self):
         return self._stats
+
+    @property
+    def closed(self):
+        return self._closed
 
     def _make_save_path(self, base_path, prefix, ext):
         '''Make save path {base_path}/{prefix}.{ext}
@@ -364,7 +368,7 @@ class _VideoEncoder(object):
         oh,ow,_ = self.video_shape
         
         if c != 3 and c != 4:
-            raise RuntimeError('Your frame has shape {}, but we require (w,h,3) or (w,h,4)'.format(self.frame_shape))
+            raise RuntimeError(f'Your frame has shape {self.frame_shape}, but we require (h,w,3) or (h,w,4)')
         
         self.wh = (w,h)
         self.output_wh = (ow,oh)
@@ -398,8 +402,8 @@ class _VideoEncoder(object):
             '-r', '{:d}'.format(self.out_fps),
             self.path)
         
-
-        LOG.debug('Starting ffmpeg with cmd "{}"'.format(' '.join(self.cmdline)))
+        cmd = ' '.join(self.cmdline)
+        LOG.debug(f'Starting ffmpeg with cmd "{cmd}"')
 
         self.proc = subprocess.Popen(self.cmdline, stdin=subprocess.PIPE)
     
@@ -422,16 +426,24 @@ class _VideoEncoder(object):
 
     def capture_frame(self, frame):
         if not isinstance(frame, (np.ndarray, np.generic)):
-            raise RuntimeError('Wrong type {} for {} (must be np.ndarray or np.generic)'.format(type(frame), frame))
+            raise RuntimeError(f'Wrong type {type(frame)} for {frame} '
+                '(must be np.ndarray or np.generic)')
         if frame.shape != self.frame_shape:
-            raise RuntimeError('Your frame has shape {}, but the VideoRecorder is configured for shape {}'.format(frame.shape, self.frame.shape))
+            raise RuntimeError(f'Your frame has shape {frame.shape}, '
+                'but the VideoRecorder is configured for shape '
+                f'{self.frame_shape}')
         if frame.dtype != np.uint8:
-            raise RuntimeError('Your frame has data type {}, but we require unit8 (i.e. RGB values from 0-255)'.format(frame.dtype))
+            raise RuntimeError(f'Your frame has data type {frame.dtype}'
+                ', but we require unit8 (i.e. RGB values from 0-255)')
 
         self.proc.stdin.write(frame.tobytes())
 
     def __del__(self):
-        self.close()
+        if self.proc is not None:
+            print('WARNING: The _VideoEncoder is not closed, please '
+                    'ensure you have closed the environment before the '
+                    'program ended `env.close()`')
+            self.close()
 
     def close(self):
         if self.proc is None:
@@ -440,7 +452,7 @@ class _VideoEncoder(object):
         self.proc.stdin.close()
         ret = self.proc.wait()
         if ret != 0:
-            LOG.error('VideoRecorder encoder exited with status {}'.format(ret))
+            LOG.error(f'VideoRecorder encoder exited with status {ret}')
 
         self.proc = None
 
@@ -478,14 +490,13 @@ class _VideoRecorder(object):
         self.out_fps   = out_fps
         self.enabled   = enabled
         self.metadata  = metadata or {}
-        self._closed   = False
         if not self.enabled:
             return
 
         if not path:
-            raise ValueError("'path' not specified: {}".format(path))
+            raise ValueError(f"'path' not specified: {path}")
         if not meta_path:
-            raise ValueError("'meta_path' not specified: {}".format(meta_path))
+            raise ValueError(f"'meta_path' not specified: {meta_path}")
 
         in_fps  = env.metadata.get('video.frames_per_second', 30)
         out_fps = env.metadata.get('video.output_frames_per_second', in_fps)
@@ -522,11 +533,11 @@ class _VideoRecorder(object):
         
     @property
     def closed(self):
-        return self._closed
+        return not self.enabled
 
     @property
     def functional(self):
-        return self.enabled and not self.broken and not self.closed
+        return self.enabled and not self.broken
 
     def capture_frame(self):
         if not self.functional:
@@ -549,7 +560,7 @@ class _VideoRecorder(object):
             return
 
         if self.encoder:
-            LOG.debug('Closing video encoder: {}'.format(self.path))
+            LOG.debug(f'Closing video encoder: {self.path}')
             self.encoder.close()
             self.encoder = None
         else:
@@ -568,7 +579,7 @@ class _VideoRecorder(object):
             self.metadata['broken'] = True
         self.write_metadata()
         # mark as closed
-        self._closed = True
+        self.enabled = False
 
     def write_metadata(self):
         if not self.enabled:
@@ -579,7 +590,7 @@ class _VideoRecorder(object):
         except FileNotFoundError:
             LOG.exception(f'Failed to write metadata to path: {self.meta_path}\n'
                 'This error may caused by trying to write files in a __del__'
-                'function')
+                ' function')
 
     def _create_path(self, path):
         '''Ensure nested directories exist
@@ -590,14 +601,14 @@ class _VideoRecorder(object):
     def _get_frame_shape(self, frame):
         if len(frame.shape) != 3:
             raise RuntimeError('Receive unknown frame shape: '
-                                '{}'.format(frame.shape))
+                                f'{frame.shape}')
 
         return frame.shape # h,w,c
 
     def _get_video_shape(self, frame):
         if len(frame.shape) != 3:
             raise RuntimeError('Receive unknown frame shape: '
-                                '{}'.format(frame.shape))
+                                f'{frame.shape}')
 
         h,w,c = frame.shape
 
@@ -624,14 +635,18 @@ class _VideoRecorder(object):
 
         except RuntimeError as e:
             LOG.exception('Tried to pass invalid video frame, '
-                        'marking as broken: {}'.format(self.path))
+                        f'marking as broken: {self.path}')
             self.metadata['exc'] = str(e)
             self.broken = True
         else:
             self.empty = False
 
     def __del__(self):
-        self.close()
+        if self.enabled:
+            print('WARNING: The _VideoRecorder is not closed, please '
+                    'ensure you have closed the environment before the '
+                    'program ended `env.close()`')
+            self.close()
 
 
 class VideoRecorder(MonitorToolChain):
@@ -799,11 +814,11 @@ class VideoRecorder(MonitorToolChain):
         return abspath.format(**self.stats)
 
     def _close_and_save_recorder(self):
-        if((not self._recorder)
-                or (not self._recorder.functional)):
+        if not self._recorder:
             return
-
         self._recorder.close()
+        if not self._recorder.functional:
+            return
 
         video_path = self._make_path(
             root_dir = self._root_dir,
