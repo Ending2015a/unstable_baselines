@@ -20,10 +20,10 @@ __all__ = [
 ]
 
 class EnvWorker(vec_base.BaseEnvWorker):
-    def __init__(self, env_fn):
+    def __init__(self, env_fn, auto_reset: bool):
         self.env = env_fn()
         self._res = None
-        super().__init__(env_fn)
+        super().__init__(env_fn, auto_reset)
     
     def getattr(self, attrname: str):
         return getattr(self.env, attrname)
@@ -35,7 +35,10 @@ class EnvWorker(vec_base.BaseEnvWorker):
         return self.env.reset(**kwargs)
 
     def step_async(self, act):
-        self._res = self.env.step(act)
+        obs, rew, done, info = self.env.step(act)
+        if self._auto_reset and done:
+            obs = self.env.reset()
+        self._res = (obs, rew, done, info)
 
     def step_wait(self):
         return self._res
@@ -57,15 +60,17 @@ class EnvWorker(vec_base.BaseEnvWorker):
 class DummyVecEnv(vec_base.BaseVecEnv):
     def __init__(self,
         env_fns: list, 
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None,
+        auto_reset: bool = True,
     ):
-        super().__init__(env_fns, EnvWorker, rms_norm)
+        super().__init__(env_fns, EnvWorker, rms_norm, auto_reset)
 
 
-class VecEnv(DummyVecEnv):
+class VecEnv(vec_base.BaseVecEnv):
     def __init__(self, 
         envs: list,
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None,
+        auto_reset: bool = True,
     ):
         env_fns = [lambda i=j: envs[i] for j in range(len(envs))]
-        super().__init__(env_fns, rms_norm)
+        super().__init__(env_fns, EnvWorker, rms_norm, auto_reset)

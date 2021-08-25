@@ -17,9 +17,9 @@ from unstable_baselines.lib import utils as ub_utils
 # The implementation mainly follows tianshou/venvs.py
 # habitat-lab/vector_env.py and stable-baselines3/subproc_vec_env.py
 class BaseEnvWorker(metaclass=abc.ABCMeta):
-    def __init__(self, env_fn):
+    def __init__(self, env_fn, auto_reset: bool):
         self._env_fn = env_fn
-        self.closed = False
+        self._auto_reset = auto_reset
         self.observation_space = self.getattr('observation_space')
         self.action_space      = self.getattr('action_space')
         self.metadata          = self.getattr('metadata')
@@ -62,17 +62,17 @@ class BaseEnvWorker(metaclass=abc.ABCMeta):
     def close_wait(self):
         raise NotImplementedError
 
-
 # The implementation mainly follows tianshou/venvs.py
 # habitat-lab/vector_env.py and stable-baselines3/subproc_vec_env.py
 class BaseVecEnv(gym.Env):
     def __init__(self,
-        env_fns: list,
+        env_fns:      list,
         worker_class: BaseEnvWorker,
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None
+        rms_norm:     Union[str, bool, ub_utils.RMSNormalizer] = None,
+        auto_reset:   bool = True
     ):
         self._worker_class = worker_class
-        self.workers       = [worker_class(fn) for fn in env_fns]
+        self.workers       = [worker_class(fn, auto_reset) for fn in env_fns]
 
         # init properties
         worker = self.workers[0]
@@ -90,11 +90,15 @@ class BaseVecEnv(gym.Env):
         self.specs              = [w.spec for w in self.workers]
 
         self._rms_norm = self._get_rms_norm_opt(rms_norm)
-        self.closed = False
+        self._closed = False
 
     @property
     def rms_norm(self):
         return self._rms_norm
+
+    @property
+    def closed(self):
+        return self._closed
 
     def __len__(self):
         return self.n_envs
@@ -183,7 +187,7 @@ class BaseVecEnv(gym.Env):
             return
         [w.close_async() for w in self.workers]
         [w.close_wait()  for w in self.workers]
-        self.closed = True
+        self._closed = True
 
     def _flatten_obs(self, obs_list):
         obs = ub_utils.nested_iter_tuple(

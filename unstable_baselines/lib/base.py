@@ -10,6 +10,8 @@ import datetime
 import collections
 
 # --- 3rd party ---
+import cloudpickle
+
 import gym
 import numpy as np
 import tensorflow as tf
@@ -1267,11 +1269,12 @@ class BaseRLModel(TrainableModel):
             if self.is_warming_up():
                 self.LOG.add_row(f'Collecting rollouts')
             else:
-                for name, loss in losses.items():
-                    self.LOG.add_row(f'{name}: {loss:.6f}')
+                name = '\n'.join(map(str, losses.keys()))
+                loss = '\n'.join(map('{:.6f}'.format, losses.values()))
+                self.LOG.add_rows(fmt='{name} {||} {loss}', name=name, loss=loss)
 
-        LOG.add_line()
-        LOG.flush('INFO')
+        self.LOG.add_line()
+        self.LOG.flush('INFO')
 
     def log_eval(self, n_episodes, results, metrics):
         '''Print evaluation log

@@ -25,6 +25,7 @@ __all__ = [
     'ScaledFloatFrame',
     'ClipRewardEnv',
     'FrameStack',
+    'make_atari',
     'wrap_deepmind',
 ]
 
@@ -151,7 +152,7 @@ class WarpFrame(gym.ObservationWrapper):
         super().__init__(env)
         self.width = 84
         self.height = 84
-        self.observation_space = spaces.Box(low=0, high=255, 
+        self.observation_space = gym.spaces.Box(low=0, high=255, 
                                             shape=(self.height, self.width, 1),
                                             dtype=env.observation_space.dtype)
 
@@ -199,7 +200,7 @@ class FrameStack(gym.Wrapper):
         high = np.max(space.high)
         # stack to the last dim (channel)
         shape = (*space.shape[:-1], space.shape[-1] * n_frames)
-        self.observation_space = spaces.Box(
+        self.observation_space = gym.spaces.Box(
             low=low, high=high, 
             shape=shape,
             dtype=env.observation_space.dtype
