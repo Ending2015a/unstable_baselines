@@ -5,6 +5,7 @@ source =
 omit = 
     test/*
     unstable_baselines/logger/*
+    # atari wrappers borrowed from openai baselines
     setup.py
 
 [report]

@@ -8,11 +8,12 @@ import gym
 import numpy as np
 
 # --- my module ---
+from unstable_baselines.lib import utils as ub_utils
 
 class _FakeEnv(gym.Env):
     metadata = {'render.modes': []}
     reward_range = {-float('inf'), float('inf')}
-    spec = None
+    spec = ub_utils.StateObject(id='FakeEnv')
     observation_space: gym.Space
     action_space: gym.Space
     def __init__(self, 
@@ -32,13 +33,14 @@ class _FakeEnv(gym.Env):
 
     def step(self, action):
         self.timesteps += 1
-        done = self.timesteps >= self.max_steps
-        rew = self.timesteps
-        return self.observation_space.sample(), rew, done, {}
+        obs = self._get_obs()
+        rew = self._get_rew()
+        done = self._get_done()
+        return obs, rew, done, {}
 
     def reset(self):
         self.timesteps = 0
-        return self.observation_space.sample()
+        return self._get_obs()
 
     def render(self, mode='human'):
         pass
@@ -50,6 +52,15 @@ class _FakeEnv(gym.Env):
     def seed(self, seed):
         self.observation_space.seed(seed)
         self.action_space.seed(seed)
+
+    def _get_obs(self):
+        return self.observation_space.sample()
+
+    def _get_rew(self):
+        return self.timesteps
+    
+    def _get_done(self):
+        return self.timesteps >= self.max_steps
 
 class FakeContinuousEnv(_FakeEnv):
     def __init__(self, 
@@ -67,6 +78,7 @@ class FakeContinuousEnv(_FakeEnv):
         super().__init__(rank, obs_space, act_space, max_steps)
 
 class FakeImageEnv(_FakeEnv):
+    metadata = {'render.modes': ['rgb_array']}
     def __init__(self,
         rank: int = 0,
         obs_space: gym.Space = None,
@@ -75,10 +87,21 @@ class FakeImageEnv(_FakeEnv):
     ):
         if obs_space is None:
             obs_space = gym.spaces.Box(low=0,high=255,
-                            shape=(64, 64, 3), dtype=np.float32)
+                            shape=(64, 64, 3), dtype=np.uint8)
         if act_space is None:
             act_space = gym.spaces.Discrete(6)
         super().__init__(rank, obs_space, act_space, max_steps)
+        self._temp_obs = None
+
+    def _get_obs(self):
+        obs = super()._get_obs()
+        self._temp_obs = obs.copy()
+        return obs
+    
+    def render(self, mode='human'):
+        if mode == 'rgb_array':
+            return self._temp_obs
+        pass
 
 class FakeEnv(gym.Env):
     metadata = {'render.modes':[]}

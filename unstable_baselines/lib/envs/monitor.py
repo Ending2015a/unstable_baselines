@@ -31,10 +31,25 @@ class Monitor(gym.Wrapper):
     def __init__(self, env:            gym.Env,
                        root_dir:           str = './monitor',
                        prefix:             str = None,
-                       force:             bool = True,
                        allow_early_reset: bool = True,
                        video:             bool = False,
                        video_kwargs:      dict = {}):
+        '''A monitor wrapper to record environment episode reward, length, time
+        and game screen.
+
+        Args:
+            env (gym.Env): Environment.
+            root_dir (str, optional): Root path to store monitor files. Defaults 
+                to './monitor'.
+            prefix (str, optional): Monitor file prefix. Defaults to None.
+            allow_early_reset (bool, optional): If False, monitor ignores the
+                episodes that are reset before done. Defaults to True.
+            video (bool, optional): Whether to record video (mp4). This feature 
+                only works for the environments which support 'rgb_array' render 
+                mode. Defaults to False.
+            video_kwargs (dict, optional): Recording keywarded arguments. See
+                VideoRecorder for more info. Defaults to {}.
+        '''        
         super().__init__(env)
 
         self.root_dir = root_dir or './'
@@ -45,13 +60,14 @@ class Monitor(gym.Wrapper):
         self._stats_recorder = StatsRecorder(
             root_dir          = self.root_dir,
             prefix            = self.prefix,
-            ext               = self.monitor_ext,
+            ext               = None,
             allow_early_reset = self.allow_early_reset
         )
         self._tools = []
 
         self.add_tool(self._stats_recorder)
         if video:
+            video_kwargs = video_kwargs or {}
             self.add_tool(VideoRecorder(**video_kwargs))
     
     @property
@@ -88,6 +104,8 @@ class Monitor(gym.Wrapper):
         return self._after_reset(obs)
 
     def close(self):
+        for tool in self._tools:
+            tool.close()
         super().close()
     
     def _before_step(self, act):
@@ -110,10 +128,10 @@ class Monitor(gym.Wrapper):
             obs = tool._after_reset(obs)
         return obs
 
-
-
 class MonitorToolChain(metaclass=abc.ABCMeta):
     def __init__(self):
+        '''A base class for implementing custom monitor tool chains
+        '''
         self._monitor = None
         self._stats   = None
         self._env     = None
@@ -137,7 +155,6 @@ class MonitorToolChain(metaclass=abc.ABCMeta):
 
     def close(self):
         pass
-
 
 # === Stats Recorder ===
 
@@ -181,17 +198,18 @@ class StatsRecorder(MonitorToolChain):
         t: running time (time - t_start)
 
         Args:
-            root_dir (str, optional): [description]. Defaults to None.
-            prefix (str, optional): [description]. Defaults to None.
-            ext (str, optional): [description]. Defaults to 'monitor.csv'.
-            env_id (str, optional): [description]. Defaults to None.
+            root_dir (str, optional): Root path to save stats files. Defaults 
+                to None.
+            prefix (str, optional): File prefix. Defaults to None.
+            ext (str, optional): File extention. Defaults to 'monitor.csv'.
+            env_id (str, optional): Environment ID. Defaults to None.
         '''
         self.t_start = time.time()
 
         self.root_dir = root_dir
         self.prefix   = prefix
         self.ext      = ext
-        self.env_id   = env_id
+        self.env_id   = None
         self.allow_early_reset = allow_early_reset
 
         # initialize
@@ -204,14 +222,13 @@ class StatsRecorder(MonitorToolChain):
 
         self._stats = Stats()
 
-        self._setup_writer()
-
     def set_monitor(self, monitor: Monitor):
         self._monitor = monitor
         self.root_dir = self.root_dir or monitor.root_dor
         self.prefix   = self.prefix or monitor.prefix
         self.ext      = self.ext or self.monitor_ext
         self.env_id   = self.env_id or monitor.env_id
+        self._setup_writer()
 
     def _setup_writer(self):
         # setup csv file
@@ -229,9 +246,6 @@ class StatsRecorder(MonitorToolChain):
         self.file_handler.write('#{}\n'.format(self.header))
 
         # create csv writer
-        #   r: rewards
-        #   l: length
-        #   t: timestamp
         self.writer = csv.DictWriter(self.file_handler, 
                     fieldnames=('rewards', 'length', 'walltime'))
         self.writer.writeheader()
@@ -264,20 +278,17 @@ class StatsRecorder(MonitorToolChain):
     def _before_step(self, act):
         if self._need_reset:
             raise RuntimeError('Tried to step environment that needs reset')
-
         return act
 
     def _after_step(self, obs, rew, done, info):
         # append rewards
         self.stats.rewards += rew
         self.stats.steps += 1
-
         # episode ended
         if done:
             self._need_reset = True
-            ep_info = self.write_results()
+            ep_info = self._write_results()
             info['episode'] = ep_info
-        
         return obs, rew, done, info
 
     def _before_reset(self, **kwargs):
@@ -289,7 +300,6 @@ class StatsRecorder(MonitorToolChain):
         if not self._need_reset:
             if self.allow_early_reset:
                 self._write_results()
-        
         self.stats.rewards = 0
         self.stats.start_steps = self.stats.steps
         self.stats.episodes += 1
@@ -304,11 +314,9 @@ class StatsRecorder(MonitorToolChain):
         ep_info = {'rewards': round(ep_rew, 6), 
                     'length': ep_len,
                     'walltime': round(ep_time, 6)}
-
         self.stats.ep_rewards.append(ep_rew)
         self.stats.ep_lengths.append(ep_len)
         self.stats.ep_times.append(ep_time)
-
         # write episode info to csv
         if self.writer:
             self.writer.writerow(ep_info)
@@ -318,19 +326,19 @@ class StatsRecorder(MonitorToolChain):
     def close(self):
         if self.file_handler is not None:
             self.file_handler.close()
-
         self._closed = True
 
     def __del__(self):
         if not self._closed:
+            print('WARNING: The StatsRecorder is not closed, please '
+                'ensure you have closed the environment before the '
+                'program ended `env.close()`')
             self.close()
 
     def flush(self):
         pass
 
-
 # === Video Recorder ===
-
 
 class _VideoEncoder(object):
     def __init__(self, path, 
@@ -489,8 +497,8 @@ class _VideoRecorder(object):
         modes       = env.metadata.get('render.modes', [])
 
         if 'rgb_array' not in modes:
-            LOG.warn('Disabling video recorder because {} not '
-                    'supports video mode "rgb_array"'.format(env))
+            LOG.warning(f'Disabling video recorder because {env} not '
+                    'supports render mode "rgb_array"')
             self.enabled = False
             return
         
@@ -501,8 +509,8 @@ class _VideoRecorder(object):
             env.unwrapped._render_height = height
 
         # Create directory
-        self._create_path(os.path.abspath(self.path))
-        self._create_path(os.path.abspath(self.meta_path))
+        self._create_path(os.path.abspath(os.path.dirname(self.path)))
+        self._create_path(os.path.abspath(os.path.dirname(self.meta_path)))
         
         # Write metadata
         self.metadata['content_type'] = 'video/mp4'
@@ -523,22 +531,21 @@ class _VideoRecorder(object):
     def capture_frame(self):
         if not self.functional:
             return 
-
+        # capture current frame
         frame = self.env.render(mode='rgb_array')
-
         if frame is None:
             if self._async:
                 return
             else:
                 LOG.error('Env returned None on render(). Disabling further '
                         'rendering for video recorder by marking as disabled: '
-                        '{}'.format(self.path))
+                        f'{self.path}')
                 self.broken = True
         else:
             self._encode_image_frame(frame)
 
     def close(self):
-        if not self.functional:
+        if not self.enabled or self.closed:
             return
 
         if self.encoder:
@@ -552,25 +559,27 @@ class _VideoRecorder(object):
             self.metadata['empty'] = True
 
         if self.broken:
-            LOG.warn('Cleaning up paths for broken video recorder: '
-                        '{}'.format(self.path))
+            LOG.warning('Cleaning up paths for broken video recorder: '
+                        f'{self.path}')
 
             if os.path.isfile(self.path):
                 os.remove(self.path)
 
             self.metadata['broken'] = True
-
         self.write_metadata()
-
         # mark as closed
         self._closed = True
 
     def write_metadata(self):
         if not self.enabled:
             return
-        
-        with open(self.meta_path, 'wt') as f:
-            json.dump(self.metadata, f, indent=4)
+        try:
+            with open(self.meta_path, 'wt') as f:
+                json.dump(self.metadata, f, indent=4)
+        except FileNotFoundError:
+            LOG.exception(f'Failed to write metadata to path: {self.meta_path}\n'
+                'This error may caused by trying to write files in a __del__'
+                'function')
 
     def _create_path(self, path):
         '''Ensure nested directories exist
@@ -628,7 +637,7 @@ class _VideoRecorder(object):
 class VideoRecorder(MonitorToolChain):
     video_ext    = 'video.mp4'
     metadata_ext = 'metadata.json'
-    video_suffix = 'ep{episode:06d}.{start_steps}-{steps}'
+    video_suffix = 'ep{episodes:06d}.{start_steps}-{steps}'
     def __init__(self, root_dir:  str = None,
                        prefix:    str = None,
                        width:     int = None,
@@ -638,6 +647,32 @@ class VideoRecorder(MonitorToolChain):
                        interval:  int = None,
                        metadata: dict = None,
                        force:    bool = True):
+        '''This monitor tool records the environment screens.
+
+        Args:
+            root_dir (str, optional): Root path to store video recordings. 
+                Defaults to None.
+            prefix (str, optional): Video recording file prefix. Defaults 
+                to None.
+            width (int, optional): Video record width. Defaults to None.
+            height (int, optional): Video record height. Defaults to None.
+            fps (int, optional): Video record FPS. Defaults to None.
+            env_fps (int, optional): Environment's FPS. Defaults to None.
+            interval (int, optional): Record interval (episodes). It can be
+                an int or a callable function which has a signature:
+                    `def func(episode_number: int) -> bool`
+                Return True if you want to record this number of episode,
+                False otherwise. None for built in capped cubic video 
+                schedule. Defaults to None.
+            metadata (dict, optional): Metadata to write in additional json 
+                file. Defaults to None.
+            force (bool, optional): Force to save recordings. If False,
+                it raises an exception if root_dir is not empty. Defaults 
+                to True.
+
+        Raises:
+            RuntimeError: `interval` is not a callable object.
+        '''        
         super().__init__()
 
         # Default callback
@@ -660,6 +695,7 @@ class VideoRecorder(MonitorToolChain):
         self._meta_ext  = self.metadata_ext
         self._metadata  = metadata
         self._schedule  = schedule
+        self._force     = force
 
         self._is_reset  = False # Whether the env is reset
         self._env       = None
@@ -679,6 +715,11 @@ class VideoRecorder(MonitorToolChain):
             or os.path.join(self._monitor.root_dir, 'videos/'))
         # Default prefix: {monitor.prefix}
         self._prefix = (self._prefix or self._monitor.prefix)
+        # Raise an exception if the path is not empty
+        if not self._force:
+            if not self._path_is_empty(self._root_dir):
+                raise RuntimeError('Try to write to non-empty video '
+                    f'directory {self._root_dir}')
     
     @staticmethod
     def capped_cubic_video_schedule(episode):
@@ -696,11 +737,11 @@ class VideoRecorder(MonitorToolChain):
         '''Whether we should record this episode'''
         return self._schedule(self.stats.episodes)
 
-    def close():
+    def close(self):
         '''Close VideoRecorder'''
         if not self._enabled:
             return
-        self._close_and_save_video_recorder()
+        self._close_and_save_recorder()
         # disable VideoRecorder
         self._enabled = False
 
@@ -740,8 +781,8 @@ class VideoRecorder(MonitorToolChain):
 
     def _get_temp_path(self, dir, prefix, suffix):
         with tempfile.NamedTemporaryFile(dir=dir, prefix=prefix,
-                suffix=suffix, delete=False) as f:
-            path = f.name
+                suffix=suffix, delete=True) as f:
+            path = str(f.name)
         return path
 
     def _make_path(self, root_dir, prefix, suffix, ext):
@@ -782,10 +823,10 @@ class VideoRecorder(MonitorToolChain):
 
         # update metadata
         episode_metadata = {
-            'episode': self.stats.episodes,
-            'start_steps': self.stats.start_steps,
-            'end_steps': self.stats.steps,
-            'episode_length': self.stats.steps - self.stats.start_steps,
+            'episode':         self.stats.episodes,
+            'start_steps':     self.stats.start_steps,
+            'end_steps':       self.stats.steps,
+            'episode_length':  self.stats.steps - self.stats.start_steps,
             'episode_rewards': self.stats.rewards
         }
 
@@ -800,18 +841,18 @@ class VideoRecorder(MonitorToolChain):
             os.rename(self._recorder.meta_path, meta_path)
             LOG.debug(f'Saving metadata to: {meta_path}')
         else:
-            LOG.warn(f'Metadata not found: {meta_path}')
+            LOG.warning(f'Metadata not found: {meta_path}')
 
         if os.path.isfile(self._recorder.path):
             os.rename(self._recorder.path, video_path)
             LOG.debug(f'Saving video to: {video_path}')
         else:
             if self._recorder.broken:
-                LOG.warn('Failed to save video, the VideoRecorder is broken,'
-                        f'for more info: {meta_path}')
+                LOG.warning('Failed to save video, the VideoRecorder is broken,'
+                            f'for more info: {meta_path}')
             else:
                 LOG.error('Failed to save video, missing tempfile, '
-                        f'for more info: {meta_path}')
+                            f'for more info: {meta_path}')
 
     def _new_recorder(self):
         '''Create a new video recorder
@@ -821,7 +862,7 @@ class VideoRecorder(MonitorToolChain):
             root_dir = self._root_dir,
             prefix   = self._prefix,
             suffix   = None,
-            ext      ='ep{episodes:06d}'
+            ext      = 'ep{episodes:06d}.'
         )
 
         root_dir   = os.path.dirname(temppath)
@@ -830,7 +871,7 @@ class VideoRecorder(MonitorToolChain):
         meta_path  = None
 
         if self.need_record:
-            self._create_path(base_path)
+            self._create_path(root_dir)
             video_path = self._get_temp_path(root_dir, prefix, '.mp4')
             meta_path  = self._get_temp_path(root_dir, prefix, '.json')
 
