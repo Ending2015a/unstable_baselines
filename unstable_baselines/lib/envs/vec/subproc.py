@@ -42,7 +42,7 @@ class CMD:
     render  = 6
     close   = 7
 
-def _worker(_p, p, env_fn_wrapper):
+def _subproc_worker(_p, p, env_fn_wrapper):
     _p.close()
     env = env_fn_wrapper.fn()
     try:
@@ -86,7 +86,7 @@ class SubprocEnvWorker(vec_base.BaseEnvWorker):
         args = (
             self.p, _p, CloudpickleWrapper(env_fn)
         )
-        self.process = ctx.Process(target=_worker, args=args, daemon=True)
+        self.process = ctx.Process(target=_subproc_worker, args=args, daemon=True)
         self.process.start()
         self._waiting_cmd = None
         _p.close()

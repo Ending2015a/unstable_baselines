@@ -9,6 +9,77 @@ import numpy as np
 
 # --- my module ---
 
+class _FakeEnv(gym.Env):
+    metadata = {'render.modes': []}
+    reward_range = {-float('inf'), float('inf')}
+    spec = None
+    observation_space: gym.Space
+    action_space: gym.Space
+    def __init__(self, 
+        rank: int, 
+        obs_space: gym.Space, 
+        act_space: gym.Space,
+        max_steps: int = 1000
+    ):
+        assert isinstance(obs_space, gym.Space)
+        assert isinstance(act_space, gym.Space)
+        self.observation_space = obs_space
+        self.action_space = act_space
+        self.timesteps = 0
+        self.max_steps = max_steps
+        self.is_closed = False
+        self.rank = rank
+
+    def step(self, action):
+        self.timesteps += 1
+        done = self.timesteps >= self.max_steps
+        rew = self.timesteps
+        return self.observation_space.sample(), rew, done, {}
+
+    def reset(self):
+        self.timesteps = 0
+        return self.observation_space.sample()
+
+    def render(self, mode='human'):
+        pass
+
+    def close(self):
+        if not self.is_closed:
+            self.is_closed = True
+
+    def seed(self, seed):
+        self.observation_space.seed(seed)
+        self.action_space.seed(seed)
+
+class FakeContinuousEnv(_FakeEnv):
+    def __init__(self, 
+        rank: int = 0, 
+        obs_space: gym.Space = None, 
+        act_space: gym.Space = None, 
+        max_steps: int = 1000
+    ):
+        if obs_space is None:
+            obs_space = gym.spaces.Box(low=-np.inf,high=np.inf,
+                            shape=(64,), dtype=np.float32)
+        if act_space is None:
+            act_space = gym.spaces.Box(low=-1.,high=-1.,
+                            shape=(16,), dtype=np.float32)
+        super().__init__(rank, obs_space, act_space, max_steps)
+
+class FakeImageEnv(_FakeEnv):
+    def __init__(self,
+        rank: int = 0,
+        obs_space: gym.Space = None,
+        act_space: gym.Space = None,
+        max_steps: int = 1000
+    ):
+        if obs_space is None:
+            obs_space = gym.spaces.Box(low=0,high=255,
+                            shape=(64, 64, 3), dtype=np.float32)
+        if act_space is None:
+            act_space = gym.spaces.Discrete(6)
+        super().__init__(rank, obs_space, act_space, max_steps)
+
 class FakeEnv(gym.Env):
     metadata = {'render.modes':[]}
     reward_range = {-float('inf'), float('inf')}

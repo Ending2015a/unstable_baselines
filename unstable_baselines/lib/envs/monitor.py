@@ -33,7 +33,7 @@ class Monitor(gym.Wrapper):
                        prefix:             str = None,
                        force:             bool = True,
                        allow_early_reset: bool = True,
-                       enable_video:      bool = False,
+                       video:             bool = False,
                        video_kwargs:      dict = {}):
         super().__init__(env)
 
@@ -51,7 +51,7 @@ class Monitor(gym.Wrapper):
         self._tools = []
 
         self.add_tool(self._stats_recorder)
-        if enable_video:
+        if video:
             self.add_tool(VideoRecorder(**video_kwargs))
     
     @property
