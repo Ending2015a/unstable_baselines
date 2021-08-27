@@ -12,8 +12,6 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from gym.wrappers import TimeLimit
-
 # --- my module ---
 
 __all__ = [
@@ -191,7 +189,7 @@ class ClipRewardEnv(gym.RewardWrapper):
         return np.sign(reward)
 
 class FrameStack(gym.Wrapper):
-    def __init__(self, env, n_frames):
+    def __init__(self, env, n_frames=4):
         super().__init__(env)
         self.n_frames = n_frames
         self.frames = deque([], maxlen=n_frames)
@@ -223,7 +221,7 @@ class FrameStack(gym.Wrapper):
 
 
 def make_atari(env_id):
-    '''Make atari environment, random reset + frameskip'''
+    '''Make atari environment, random start + frameskip'''
     env = gym.make(env_id)
     assert 'NoFrameskip' in env.unwrapped.spec.id
     env = NoopResetEnv(env, noop_max=30)
@@ -247,8 +245,6 @@ def wrap_deepmind(env:       gym.Env,
     :return: the wrapped atari environment.
     """
     assert 'NoFrameskip' in env.unwrapped.spec.id
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
     if episode_life:
         env = EpisodicLifeEnv(env)
     if 'FIRE' in env.unwrapped.get_action_meanings():

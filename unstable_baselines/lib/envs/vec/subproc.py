@@ -139,10 +139,9 @@ class SubprocEnvWorker(vec_base.BaseEnvWorker):
     def _wait(self, cmd, timeout=None):
         if self._waiting_cmd != cmd:
             raise RuntimeError
+        res = None
         if self.p.poll(timeout):
             res = self.p.recv()
-        else:
-            res = None
         self._waiting_cmd = None #unmarked
         return res
 

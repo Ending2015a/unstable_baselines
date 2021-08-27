@@ -14,14 +14,29 @@ tf.config.run_functions_eagerly(True)
 
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
+from unstable_baselines.lib import data as ub_data
 from unstable_baselines.lib import nets as ub_nets
 from unstable_baselines.lib import prob as ub_prob
 from unstable_baselines.lib.envs import vec as ub_vec
 from unstable_baselines.algo.ppo import model as ppo_model
 from test.utils import TestCase
-from test.test_lib.test_envs.utils import FakeEnv
+from test.test_lib.test_envs.utils import FakeImageEnv, FakeContinuousEnv
 
-class TestPPOModule(TestCase):
+
+def legacy_gae(rew, val, done, gamma, lam):
+    last_gae = 0
+    next_nterm = 1.0 - done[-1]
+    next_val = val[-1]
+    adv = np.zeros_like(val)
+    for t in reversed(range(len(done))):
+        delta = rew[t] + gamma * next_val * next_nterm - val[t]
+        last_gae = delta + gamma * lam * next_nterm * last_gae
+        adv[t] = last_gae
+        next_nterm = 1.0 - done[t]
+        next_val = val[t]
+    return adv
+
+class TestPPOModel(TestCase):
 
     def assertVariables(self, tar_list, var_list):
         self.assertEqual(len(tar_list), len(var_list))
@@ -308,7 +323,7 @@ class TestPPOModule(TestCase):
             self.assertAllClose(target_var, var)
 
     def test_ppo_setup_image_obs(self):
-        envs = [FakeEnv(0, 'Image') for _ in range(3)]
+        envs = [FakeImageEnv() for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
         self.assertEqual(3, model.n_envs)
@@ -327,7 +342,7 @@ class TestPPOModule(TestCase):
         self.assertEqual(6+6+2+2, len(model.trainable_variables))
 
     def test_ppo_setup_non_image_obs(self):
-        envs = [FakeEnv(0, 'Box') for _ in range(3)]
+        envs = [FakeContinuousEnv() for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         # no share net, mlp
         model = ppo_model.PPO(env, mlp_units=[64, 64, 64])
@@ -347,7 +362,7 @@ class TestPPOModule(TestCase):
         self.assertTrue(model.observation_space is None)
         self.assertTrue(model.action_space is None)
         self.assertTrue(model.agent is None)
-        envs = [FakeEnv(0, 'Box') for _ in range(3)]
+        envs = [FakeContinuousEnv() for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         model.set_env(env)
         model.setup()
@@ -356,13 +371,16 @@ class TestPPOModule(TestCase):
         self.assertEqual(4+4+3+2, len(model.trainable_variables))
 
     def test_ppo_setup_exception(self):
-        envs = [FakeEnv(0, 'Discrete') for _ in range(3)]
+        envs = [FakeImageEnv(obs_space=gym.spaces.Discrete(16)) 
+                for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         with self.assertRaises(RuntimeError):
+            # This algorithm does not support observation spaces
+            # of type Discrete
             ppo_model.PPO(env)
     
     def test_ppo_call(self):
-        envs = [FakeEnv(0, 'Box') for _ in range(3)]
+        envs = [FakeContinuousEnv() for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
         batch_size = 3
@@ -380,7 +398,7 @@ class TestPPOModule(TestCase):
         self.assertArrayEqual((batch_size,), logp.shape)
     
     def test_ppo_predict_batch(self):
-        envs = [FakeEnv(0, 'Box') for _ in range(3)]
+        envs = [FakeContinuousEnv() for _ in range(3)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
         batch_size = 3
@@ -395,7 +413,7 @@ class TestPPOModule(TestCase):
 
     def test_ppo_run(self):
         n_envs = 3
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
         obs_shape = env.observation_space.shape
@@ -422,7 +440,7 @@ class TestPPOModule(TestCase):
 
     def test_ppo_train(self):
         n_envs = 3
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
         n_samples = 10
@@ -436,8 +454,8 @@ class TestPPOModule(TestCase):
 
     def test_ppo_train_with_target_kl(self):
         n_envs = 3
-        target_kl = 0.0
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        target_kl = 0.0029 # exp kl ~0.004387 > 1.5*target_kl
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         env.seed(0)
         ub_utils.set_seed(0)
@@ -447,13 +465,13 @@ class TestPPOModule(TestCase):
         n_subepochs = 4
         exp_gradsteps = n_samples * n_envs * 1 / batch_size
         model.run(n_samples)
-        model.train(batch_size, n_subepochs)
+        model.train(batch_size, n_subepochs) 
         self.assertEqual(exp_gradsteps, model.num_gradsteps)
         self.assertEqual(1, model.num_subepochs)
 
     def test_ppo_param_order_non_delayed_vs_delayed(self):
         n_envs = 3
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         env.seed(1)
         ub_utils.set_seed(1)
@@ -482,7 +500,7 @@ class TestPPOModule(TestCase):
 
     def test_ppo_save_load(self):
         n_envs = 3
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         env.seed(1)
         ub_utils.set_seed(1)
@@ -542,9 +560,9 @@ class TestPPOModule(TestCase):
         total_steps = n_envs * n_steps * n_epochs
         total_gradsteps = (int((n_envs * n_steps)/batch_size+0.5)
                             * n_subepochs * n_epochs)
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
-        eval_env = FakeEnv(0, 'Box')
+        eval_env = FakeContinuousEnv()
         env.seed(1)
         ub_utils.set_seed(1)
         model = ppo_model.PPO(
@@ -576,23 +594,23 @@ class TestPPOModule(TestCase):
 
     def test_ppo_reset_spaces_conflict(self):
         n_envs = 4
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env)
-        envs = [FakeEnv(0, 'Image') for _ in range(n_envs)]
+        envs = [FakeImageEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         with self.assertRaises(RuntimeError):
             # space conflict
             model.set_env(env)
     
     def test_ppo_not_vec_env(self):
-        env = FakeEnv(0, 'Box')
+        env = FakeContinuousEnv()
         with self.assertRaises(RuntimeError):
             ppo_model.PPO(env)
 
     def test_ppo_dual_clip_valu_clip(self):
         n_envs = 4
-        envs = [FakeEnv(0, 'Box') for _ in range(n_envs)]
+        envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         model = ppo_model.PPO(env, value_clip=0.1, dual_clip=0.1)
         n_samples = 10
@@ -602,3 +620,23 @@ class TestPPOModule(TestCase):
         model.run(n_samples)
         model.train(batch_size, n_subepochs)
 
+    def test_ppo_gae(self):
+        n_envs = 2
+        gamma = 0.99
+        lam = 0.95
+        envs = [FakeImageEnv(max_steps=10) for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        env.seed(1)
+        ub_utils.set_seed(1)
+        n_samples = 20
+        model = ppo_model.PPO(env, gamma=gamma, gae_lambda=lam)
+        model.run(n_samples)
+        gae = model.buffer.data['adv']
+        exp_gae = legacy_gae(
+            rew   = model.buffer.data['rew'], 
+            val   = model.buffer.data['val'], 
+            done  = model.buffer.data['done'], 
+            gamma = gamma, 
+            lam   = lam
+        )
+        self.assertAllClose(exp_gae, gae)

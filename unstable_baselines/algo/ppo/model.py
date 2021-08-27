@@ -21,6 +21,7 @@ class DiagGaussianPolicyNet(ub.nets.DiagGaussianPolicyNet):
     '''
     support_spaces = [gym.spaces.Box]
     def create_logstd_model(self):
+        '''(Override) Logstd model'''
         return ub.nets.Constant(tf.Variable(
             np.zeros((self.action_dims,), dtype=np.float32),
             name = 'logstd'
@@ -47,7 +48,7 @@ class PolicyNet(ub.nets.PolicyNet):
         return super().call(inputs, training=training)
 
     def create_gaussian_policy(self):
-        '''Policy for Box action space'''
+        '''(Override) Policy for Box action space'''
         return DiagGaussianPolicyNet(self.action_space, squash=False)
 
 class ValueNet(ub.nets.ValueNet):
@@ -68,6 +69,7 @@ class ValueNet(ub.nets.ValueNet):
         return super().call(inputs, training=training)
 
     def create_value_model(self):
+        '''(Override) Value model arch'''
         return tf.keras.layers.Dense(1)
 
 # === Agent ===
@@ -137,7 +139,7 @@ class Agent(ub.base.BaseAgent):
         self.value  = ValueNet(base_net_v)
 
     def setup(self):
-        '''Setup agent model'''
+        '''(Override) Setup agent model'''
         self._setup_model()
         # construct network params
         obs = ub.utils.input_tensor(self.observation_space.shape)
@@ -145,6 +147,7 @@ class Agent(ub.base.BaseAgent):
         self.call_value(obs, proc_obs=False)
 
     # --- forwrd group ---
+
     def call_policy(self, inputs, proc_obs=True, training=True):
         '''Forward policy net'''
         if proc_obs:
@@ -165,7 +168,7 @@ class Agent(ub.base.BaseAgent):
                    proc_act: bool = False,
                    det:      bool = False,
                    training: bool = True):
-        '''Forward agent
+        '''(Override) Forward agent
 
         Args:
             inputs (tf.Tensor): Batch observations in shape 
@@ -200,15 +203,15 @@ class Agent(ub.base.BaseAgent):
     def predict(self, inputs,
                       proc_obs: bool = True,
                       proc_act: bool = True,
-                      det:      bool = True):
-        '''Predict actions
+                      det:      bool = False):
+        '''(Override) Predict actions
 
         Args:
             inputs (np.ndarray): Batch observations in shape (b, *obs_space.shape)
                 or in shape (*obs_space.shape) for one observation.
             proc_obs (bool, optional): Preprocess observations. Defaults to True.
             proc_act (bool, optional): Postprocess actions. Defaults to True.
-            det (bool, optional): Deterministic actions. Defaults to True.
+            det (bool, optional): Deterministic actions. Defaults to False.
 
         Returns:
             np.ndarray: predicted actions in shape (b, *act_space.shape) or
@@ -248,6 +251,7 @@ class PPO(ub.base.OnPolicyModel):
         dual_clip:     float = None,
         ent_coef:      float = 0.01,
         vf_coef:       float = 0.5,
+        reg_coef:      float = 0.0,
         clipnorm:      float = 0.5,
         target_kl:     float = None,
     # --- architecture parameters ---
@@ -285,6 +289,8 @@ class PPO(ub.base.OnPolicyModel):
             ent_coef (float, optional): Entropy loss coefficient. Defaults to 
                 0.01.
             vf_coef (float, optional): Value loss coefficient. Defaults to 0.5.
+            reg_coef (float, optional): Regularization coefficient. Default to 
+                0.0.
             clipnorm (float, optional): Gradient clip. Defaults to 0.5.
             target_kl (float, optional): Target KL to early stop. Defaults 
                 to None.
@@ -317,6 +323,7 @@ class PPO(ub.base.OnPolicyModel):
         self.dual_clip     = dual_clip
         self.ent_coef      = ent_coef
         self.vf_coef       = vf_coef
+        self.reg_coef      = reg_coef
         self.clipnorm      = clipnorm
         self.target_kl     = target_kl
         self.share_net     = share_net
@@ -332,11 +339,15 @@ class PPO(ub.base.OnPolicyModel):
     
     # --- setup group ---
     def _setup_buffer(self):
-        '''Override this method to customize to your replay byffer'''
+        '''Setup buffers
+        Override this method to customize to your replay byffer
+        '''
         self.buffer = ub.data.SequentialBuffer()
         
     def _setup_model(self):
-        '''Override this method to customize to you model'''
+        '''Setup models, agents
+        Override this method to customize to you model
+        '''
         self.agent = Agent(
             self.observation_space,
             self.action_space,
@@ -346,7 +357,9 @@ class PPO(ub.base.OnPolicyModel):
         )
 
     def _setup_optimizer(self):
-        '''Override this method to customize to your optimizer'''
+        '''Setup optimizers
+        Override this method to customize to your optimizer
+        '''
         # --- setup scheduler ---
         self.learning_rate = ub.sche.get_scheduler(
             self.learning_rate,
@@ -358,12 +371,13 @@ class PPO(ub.base.OnPolicyModel):
             clipnorm      = self.clipnorm
         )
         # track weights
-        self.optimizer._create_all_weights(
+        ub.utils.set_optimizer_params(
+            self.optimizer,
             self.agent.trainable_variables
         )
         
     def setup(self):
-        '''Setup models, optimizers and schedulers for training'''
+        '''(Override) Setup models, optimizers and schedulers for training'''
         self._setup_buffer()
         self._setup_model()
         self._setup_optimizer()
@@ -375,7 +389,7 @@ class PPO(ub.base.OnPolicyModel):
                    proc_act: bool = False,
                    det:      bool = False,
                    training: bool = True):
-        '''See Agent.call'''
+        '''(Override) See Agent.call'''
         return self.agent(
             inputs,
             proc_obs = proc_obs,
@@ -387,8 +401,8 @@ class PPO(ub.base.OnPolicyModel):
     def predict(self, inputs,
                       proc_obs: bool = True,
                       proc_act: bool = True,
-                      det:      bool = True):
-        '''See Agent.predict'''
+                      det:      bool = False):
+        '''(Override) See Agent.predict'''
         return self.agent.predict(
             inputs,
             proc_obs = proc_obs,
@@ -398,7 +412,7 @@ class PPO(ub.base.OnPolicyModel):
     
     # --- collect group ---
     def _collect_step(self, obs=None):
-        '''Collect one sample
+        '''(Override) Collect one sample
 
         Args:
             obs (np.ndarray, optional): Current observations. Defaults to None.
@@ -428,6 +442,7 @@ class PPO(ub.base.OnPolicyModel):
         return next_obs
     
     def run(self, steps, obs=None):
+        '''(Override) Run rollouts collection procedure'''
         # reset buffer
         self.buffer.reset()
         # collect rollouts
@@ -498,6 +513,20 @@ class PPO(ub.base.OnPolicyModel):
             vf_loss = tf.maximum(loss1, loss2)
         return tf.math.reduce_mean(vf_loss)
 
+    def reg_loss(self, var_list):
+        '''Regularization loss
+
+        Args:
+            var_list (list): A list of variables need to be regularized.
+
+        Returns:
+            tf.Tensor: regularization loss.
+        '''        
+        if not var_list:
+            return 0.
+        reg = tf.keras.regularizers.L2(self.reg_coef)
+        return tf.math.add_n([reg(var) for var in var_list])
+
     @tf.function
     def _train_model(self, batch):
         '''Perform one gradient update'''
@@ -515,8 +544,10 @@ class PPO(ub.base.OnPolicyModel):
             pi_loss  = self.policy_loss(batch['adv'], logp, batch['logp'])
             vf_loss  = self.value_loss(batch['adv'], val, batch['val'])
             ent_loss = -tf.math.reduce_mean(ent)
+            reg_loss = self.reg_loss(vars)
             # aggregate losses
-            loss = pi_loss + self.vf_coef * vf_loss + self.ent_coef * ent_loss
+            loss = (pi_loss + self.vf_coef * vf_loss 
+                            + self.ent_coef * ent_loss + reg_loss)
         # perform gradients
         grads = tape.gradient(loss, vars)
         self.optimizer.apply_gradients(zip(grads, vars))
@@ -525,20 +556,25 @@ class PPO(ub.base.OnPolicyModel):
             'pi_loss':  pi_loss,
             'vf_loss':  vf_loss,
             'ent_loss': ent_loss,
+            'reg_loss': reg_loss,
             'kl':       kl
         }, kl
 
     def _train_step(self, batch):
-        '''Overrided, train one step'''
+        '''(Override) Train one step'''
         # update learning rate
-        lr = tf.convert_to_tensor(self.learning_rate())
-        self.optimizer.lr.assign(lr)
+        # lr = tf.convert_to_tensor(self.learning_rate())
+        # self.optimizer.lr.assign(lr)
         # train model
         losses, kl = self._train_model(batch)
         return losses, kl
 
+    def _train_subepoch(self, batch_size, **kwargs):
+        '''(Override, disabled) Train one subepoch'''
+        pass
+
     def train(self, batch_size, subepochs, **kwargs):
-        '''Overrided, train one epoch'''
+        '''(Override) Train one epoch'''
         all_losses = []
         for subepoch in range(subepochs):
             all_kls = []
@@ -576,6 +612,7 @@ class PPO(ub.base.OnPolicyModel):
             'dual_clip':     self.dual_clip,
             'ent_coef':      self.ent_coef,
             'vf_coef':       self.vf_coef,
+            'reg_coef':      self.reg_coef,
             'clipnorm':      self.clipnorm,
             'target_kl':     self.target_kl,
             'share_net':     self.share_net,

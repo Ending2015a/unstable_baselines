@@ -38,6 +38,7 @@ __all__ = [
     'to_json_serializable',
     'from_json_serializable',
     'input_tensor',
+    'set_optimizer_params',
     'get_tensor_ndims',
     'flatten_tensor',
     'safe_json_dumps',
@@ -377,6 +378,14 @@ def input_tensor(shape, dtype=np.float32, batch_size=1):
     shape = tf.TensorShape(shape).as_list()
     shape = tf.TensorShape([batch_size] + shape)
     return tf.zeros(shape, dtype=dtype)
+
+def set_optimizer_params(optimizer, param_list):
+    # Set optimizer tracking parameters
+    if len(param_list) > 0:
+        with tf.name_scope(optimizer._name):
+            with tf.init_scope():
+                optimizer._create_all_weights(param_list)
+    return optimizer
 
 def preprocess_observation(inputs, obs_space, dtype=tf.float32):
     if isinstance(obs_space, gym.spaces.Box):
