@@ -521,7 +521,7 @@ def from_json_serializable(encoded_obj):
     return obj
 
 def safe_json_dumps(obj, 
-                    indent=4, 
+                    indent=2, 
                     ensure_ascii=False, 
                     default=to_json_serializable, 
                     **kwargs):
@@ -534,7 +534,6 @@ def safe_json_dumps(obj,
 def safe_json_loads(string, 
                     object_hook=from_json_serializable, 
                     **kwargs):
-
     obj = json.loads(string, 
                     object_hook=object_hook, 
                     **kwargs)

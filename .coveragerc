@@ -5,8 +5,9 @@ source =
 omit = 
     test/*
     unstable_baselines/logger/*
-    # atari wrappers borrowed from openai baselines
     setup.py
+    # deprecated packages
+    unstable_baselines/dep/*
 
 [report]
 exclude_lines =

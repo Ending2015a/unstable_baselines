@@ -20,7 +20,6 @@ function coverage_test() {
     RELPATH=$(realpath --relative-to="$PWD" ${PROJ_DIR})
     export NUMBA_DISABLE_JIT='1'
     coverage run --source "${RELPATH}" \
-                 --omit "${RELPATH}/unstable_baselines/logger/*","${RELPATH}/test/*"\
                  -m unittest discover -s "${PROJ_DIR}/test"
     echo "Report coverage: ${REPORT_CMD}"
     coverage report ${REPORT_CMD}

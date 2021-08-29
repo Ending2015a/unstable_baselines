@@ -422,8 +422,8 @@ class TestPPOModel(TestCase):
         model.run(n_samples)
         buf = model.buffer
         self.assertEqual(n_samples*n_envs, len(buf))
-        self.assertTrue(buf.ready_for_sampling)
-        self.assertFalse(buf.isfull())
+        self.assertTrue(buf.ready_for_sample)
+        self.assertFalse(buf.isfull)
         # test buffer contents
         self.assertArrayEqual((n_samples*n_envs, *obs_shape), 
                               buf.data['obs'].shape)
@@ -454,7 +454,7 @@ class TestPPOModel(TestCase):
 
     def test_ppo_train_with_target_kl(self):
         n_envs = 3
-        target_kl = 0.0029 # exp kl ~0.004387 > 1.5*target_kl
+        target_kl = 0.096764 # exp kl ~0.145147 > 1.5*target_kl
         envs = [FakeContinuousEnv() for _ in range(n_envs)]
         env = ub_vec.VecEnv(envs)
         env.seed(0)
@@ -463,11 +463,11 @@ class TestPPOModel(TestCase):
         n_samples = 10
         batch_size = 10
         n_subepochs = 4
-        exp_gradsteps = n_samples * n_envs * 1 / batch_size
+        exp_gradsteps = (n_samples * n_envs * 2) // batch_size
         model.run(n_samples)
         model.train(batch_size, n_subepochs) 
         self.assertEqual(exp_gradsteps, model.num_gradsteps)
-        self.assertEqual(1, model.num_subepochs)
+        self.assertEqual(2, model.num_subepochs)
 
     def test_ppo_param_order_non_delayed_vs_delayed(self):
         n_envs = 3
@@ -482,7 +482,7 @@ class TestPPOModel(TestCase):
         batch_size = 10
         model.run(n_samples)
         # train for some steps
-        batch = next(iter(model.buffer(batch_size)))
+        batch = next(iter(model.sampler(batch_size)))
         ub_utils.set_seed(1)
         model._train_model(batch)
         # delayed
@@ -510,7 +510,7 @@ class TestPPOModel(TestCase):
         model.run(n_samples)
         # train for some steps
         ub_utils.set_seed(2)
-        batch = next(iter(model.buffer(batch_size)))
+        batch = next(iter(model.sampler(batch_size)))
         model._train_model(batch)
         with tempfile.TemporaryDirectory() as tempdir:
             save_path = tempdir
@@ -532,7 +532,7 @@ class TestPPOModel(TestCase):
                         loaded_model.trainable_variables)
         # test optimizers, train one step to create &
         # load optimizer params
-        batches = [batch for batch in model.buffer(batch_size)]
+        batches = [batch for batch in model.sampler(batch_size)]
         ub_utils.set_seed(1)
         for batch in batches:
             losses1, kl1 = model._train_step(batch)
@@ -630,8 +630,7 @@ class TestPPOModel(TestCase):
         ub_utils.set_seed(1)
         n_samples = 20
         model = ppo_model.PPO(env, gamma=gamma, gae_lambda=lam)
-        model.run(n_samples)
-        gae = model.buffer.data['adv']
+        model.collect(n_samples)
         exp_gae = legacy_gae(
             rew   = model.buffer.data['rew'], 
             val   = model.buffer.data['val'], 
@@ -639,4 +638,9 @@ class TestPPOModel(TestCase):
             gamma = gamma, 
             lam   = lam
         )
+        shape = exp_gae.shape
+        exp_gae = exp_gae.swapaxes(0, 1).reshape(shape[0]*shape[1])
+        env.seed(1)
+        model.run(n_samples)
+        gae = model.buffer.data['adv']
         self.assertAllClose(exp_gae, gae)

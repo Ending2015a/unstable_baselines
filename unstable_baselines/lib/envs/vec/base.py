@@ -20,6 +20,8 @@ class BaseEnvWorker(metaclass=abc.ABCMeta):
     def __init__(self, env_fn, auto_reset: bool):
         self._env_fn = env_fn
         self._auto_reset = auto_reset
+
+    def setup(self):
         self.observation_space = self.getattr('observation_space')
         self.action_space      = self.getattr('action_space')
         self.metadata          = self.getattr('metadata')
@@ -73,24 +75,25 @@ class BaseVecEnv(gym.Env):
     ):
         self._worker_class = worker_class
         self.workers       = [worker_class(fn, auto_reset) for fn in env_fns]
+        self.n_envs        = len(self.workers)
+        self._closed       = False
+        # setup workers
+        [w.setup() for w in self.workers]
 
         # init properties
-        worker = self.workers[0]
-        self.observation_space = worker.observation_space
-        self.action_space      = worker.action_space
-        self.metadata          = worker.metadata
-        self.reward_range      = worker.reward_range
-        self.spec              = worker.spec
-        self.n_envs            = len(self.workers)
-
         self.observation_spaces = [w.observation_space for w in self.workers]
         self.action_spaces      = [w.action_space for w in self.workers]
         self.metadatas          = [w.metadata for w in self.workers]
         self.reward_ranges      = [w.reward_range for w in self.workers]
         self.specs              = [w.spec for w in self.workers]
 
+        self.observation_space = self.observation_spaces[0]
+        self.action_space      = self.action_spaces[0]
+        self.metadata          = self.metadatas[0]
+        self.reward_range      = self.reward_ranges[0]
+        self.spec              = self.specs[0]
+
         self._rms_norm = self._get_rms_norm_opt(rms_norm)
-        self._closed = False
 
     @property
     def rms_norm(self):

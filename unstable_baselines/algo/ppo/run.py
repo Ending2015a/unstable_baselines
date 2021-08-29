@@ -41,7 +41,7 @@ def parse_args():
     a.MODEL.learning_rate   = 3e-4
     a.MODEL.gamma           = 0.99
     a.MODEL.gae_lambda      = 0.95
-    a.MODEL.policy_clip     = 0.2
+    a.MODEL.policy_clip     = 0.1
     a.MODEL.value_clip      = None
     a.MODEL.dual_clip       = None
     a.MODEL.ent_coef        = 0.01
@@ -102,14 +102,12 @@ def make_env(a, rank=0, eval=False):
         video_kwargs = dict(interval=1 if eval else None)
     )
     if 'NoFrameskip' in a.env_id:
-        # make atari env
         env = make_atari_env(a, eval=eval, **monitor_params)
     else:
-        # make pybullet env
         env = make_pybullet_env(a, eval=eval, **monitor_params)
     return env
 
-if __name__ == '__main__':
+def main():
     a = parse_args()
     # === Reset logger ===
     logger.Config.use(filename=a.ARGS.logging, level=a.ARGS.log_level,
@@ -169,3 +167,6 @@ if __name__ == '__main__':
         exit(1)
     env.close()
     eval_env.close()
+
+if __name__ == '__main__':
+    main()

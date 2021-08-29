@@ -142,12 +142,11 @@ class Agent(ub.base.BaseAgent):
         '''(Override) Setup agent model'''
         self._setup_model()
         # construct network params
-        obs = ub.utils.input_tensor(self.observation_space.shape)
-        self.call_policy(obs, proc_obs=False)
-        self.call_value(obs, proc_obs=False)
+        inputs = ub.utils.input_tensor(self.observation_space.shape)
+        self.call_policy(inputs, proc_obs=False)
+        self.call_value(inputs, proc_obs=False)
 
     # --- forwrd group ---
-
     def call_policy(self, inputs, proc_obs=True, training=True):
         '''Forward policy net'''
         if proc_obs:
@@ -159,8 +158,9 @@ class Agent(ub.base.BaseAgent):
         '''Forward value net'''
         if proc_obs:
             # cast and normalize inputs (eg. image in uint8)
-            obs = self.proc_observation(inputs)
-        return self.value(inputs, training=training)
+            inputs = self.proc_observation(inputs)
+        outputs = self.value(inputs, training=training)
+        return tf.math.reduce_mean(outputs, axis=-1)
 
     @tf.function
     def call(self, inputs,
@@ -186,7 +186,6 @@ class Agent(ub.base.BaseAgent):
         # forward actor
         distrib = self.call_policy(inputs, proc_obs=proc_obs, training=training)
         values  = self.call_value(inputs, proc_obs=proc_obs, training=training)
-        values  = tf.math.reduce_mean(values, axis=-1)
         # predict actions
         if det:
             actions = distrib.mode()
@@ -203,7 +202,7 @@ class Agent(ub.base.BaseAgent):
     def predict(self, inputs,
                       proc_obs: bool = True,
                       proc_act: bool = True,
-                      det:      bool = False):
+                      det:      bool = True):
         '''(Override) Predict actions
 
         Args:
@@ -211,7 +210,7 @@ class Agent(ub.base.BaseAgent):
                 or in shape (*obs_space.shape) for one observation.
             proc_obs (bool, optional): Preprocess observations. Defaults to True.
             proc_act (bool, optional): Postprocess actions. Defaults to True.
-            det (bool, optional): Deterministic actions. Defaults to False.
+            det (bool, optional): Deterministic actions. Defaults to True.
 
         Returns:
             np.ndarray: predicted actions in shape (b, *act_space.shape) or
@@ -343,6 +342,7 @@ class PPO(ub.base.OnPolicyModel):
         Override this method to customize to your replay byffer
         '''
         self.buffer = ub.data.SequentialBuffer()
+        self.sampler = ub.data.PermuteSampler(self.buffer)
         
     def _setup_model(self):
         '''Setup models, agents
@@ -401,7 +401,7 @@ class PPO(ub.base.OnPolicyModel):
     def predict(self, inputs,
                       proc_obs: bool = True,
                       proc_act: bool = True,
-                      det:      bool = False):
+                      det:      bool = True):
         '''(Override) See Agent.predict'''
         return self.agent.predict(
             inputs,
@@ -448,7 +448,6 @@ class PPO(ub.base.OnPolicyModel):
         # collect rollouts
         obs = self.collect(steps, obs=obs)
         # compute gae
-        self.buffer.make()
         adv = ub.data.compute_advantage(
             rew        = self.buffer.data['rew'],
             val        = self.buffer.data['val'],
@@ -457,11 +456,15 @@ class PPO(ub.base.OnPolicyModel):
             gae_lambda = self.gae_lambda
         )
         self.buffer.data['adv'] = adv
+        # ready for sampling
+        self.buffer.make()
         return obs
 
     # --- train group ---
     def policy_loss(self, adv, logp, old_logp):
         '''Compute policy loss (clipped surrogate loss)
+        Dual-clip from: https://arxiv.org/abs/1912.09729
+        Mastering Complex Control in MOBA Games with Deep Reinforcement Learning
 
         Args:
             adv (tf.Tensor): Batch advantages (GAE), shape (b,), tf.float32
@@ -495,7 +498,7 @@ class PPO(ub.base.OnPolicyModel):
         loss = (V(s)-Y)^2
 
         Args:
-            adv (tf.Tensor): Batch advantages (GAE), shape (b,)
+            adv (tf.Tensor): Batch advantages, shape (b,)
             val (tf.Tensor): Batch value predictions, shape (b,)
             old_val (tf.Tensor): Batch old value predictions, shape (b,)
 
@@ -521,11 +524,9 @@ class PPO(ub.base.OnPolicyModel):
 
         Returns:
             tf.Tensor: regularization loss.
-        '''        
-        if not var_list:
-            return 0.
+        '''
         reg = tf.keras.regularizers.L2(self.reg_coef)
-        return tf.math.add_n([reg(var) for var in var_list])
+        return tf.math.add_n([reg(var) for var in var_list] + [0.0])
 
     @tf.function
     def _train_model(self, batch):
@@ -563,8 +564,8 @@ class PPO(ub.base.OnPolicyModel):
     def _train_step(self, batch):
         '''(Override) Train one step'''
         # update learning rate
-        # lr = tf.convert_to_tensor(self.learning_rate())
-        # self.optimizer.lr.assign(lr)
+        lr = tf.convert_to_tensor(self.learning_rate())
+        self.optimizer.lr.assign(lr)
         # train model
         losses, kl = self._train_model(batch)
         return losses, kl
@@ -579,7 +580,7 @@ class PPO(ub.base.OnPolicyModel):
         for subepoch in range(subepochs):
             all_kls = []
             # train one subepoch
-            for batch in self.buffer(batch_size):
+            for batch in self.sampler(batch_size):
                 # train one step
                 losses, kl = self._train_step(batch)
                 all_losses.append(losses)

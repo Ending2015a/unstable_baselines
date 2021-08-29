@@ -533,6 +533,7 @@ class _VideoRecorder(object):
         
     @property
     def closed(self):
+        '''Return True, if disabled'''
         return not self.enabled
 
     @property
@@ -556,7 +557,7 @@ class _VideoRecorder(object):
             self._encode_image_frame(frame)
 
     def close(self):
-        if not self.enabled or self.closed:
+        if not self.enabled:
             return
 
         if self.encoder:
@@ -586,7 +587,7 @@ class _VideoRecorder(object):
             return
         try:
             with open(self.meta_path, 'wt') as f:
-                json.dump(self.metadata, f, indent=4)
+                json.dump(self.metadata, f, indent=2)
         except FileNotFoundError:
             LOG.error(f'Failed to write metadata to path: {self.meta_path}\n'
                 'This error may caused by trying to write files in a __del__'
@@ -819,7 +820,6 @@ class VideoRecorder(MonitorToolChain):
         if not self._recorder.functional:
             self._recorder.close()
             return
-        self._recorder.close()
 
         video_path = self._make_path(
             root_dir = self._root_dir,
@@ -848,6 +848,8 @@ class VideoRecorder(MonitorToolChain):
 
         self._recorder.metadata['episode_info'] = episode_metadata
         self._recorder.write_metadata()
+        # close recorder after writintg metadata
+        self._recorder.close()
         # create save paths
         self._create_path(os.path.dirname(video_path))
         self._create_path(os.path.dirname(meta_path))

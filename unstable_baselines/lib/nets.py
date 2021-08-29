@@ -304,9 +304,7 @@ class ValueNet(tf.keras.Model):
         Returns:
             tf.keras.Model: model
         '''
-        return tf.keras.Sequential([
-            tf.keras.layers.Dense(1)
-        ])
+        return tf.keras.layers.Dense(1)
 
 class MultiHeadValueNets(tf.keras.Model):
     def __init__(self, n_heads: int=2, nets=None, **kwargs):
@@ -395,6 +393,4 @@ class MultiHeadValueNets(tf.keras.Model):
         Returns:
             tf.keras.Model: model
         '''        
-        return tf.keras.Sequential([
-            tf.keras.layers.Dense(1)
-        ])
+        return tf.keras.layers.Dense(1)

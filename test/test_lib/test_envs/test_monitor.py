@@ -120,6 +120,9 @@ class TestMonitorModule(TestCase):
             self.assertTrue(env.tools[0].closed)
             self.assertFalse(env.tools[1]._enabled)
             self.assertTrue(env.tools[1]._recorder.closed)
+            json_files = [f for f in files if f.endswith('.json')]
+            with open(os.path.join(video_path, json_files[0]), 'r') as f:
+                print(f.read())
     
     def test_monitor_w_video_recorder_cubic(self):
         env = FakeImageEnv(max_steps=10)
