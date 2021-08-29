@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8, 3.9]
-        tf-version: ['2.3.*', '2.4.*', '2.5.*', '2.6.*']
+        tf-version: ['2.3.*', '2.4.*']
         
     steps:
     - uses: actions/checkout@v2
@@ -22,6 +22,8 @@ jobs:
         submodules: recursive
     - name: Set up FFMPEG
       uses: FedericoCarboni/setup-ffmpeg@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
