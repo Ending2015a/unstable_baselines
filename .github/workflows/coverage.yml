@@ -1,0 +1,42 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+
+jobs:
+  build:
+    # Skip coverage test if [ci skip] in the commit message
+    if: "! contains(toJSON(github.event.head_commit.message), '[ci skip]')"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+        
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Install TensorFlow
+        pip install "tensorflow~=2.4"
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install coverage
+    - name: Run coverage test
+      run: |
+        coverage run --source . -m unittest discover -s ./test
+        coverage xml -o "./coverage.xml"
+    - name: Report coverage to Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        token: ${{ secrets.CODECOV }}
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-actions
+        fail_ci_if_error: false
