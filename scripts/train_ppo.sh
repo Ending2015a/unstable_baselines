@@ -1,13 +1,15 @@
 #!/bin/bash
 # usage:
-#   ./train.sh --rank 0 --seed 1 "BeamRiderNoFrameskip-v4"
+#   ./train.sh --rank 0 --seed 1 --trace "ppo-test-1" "BeamRiderNoFrameskip-v4"
 # batch training on multiple environments:
-#   ./train.sh --rank 0 --seed 1 "SeaquestNoFrameskip-v4" \
+#   ./train.sh --rank 0 --seed 1 --trace "ppo-test-1" \
+#                                "SeaquestNoFrameskip-v4" \
 #                                "BeamRiderNoFrameskip-v4" \
 #                                "PongNoFrameskip-v4"
 
 rank=0
 seed=1
+trace="ppo"
 env_ids=('BeamRiderNoFrameskip-v4')
 
 exe=unstable_baselines.algo.ppo.run
@@ -24,7 +26,7 @@ function train() {
 }
 
 # Formalize arguments
-ARGS=`getopt -o r:s: -l rank:,seed: -n "$0" -- "$@"`
+ARGS=`getopt -o r:s:t: -l rank:,seed:,trace: -n "$0" -- "$@"`
 
 if [ $? -ne 0 ]; then
     echo "Terminating..." >&2
@@ -38,6 +40,7 @@ while true; do
     case "$1" in
     -r|--rank) rank="$2"; shift;;
     -s|--seed) seed="$2"; shift;;
+    -t|--trace) trace="$2"; shift;;
     --) shift; break;;
     *)
         echo "Unknown args: $@"
@@ -52,6 +55,6 @@ fi
 
 # Start training
 for env_id in "${env_ids[@]}"; do
-    train "$rank" "$seed" "$env_id"
+    train "$rank" "$seed" "$trace" "$env_id"
 done
 

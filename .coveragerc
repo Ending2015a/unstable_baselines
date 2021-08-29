@@ -3,11 +3,16 @@ branch = False
 source = 
     unstable_baselines/
 omit = 
+    # Unittest
     test/*
+    # Logger (submodule)
     unstable_baselines/logger/*
-    setup.py
-    # deprecated packages
+    # Examples
+    example/*
+    # Deprecated packages
     unstable_baselines/dep/*
+    # pip setup
+    setup.py
 
 [report]
 exclude_lines =
