@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8]
         tf-version: ['2.3.0', '2.4.0', '2.5.0']
-        exclude:
+        include:
           - python-version: 3.9
-            tf-version: ['2.3.0', '2.4.0']
+            tf-version: '2.5.0'
         
     steps:
     - uses: actions/checkout@v2
