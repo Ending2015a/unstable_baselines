@@ -28,6 +28,8 @@ jobs:
         python -m pip install --upgrade pip
         # Install TensorFlow
         pip install "tensorflow~=2.4"
+        # fix: ROM missing in the newest atari-py version
+        pip install atari-py==0.2.5
         # Install dependencies
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         # Install packages for unittest
