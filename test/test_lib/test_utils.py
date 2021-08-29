@@ -411,7 +411,7 @@ class TestUtilsModule(TestCase):
                 d=('df', 'as'))
 
         self.assertEqual(utils.safe_json_dumps(a), 
-                        json.dumps(a,indent=4,ensure_ascii=False))
+                        json.dumps(a,indent=2,ensure_ascii=False))
         self.assertEqual((a), a)
 
     def test_safe_json_dumps_loads_complex(self):

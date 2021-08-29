@@ -1,6 +1,7 @@
 # --- built in ---
 import os
 import sys
+import json
 import time
 import typing
 import logging
@@ -121,8 +122,13 @@ class TestMonitorModule(TestCase):
             self.assertFalse(env.tools[1]._enabled)
             self.assertTrue(env.tools[1]._recorder.closed)
             json_files = [f for f in files if f.endswith('.json')]
+            json_files[0]
             with open(os.path.join(video_path, json_files[0]), 'r') as f:
-                print(f.read())
+                meta = json.loads(f.read())
+            self.assertTrue('episode_info' in meta)
+            self.assertTrue('video_info' in meta)
+            self.assertTrue('encoder_version' in meta)
+            self.assertTrue('content_type' in meta)
     
     def test_monitor_w_video_recorder_cubic(self):
         env = FakeImageEnv(max_steps=10)
