@@ -28,8 +28,10 @@ jobs:
         python -m pip install --upgrade pip
         # Install TensorFlow
         pip install "tensorflow~=2.4"
+        # Install dependencies
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install coverage
+        # Install packages for unittest
+        pip install coverage parameterized scipy
     - name: Run coverage test
       run: |
         coverage run --source . -m unittest discover -s ./test
