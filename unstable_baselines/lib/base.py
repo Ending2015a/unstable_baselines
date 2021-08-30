@@ -422,7 +422,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         Returns:
             dict: A JSON serializable dictionary.
         '''
-        raise NotImplementedError('get_config method not implemented')
+        raise NotImplementedError
 
     @classmethod
     def from_config(cls, config):
@@ -650,13 +650,13 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             else:
                 # If we still failed to get checkpoint path, raise Error
                 raise RuntimeError("Couldn't find the checkpoint file for "
-                                "checkpoint: {}".format(directory))
+                                f"checkpoint: {file_or_dir}")
         # Get config file path
         config_path = checkpoint_path + CONFIG_SUFFIX
         # check if config path exists
         if not file_io.file_exists(config_path):
             raise RuntimeError("Couldn't find the config file for "
-                                "checkpoint: {}".format(checkpoint_path))
+                                f"checkpoint: {checkpoint_path}")
 
         return checkpoint_path
 
@@ -670,7 +670,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
                                         weights_name,
                                         best)
 
-        LOG.debug('Restore weights from: {}'.format(checkpoint_path))
+        LOG.debug(f'Restore weights from: {checkpoint_path}')
 
         # Get config path
         config_path = checkpoint_path + CONFIG_SUFFIX
@@ -738,18 +738,18 @@ class TrainableModel(SavableModel):
         Returns:
             np.ndarray: Predicted actions.
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def train(self):
         '''
         Train one epoch
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def eval(self):
         '''Evaluate model'''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def learn(self):
@@ -758,7 +758,7 @@ class TrainableModel(SavableModel):
         Returns:
             TrainableModel: self
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def metrics_compare_fn(self, last_metrics, new_metrics):
         '''Compare two metrics

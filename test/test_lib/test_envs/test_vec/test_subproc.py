@@ -16,12 +16,18 @@ from parameterized import parameterized
 # --- my module ---
 from unstable_baselines.lib.envs.vec import subproc
 from unstable_baselines.lib import utils
+from unstable_baselines.lib.envs.wrap import atari
 
 from test.utils import TestCase
 from test.test_lib.test_envs.utils import FakeEnv
 
 def create_fake_env(rank, env_type):
     return FakeEnv(rank, env_type)
+
+def create_atari_env(env_id):
+    env = atari.make_atari(env_id)
+    env = atari.wrap_deepmind(env)
+    return env
 
 class TestSubprocVecEnvModule(TestCase):
 
@@ -112,3 +118,36 @@ class TestSubprocVecEnvModule(TestCase):
         self.assertArrayEqual(obs.shape, (num_envs, *envs.observation_space.shape))
         envs.render()
         envs.close()
+    
+    def test_subproc_vec_env_seed_consistant(self):
+        num_envs = 4
+        n_steps = 250
+        def collect(envs, steps):
+            '''Collect random rollouts'''
+            samples = [envs.reset()]
+            for i in range(steps):
+                obs, rew, done, info = envs.step([
+                    act_space.sample()
+                    for act_space in envs.action_spaces
+                ])
+                samples.append(obs)
+            return np.asarray(samples)
+        # collect first env
+        env_fns = [
+            functools.partial(create_atari_env, 'BeamRiderNoFrameskip-v4')
+            for i in range(num_envs)
+        ]
+        envs = subproc.SubprocVecEnv(env_fns)
+        envs.seed(1)
+        samples1 = collect(envs, n_steps)
+        envs.close()
+        # collect second env
+        env_fns = [
+            functools.partial(create_atari_env, 'BeamRiderNoFrameskip-v4')
+            for i in range(num_envs)
+        ]
+        envs = subproc.SubprocVecEnv(env_fns)
+        envs.seed(1)
+        samples2 = collect(envs, n_steps)
+        envs.close()
+        self.assertArrayEqual(samples1, samples2)
