@@ -13,7 +13,8 @@ import unstable_baselines as ub
 from unstable_baselines.algo.ppo import PPO
 
 def parse_args():
-    root_path = 'log/ppo/BeamRiderNoFrameskip-v4'
+    env_id = 'BeamRiderNoFrameskip-v4'
+    root_path = f'log/ppo-test-1/{env_id}'
     # Configurations
     a = ub.utils.StateObject()
     a.ARGS = ub.utils.StateObject()
@@ -24,7 +25,7 @@ def parse_args():
     a.ARGS.n_envs           = 8
     # Env/Monitor parameters
     a.ENV = ub.utils.StateObject()
-    a.ENV.env_id            = 'BeamRiderNoFrameskip-v4'
+    a.ENV.env_id            = env_id
     a.ENV.monitor_dir       = os.path.join(root_path, 'monitor')
     a.ENV.video             = True   # record video
     # Hyper parameters
@@ -49,7 +50,7 @@ def parse_args():
     a.MODEL.verbose         = 2
     # Training parameters
     a.LEARN = ub.utils.StateObject()
-    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 5 # ~10M
+    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
     a.LEARN.log_interval    = 1    # epoch
     a.LEARN.eval_interval   = 1000 # epoch
     a.LEARN.eval_episodes   = 10
@@ -59,8 +60,10 @@ def parse_args():
     a.LEARN.tb_logdir       = root_path
     # Performance evaluations
     a.EVAL = ub.utils.StateObject()
-    a.EVAL.n_episodes       = 1
+    a.EVAL.n_episodes       = 100
     a.EVAL.max_steps        = 10000
+    a.FINAL = ub.utils.StateObject()
+    a.FINAL.export_path     = os.path.join(root_path, 'export')
     return a
 
 def print_args(LOG, a, group):
@@ -90,6 +93,15 @@ def make_env(a, rank=0, eval=False):
     env = make_atari_env(a, eval=eval, **monitor_params)
     return env
 
+def evaluate_and_export_final_model(model, a):
+    LOG.info('Evaluating the latest model ...')
+    results = model.eval(eval_env, **a.EVAL)
+    metrics = model.get_eval_metrics(results)
+    model.log_eval(a.EVAL.n_episodes, results, metrics)
+    # export PPO agents (only inference mode)
+    ckpt_metrics = model.get_save_metrics(metrics)
+    model.agent.save(a.FINAL.export_path, checkpoint_metrics=ckpt_metrics)
+
 def main():
     a = parse_args()
     # =============== Reset logger ==============
@@ -109,6 +121,7 @@ def main():
     print_args(LOG, a.MODEL, 'MODEL')
     print_args(LOG, a.LEARN, 'LEARN')
     print_args(LOG, a.EVAL, 'EVAL')
+    print_args(LOG, a.FINAL, 'FINAL')
     LOG.flush('WARN')
     ub.utils.set_seed(a.ARGS.seed)
     # ================ Make envs ================
@@ -133,16 +146,12 @@ def main():
         loaded_model = PPO.load(a.LEARN.save_path)
         # Evaluate model
         LOG.info('Evaluating the latest model ...')
-        results = loaded_model.eval(eval_env, **a.EVAL)
-        metrics = loaded_model.get_eval_metrics(results)
-        loaded_model.log_eval(a.EVAL.n_episodes, results, metrics)
+        evaluate_and_export_final_model(loaded_model, a)
         # --- Load model from the best checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path, best=True)
         # Evaluate model
         LOG.info('Evaluating the best model ...')
-        results = loaded_model.eval(eval_env, **a.EVAL)
-        metrics = loaded_model.get_eval_metrics(results)
-        loaded_model.log_eval(a.EVAL.n_episodes, results, metrics)
+        evaluate_and_export_final_model(loaded_model, a)
     except:
         LOG.exception('Exception occurred')
         env.close()

@@ -41,7 +41,7 @@ setup(
     keywords='reinforcement-learning playform tensorflow-2.0 tensorflow',
     packages=[
         # exclude deprecated module
-        package for package in find_packages(exclude=["*.dep.*"])
+        package for package in find_packages(exclude=["*.dep.*", "*.dep"])
         if package.startswith('unstable_baselines')
     ],
     package_data={

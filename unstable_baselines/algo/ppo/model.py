@@ -476,9 +476,7 @@ class PPO(ub.base.OnPolicyModel):
         Returns:
             tf.Tensor: policy loss, tf.float32
         '''
-        # normalize advantage, from stable baselines: ppo2.py#L265
-        eps = tf.constant(np.finfo(np.float32).eps.item(), dtype=tf.float32)
-        adv = (adv - tf.math.reduce_mean(adv)) / (tf.math.reduce_std(adv) + eps)
+        adv = (adv - tf.math.reduce_mean(adv)) / tf.math.reduce_std(adv)
         # policy ratio
         ratio = tf.exp(logp - old_logp)
         # clipped surrogate loss

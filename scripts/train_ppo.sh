@@ -16,10 +16,10 @@ exe=unstable_baselines.algo.ppo.run
 
 function train() {
     # train ${rank} ${seed} ${end_id}
-    echo "Start training, rank=$1, seed=$2, env_id=$3"
+    echo "Start training, rank=$1, seed=$2, trace=$3 env_id=$4"
     
-    python -m $exe --root "./log/$3/ppo/$1" \
-                   --env_id $3 \
+    python -m $exe --root "./log/$4/$3/$1" \
+                   --env_id $4 \
                    --seed $2 \
                    --eval_seed 0 \
                    --n_envs 8
