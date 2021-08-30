@@ -126,3 +126,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# ray[tune] cluster config
+experiments/tune-local.yaml
+
+# log files
+log/

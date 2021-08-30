@@ -39,7 +39,7 @@ jobs:
         # fix: ROM missing in the newest atari-py version
         pip install atari-py==0.2.6
         # Install dependencies
-        pip install .[dev,atari,pybullet]
+        pip install .[dev,extra]
         # Install packages for unittest
     - name: Run coverage test
       run: |

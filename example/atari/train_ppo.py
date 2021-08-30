@@ -12,24 +12,29 @@ import gym
 import unstable_baselines as ub
 from unstable_baselines.algo.ppo import PPO
 
-def parse_args():
-    env_id = 'BeamRiderNoFrameskip-v4'
-    root_path = f'log/ppo-test-1/{env_id}'
-    # Configurations
-    a = ub.utils.StateObject()
-    a.ARGS = ub.utils.StateObject()
-    a.ARGS.logging          = os.path.join(root_path, 'training.log')
+def parse_config(env_id, root_path):
+    env_id    = env_id
+    root_path = os.path.join(root_path, env_id)
+    # Create config sections (you can use python dict instead)
+    Config = ub.utils.StateObject
+    a = Config()
+    a.ARGS  = Config()
+    a.ENV   = Config()
+    a.MODEL = Config()
+    a.LEARN = Config()
+    a.EVAL  = Config()
+    a.FINAL = Config()
+    # Parameters
+    a.ARGS.logging          = f'{root_path}/training.log'
     a.ARGS.log_level        = 'INFO'
     a.ARGS.seed             = 1
     a.ARGS.eval_seed        = 0
     a.ARGS.n_envs           = 8
     # Env/Monitor parameters
-    a.ENV = ub.utils.StateObject()
     a.ENV.env_id            = env_id
-    a.ENV.monitor_dir       = os.path.join(root_path, 'monitor')
+    a.ENV.monitor_dir       = f'{root_path}/monitor'
     a.ENV.video             = True   # record video
     # Hyper parameters
-    a.MODEL = ub.utils.StateObject()
     a.MODEL.learning_rate   = 3e-4
     a.MODEL.gamma           = 0.99
     a.MODEL.gae_lambda      = 0.95
@@ -49,21 +54,18 @@ def parse_args():
     a.MODEL.batch_size      = 256
     a.MODEL.verbose         = 2
     # Training parameters
-    a.LEARN = ub.utils.StateObject()
-    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
+    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10 # ~10M
     a.LEARN.log_interval    = 1    # epoch
     a.LEARN.eval_interval   = 1000 # epoch
-    a.LEARN.eval_episodes   = 10
+    a.LEARN.eval_episodes   = 5
     a.LEARN.eval_max_steps  = 5000
     a.LEARN.save_interval   = 1000 # epoch
-    a.LEARN.save_path       = os.path.join(root_path, 'save')
+    a.LEARN.save_path       = f'{root_path}/save'
     a.LEARN.tb_logdir       = root_path
     # Performance evaluations
-    a.EVAL = ub.utils.StateObject()
-    a.EVAL.n_episodes       = 100
-    a.EVAL.max_steps        = 10000
-    a.FINAL = ub.utils.StateObject()
-    a.FINAL.export_path     = os.path.join(root_path, 'export')
+    a.EVAL.n_episodes       = 10
+    a.EVAL.max_steps        = 100
+    a.EVAL.export_path      = f'{root_path}/export'
     return a
 
 def print_args(LOG, a, group):
@@ -93,17 +95,15 @@ def make_env(a, rank=0, eval=False):
     env = make_atari_env(a, eval=eval, **monitor_params)
     return env
 
-def evaluate_and_export_final_model(model, a):
-    LOG.info('Evaluating the latest model ...')
-    results = model.eval(eval_env, **a.EVAL)
+def evaluate_and_export_final_model(model, eval_env, a):
+    results = model.eval(eval_env, a.n_episodes, a.max_steps)
     metrics = model.get_eval_metrics(results)
-    model.log_eval(a.EVAL.n_episodes, results, metrics)
+    model.log_eval(a.n_episodes, results, metrics)
     # export PPO agents (only inference mode)
     ckpt_metrics = model.get_save_metrics(metrics)
-    model.agent.save(a.FINAL.export_path, checkpoint_metrics=ckpt_metrics)
+    model.agent.save(a.export_path, checkpoint_metrics=ckpt_metrics)
 
-def main():
-    a = parse_args()
+def main(a):
     # =============== Reset logger ==============
     ub.logger.Config.use(filename=a.ARGS.logging, level=a.ARGS.log_level,
                     colored=True, reset=False)
@@ -120,10 +120,8 @@ def main():
     print_args(LOG, a.ENV,   'ENV')
     print_args(LOG, a.MODEL, 'MODEL')
     print_args(LOG, a.LEARN, 'LEARN')
-    print_args(LOG, a.EVAL, 'EVAL')
-    print_args(LOG, a.FINAL, 'FINAL')
+    print_args(LOG, a.EVAL,  'EVAL')
     LOG.flush('WARN')
-    ub.utils.set_seed(a.ARGS.seed)
     # ================ Make envs ================
     env = ub.envs.SubprocVecEnv([
         functools.partial(make_env, a.ENV, rank=rank, eval=False)
@@ -132,8 +130,7 @@ def main():
     eval_env = make_env(a.ENV, eval=True)
     env.seed(a.ARGS.seed) # seed ~ seed+n_envs
     eval_env.seed(a.ARGS.eval_seed)
-    LOG.debug(f'Action space: {env.action_space}')
-    LOG.debug(f'Observation space: {env.observation_space}')
+    ub.utils.set_seed(a.ARGS.seed)
     # =============== Train model ===============
     try:
         # --- Setup model & train ---
@@ -142,23 +139,25 @@ def main():
         # Save model
         saved_path = model.save(a.LEARN.save_path)
         LOG.info(f'Saving model to {saved_path}')
+        del model
         # --- Load model from the latest checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path)
         # Evaluate model
         LOG.info('Evaluating the latest model ...')
-        evaluate_and_export_final_model(loaded_model, a)
+        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
         # --- Load model from the best checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path, best=True)
         # Evaluate model
         LOG.info('Evaluating the best model ...')
-        evaluate_and_export_final_model(loaded_model, a)
+        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
     except:
         LOG.exception('Exception occurred')
-        env.close()
-        eval_env.close()
-        exit(1)
     env.close()
     eval_env.close()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Proximal Policy Optimization')
+    parser.add_argument('--env_id', type=str, default='BeamRiderNoFrameskip-v4')
+    parser.add_argument('--root',   type=str, default='log/ppo')
+    args = parser.parse_args()
+    main(parse_config(args.env_id, args.root))

@@ -59,10 +59,14 @@ setup(
             # Unittest and coverage
             'coverage',
             'parameterized',
-            # test prob module
-            'scipy'
+            'scipy',
         ],
         'atari': ['atari_py==0.2.6'],
-        'pybullet': ['pybullet']
+        'pybullet': ['pybullet'],
+        'extra': [
+            'atari_py==0.2.6',
+            'pybullet',
+            'ray[tune]'
+        ]
     }
 )
