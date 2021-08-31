@@ -52,6 +52,14 @@ def make_env(a, rank=0, eval=False):
         env = make_pybullet_env(a, eval=eval, **monitor_params)
     return env
 
+def evaluate_and_export_final_model(model, eval_env, a):
+    results = model.eval(eval_env, a.n_episodes, a.max_steps)
+    metrics = model.get_eval_metrics(results)
+    model.log_eval(a.n_episodes, results, metrics)
+    # export PPO agents (only inference mode)
+    ckpt_metrics = model.get_save_metrics(metrics)
+    model.agent.save(a.export_path, checkpoint_metrics=ckpt_metrics)
+
 def train(a):
     # =============== Reset logger ==============
     ub.logger.Config.use(filename=a.ARGS.logging, level=a.ARGS.log_level,
@@ -82,16 +90,17 @@ def train(a):
         # Save model
         saved_path = model.save(a.LEARN.save_path)
         LOG.info(f'Saving model to {saved_path}')
+        del model
         # --- Load model from the latest checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path)
         # Evaluate model
         LOG.info('Evaluating the latest model ...')
-        evaluate_and_export_final_model(loaded_model, a)
+        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
         # --- Load model from the best checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path, best=True)
         # Evaluate model
         LOG.info('Evaluating the best model ...')
-        evaluate_and_export_final_model(loaded_model, a)
+        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
     except:
         LOG.exception('Exception occurred')
     env.close()

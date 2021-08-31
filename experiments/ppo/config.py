@@ -62,7 +62,7 @@ def default_atari_config(env_id, root_path):
     # Performance evaluations
     a.EVAL.n_episodes       = 100
     a.EVAL.max_steps        = 10000
-    a.FINAL.export_path     = os.path.join(root_path, 'export')
+    a.EVAL.export_path      = os.path.join(root_path, 'export')
     return a
 
 def default_pybullet_config(env_id, root_path):
@@ -108,7 +108,7 @@ def default_pybullet_config(env_id, root_path):
     # Performance evaluations
     a.EVAL.n_episodes       = 100
     a.EVAL.max_steps        = 1000
-    a.FINAL.export_path     = os.path.join(root_path, 'export')
+    a.EVAL.export_path      = os.path.join(root_path, 'export')
     return a
 
 def default_config(env_id, **kwargs):

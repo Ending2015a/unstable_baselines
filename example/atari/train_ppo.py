@@ -54,7 +54,7 @@ def parse_config(env_id, root_path):
     a.MODEL.batch_size      = 256
     a.MODEL.verbose         = 2
     # Training parameters
-    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10 # ~10M
+    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
     a.LEARN.log_interval    = 1    # epoch
     a.LEARN.eval_interval   = 1000 # epoch
     a.LEARN.eval_episodes   = 5
@@ -64,7 +64,7 @@ def parse_config(env_id, root_path):
     a.LEARN.tb_logdir       = root_path
     # Performance evaluations
     a.EVAL.n_episodes       = 10
-    a.EVAL.max_steps        = 100
+    a.EVAL.max_steps        = 10000
     a.EVAL.export_path      = f'{root_path}/export'
     return a
 
