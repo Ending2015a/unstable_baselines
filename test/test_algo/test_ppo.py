@@ -12,6 +12,8 @@ import numpy as np
 import tensorflow as tf
 tf.config.run_functions_eagerly(True)
 
+from parameterized import parameterized
+
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
 from unstable_baselines.lib import data as ub_data
@@ -135,7 +137,7 @@ class TestPPOModel(TestCase):
         # mlp(3) + mlp(3) + policy + value
         self.assertEqual(6+6+2+2, len(agent.trainable_variables))
 
-    def test_ppo_agent_setup_non_image_obs(self):
+    def test_ppo_agent_setup_box_obs(self):
         obs_space = gym.spaces.Box(low=-1, high=1, shape=(64,),
                                 dtype=np.float32)
         act_space = gym.spaces.Box(low=-1, high=1, shape=(16,),
@@ -155,6 +157,59 @@ class TestPPOModel(TestCase):
         # mlp(3) + mlp(3) + policy + value
         self.assertEqual(6+3+2, len(agent.trainable_variables))
     
+    @parameterized.expand([
+        (gym.spaces.Discrete(16),),
+        (gym.spaces.MultiBinary(16),),
+        (gym.spaces.MultiDiscrete([4, 6]),)
+    ])
+    def test_ppo_agent_setup_non_box_obs(self, obs_space):
+        act_space = gym.spaces.Box(low=-1, high=1, shape=(16,),
+                                dtype=np.float32)
+        # no share net, mlp
+        agent = ppo_model.Agent(obs_space, act_space, share_net=False,
+                            force_mlp=False, mlp_units=[64, 64, 64])
+        self.assertTrue(agent.policy is not None)
+        self.assertTrue(agent.value is not None)
+        # mlp(3) + mlp(3) + policy + value
+        self.assertEqual(6+6+3+2, len(agent.trainable_variables))
+        # share net
+        agent = ppo_model.Agent(obs_space, act_space, share_net=True,
+                            force_mlp=False, mlp_units=[64, 64, 64])
+        self.assertTrue(agent.policy is not None)
+        self.assertTrue(agent.value is not None)
+        # mlp(3) + mlp(3) + policy + value
+        self.assertEqual(6+3+2, len(agent.trainable_variables))
+
+    @parameterized.expand([
+        (gym.spaces.Dict({
+            'sp1': gym.spaces.Box(low=0, high=255, shape=(64, 64, 3),
+                                    dtype=np.uint8),
+            'sp2':gym.spaces.Discrete(16)
+        }),),
+        (gym.spaces.Tuple((
+            gym.spaces.Box(low=0, high=255, shape=(64, 64, 3),
+                                    dtype=np.uint8),
+            gym.spaces.Discrete(16)
+        )),)
+    ])
+    def test_ppo_agent_setup_nested_obs(self, obs_space):
+        act_space = gym.spaces.Box(low=-1, high=1, shape=(16,),
+                                dtype=np.float32)
+        # no share net, mlp
+        agent = ppo_model.Agent(obs_space, act_space, share_net=False,
+                            force_mlp=False, mlp_units=[64, 64, 64])
+        self.assertTrue(agent.policy is not None)
+        self.assertTrue(agent.value is not None)
+        # mlp(3)*2 + nature_cnn*2 + policy + value
+        self.assertEqual(6*2+8*2+3+2, len(agent.trainable_variables))
+        # share net
+        agent = ppo_model.Agent(obs_space, act_space, share_net=True,
+                            force_mlp=False, mlp_units=[64, 64, 64])
+        self.assertTrue(agent.policy is not None)
+        self.assertTrue(agent.value is not None)
+        # mlp(3) + mlp(3) + policy + value
+        self.assertEqual(6+8+3+2, len(agent.trainable_variables))
+
     def test_ppo_agent_delayed_setup(self):
         obs_space = gym.spaces.Box(low=-1, high=1, shape=(64,),
                                 dtype=np.float32)
@@ -200,16 +255,13 @@ class TestPPOModel(TestCase):
         #
         ppo_model.Agent(box_space, box_space)
         ppo_model.Agent(box_space, discrete_space)
+        ppo_model.Agent(discrete_space, discrete_space)
+        ppo_model.Agent(multid_space, discrete_space)
+        ppo_model.Agent(multib_space, discrete_space)
         with self.assertRaises(RuntimeError):
             ppo_model.Agent(box_space, multid_space)
         with self.assertRaises(RuntimeError):
             ppo_model.Agent(box_space, multib_space)
-        with self.assertRaises(RuntimeError):
-            ppo_model.Agent(discrete_space, box_space)
-        with self.assertRaises(RuntimeError):
-            ppo_model.Agent(multid_space, box_space)
-        with self.assertRaises(RuntimeError):
-            ppo_model.Agent(multib_space, box_space)
         
     def test_ppo_agent_proc_box(self):
         obs_space = gym.spaces.Box(low=0, high=255, shape=(64,),
@@ -245,7 +297,23 @@ class TestPPOModel(TestCase):
         act = act_space.sample()
         res_act = agent.proc_action(act)
         self.assertAllClose(act, res_act)
-        
+    
+    def test_ppo_agent_proc_nested(self):
+        obs1_space = gym.spaces.Box(low=0, high=255, shape=(64,),
+                                    dtype=np.uint8)
+        obs2_space = gym.spaces.Discrete(16)
+        obs_space = gym.spaces.Dict({'obs1': obs1_space, 'obs2':obs2_space})
+        act_space = gym.spaces.Discrete(6)
+        agent = ppo_model.Agent(obs_space, act_space, share_net=False,
+                            force_mlp=False, mlp_units=[64, 64])
+        obs = obs_space.sample()
+        res_obs = agent.proc_observation(obs)
+        obs1_norm = obs['obs1'].astype(np.float32)/255.
+        obs2_norm = np.zeros((16,), np.float32)
+        obs2_norm[obs['obs2']] = 1.0
+        self.assertAllClose(obs1_norm, res_obs['obs1'])
+        self.assertAllClose(obs2_norm, res_obs['obs2'])
+
     def test_ppo_agent_call(self):
         batch_size = 3
         obs_dim = 64
@@ -369,15 +437,6 @@ class TestPPOModel(TestCase):
         self.assertTrue(model.observation_space is not None)
         self.assertTrue(model.action_space is not None)
         self.assertEqual(4+4+3+2, len(model.trainable_variables))
-
-    def test_ppo_setup_exception(self):
-        envs = [FakeImageEnv(obs_space=gym.spaces.Discrete(16)) 
-                for _ in range(3)]
-        env = ub_vec.VecEnv(envs)
-        with self.assertRaises(RuntimeError):
-            # This algorithm does not support observation spaces
-            # of type Discrete
-            ppo_model.PPO(env)
     
     def test_ppo_call(self):
         envs = [FakeContinuousEnv() for _ in range(3)]

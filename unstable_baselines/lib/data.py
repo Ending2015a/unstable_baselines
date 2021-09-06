@@ -166,11 +166,11 @@ class NestedReplayBuffer(BaseBuffer):
             data (Any): Any nested type of data. Note that the python list
                 is treated as single element.
         '''
-        # count the first dimension (batch)
-        def _len_op(v):
-            assert not np.isscalar(v), f'rank must > 0'
-            return len(v)
-        n_samples = ub_utils.nested_iter(data, _len_op, first=True)
+        # count the first/batch dimension
+        first = next(iter(ub_utils.iter_nested(data)))
+        assert not np.isscalar(first), f'rank must be > 0'
+        n_samples = len(first)
+        # n_samples = ub_utils.nested_iter(data, _len_op, first=True)
         # prepare indices
         inds = np.arange(self._pos, self._pos+n_samples) % self._buffer_size
         # copy data into the buffer
@@ -222,14 +222,14 @@ class NestedReplayBuffer(BaseBuffer):
             else:
                 shape = (self._buffer_size,) + v.shape[1:]
             return np.zeros(shape, dtype=v.dtype)
-        self._data = ub_utils.nested_iter(data, op=_create_space)
+        self._data = ub_utils.map_nested(data, op=_create_space)
     
     def _get_data(self, indices):
         '''Retrieve data'''
         if self.isnull:
             raise RuntimeError('Buffer space not created')
         _slice_op = lambda v: v[indices]
-        return ub_utils.nested_iter(self._data, _slice_op)
+        return ub_utils.map_nested(self._data, _slice_op)
 
     def _set_data(self, data, indices):
         '''Set data'''
@@ -240,7 +240,7 @@ class NestedReplayBuffer(BaseBuffer):
         def _assign_op(data_tuple, idx):
             new_data, data = data_tuple
             data[idx, ...] = np.asarray(new_data).astype(data.dtype).copy()
-        ub_utils.nested_iter_tuple((data, self._data), _assign_op, idx=indices)
+        ub_utils.map_nested_tuple((data, self._data), _assign_op, idx=indices)
 
     def load(self, path):
         raise NotImplementedError
@@ -313,11 +313,11 @@ class SequentialReplayBuffer(DictReplayBuffer):
 
     def add(self, **data):
         '''Add new batch data into the buffer'''
-        # count the first dimension (batch)
-        def _len_op(v):
-            assert not np.isscalar(v), f'rank must > 0'
-            return len(v)
-        n_samples = ub_utils.nested_iter(data, _len_op, first=True)
+        # count the first/batch dimension
+        first = next(iter(ub_utils.iter_nested(data)))
+        assert not np.isscalar(first), f'rank must be > 0'
+        n_samples = len(first)
+        #n_samples = ub_utils.nested_iter(data, _len_op, first=True)
         # copy data into the buffer
         self._append_data(data)
         # increase number of batch samples
@@ -353,7 +353,7 @@ class SequentialReplayBuffer(DictReplayBuffer):
             else:
                 v = v.swapaxes(0, 1).reshape(shape[0]*shape[1], *shape[2:])
             return v
-        data = ub_utils.nested_iter(data, _swap_flatten)
+        data = ub_utils.map_nested(data, _swap_flatten)
         self._data = data
         self._ready_for_sample = True
 
@@ -365,7 +365,7 @@ class SequentialReplayBuffer(DictReplayBuffer):
         '''Create buffer space'''
         def _create_space(v):
             return []
-        self._data = ub_utils.nested_iter(data, op=_create_space)
+        self._data = ub_utils.map_nested(data, op=_create_space)
     
     def _append_data(self, data):
         if self.isnull:
@@ -376,7 +376,7 @@ class SequentialReplayBuffer(DictReplayBuffer):
         def _append_op(data_tuple):
             new_data, data = data_tuple
             data.append(np.asarray(new_data))
-        ub_utils.nested_iter_tuple((data, self.data), _append_op)
+        ub_utils.map_nested_tuple((data, self.data), _append_op)
 
 # alias
 ReplayBuffer = DictReplayBuffer

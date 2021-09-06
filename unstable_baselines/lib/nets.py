@@ -13,6 +13,7 @@ import numpy as np
 import tensorflow as tf
 
 # --- my module ---
+from unstable_baselines.lib import utils as ub_utils
 from unstable_baselines.lib import prob as ub_prob
 from unstable_baselines.lib import patch as ub_patch
 
@@ -38,13 +39,13 @@ class Constant(tf.keras.Model):
 
 class MlpNet(tf.keras.Model):
     '''MLP feature extractor'''
-    def __init__(self, hiddens=[64, 64], **kwargs):
+    def __init__(self, mlp_units=[64, 64], **kwargs):
         super().__init__(**kwargs)
 
         layers = [tf.keras.layers.Flatten()]
-        for h in hiddens:
+        for unit in mlp_units:
             layers.extend([
-                tf.keras.layers.Dense(h),
+                tf.keras.layers.Dense(unit),
                 ub_patch.ReLU()
             ])
         
@@ -74,6 +75,57 @@ class NatureCnn(tf.keras.Model):
 
     def call(self, inputs, training=True):
         return self._model(inputs, training=training)
+
+# === Complex nets ===
+
+class AwesomeNet(tf.keras.Model):
+    def __init__(self, input_space: gym.Space, 
+                       force_mlp:   bool = False, 
+                       mlp_units:   list = [64, 64], 
+                       **kwargs):
+        '''AwesomeNet automatically handles nested spaces and input 
+        tensors. AwesomeNet creates either NatureCnn or MlpNet for 
+        each observation space according to its type if `force_mlp`
+        is False. Otherwise, all observations forwards into a MlpNet.
+        '''
+        super().__init__(**kwargs)
+        self.force_mlp = force_mlp
+        self.mlp_units = mlp_units
+        # flatten nested input space to a tuple of spaces
+        self._flat_spaces = ub_utils.flatten_space(input_space)
+        assert len(self._flat_spaces) > 0
+        # create models for each space
+        self._models = [
+            self.create_model(space)
+            for space in self._flat_spaces
+        ]
+        
+    def call(self, inputs, training=True):
+        '''Forward networks'''
+        flat_inputs = tf.nest.flatten(inputs)
+        # assert len(flat_inputs) == len(self._models)
+        outputs = []
+        for input, model in zip(flat_inputs, self._models):
+            x = model(input, training=training)
+            outputs.append(x)
+        return tf.concat(outputs, axis=1)
+
+    def create_model(self, space: gym.Space):
+        '''Create model by space'''
+        use_cnn = (ub_utils.is_image_space(space)
+                    and not self.force_mlp)
+        if use_cnn:
+            return self.create_cnn()
+        else:
+            return self.create_mlp()
+
+    def create_cnn(self):
+        '''Create nature cnn'''
+        return NatureCnn()
+
+    def create_mlp(self):
+        '''Create mlp net'''
+        return MlpNet(self.mlp_units)
 
 # === Policies ===
 
@@ -166,7 +218,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
         mean   = self._mean_model(inputs, training=training)
         logstd = self._logstd_model(inputs, training=training)
         std    = tf.math.softplus(logstd) + 1e-5
-        # reshape as action space space
+        # reshape as action space shape (-1 = batch dim)
         output_shape = [-1] + list(self.action_shape)
         mean = tf.reshape(mean, output_shape)
         std  = tf.reshape(std, output_shape)
@@ -200,7 +252,7 @@ class DiagGaussianPolicyNet(tf.keras.Model):
 
 class PolicyNet(tf.keras.Model):
     support_spaces = [gym.spaces.Box, gym.spaces.Discrete]
-    #TODO: support other spaces
+    #TODO: support other spaces: MultiDiscrete, Dict, Tuple
     def __init__(self, action_space, squash=False, net=None, **kwargs):
         '''Base Policy net
         Override `create_model` or `create_*_policy` method to customize
@@ -275,15 +327,13 @@ class ValueNet(tf.keras.Model):
         '''        
         super().__init__(**kwargs)
         self._model = net
+        self._value = None
 
     def build(self, input_shape):
         # create empty net
         if self._model is None:
             self._model = Identity()
-        self._model = tf.keras.Sequential([
-            self._model,
-            self.create_value_model()
-        ])
+        self._value = self.create_value_model()
 
     def call(self, inputs, training=True):
         '''Forward value net
@@ -294,8 +344,9 @@ class ValueNet(tf.keras.Model):
 
         Returns:
             tf.Tensor: value predictions, (Default) shape (b, 1)
-        '''        
-        return self._model(inputs, training=training)
+        '''
+        x = self._model(inputs, training=training)
+        return self._value(x, training=training)
     
     def create_value_model(self):
         '''Create value model
@@ -320,8 +371,9 @@ class MultiHeadValueNets(tf.keras.Model):
                 Defaults to None.
         '''
         super().__init__(**kwargs)
-        self.n_heads   = n_heads
-        self._models   = nets
+        self.n_heads = n_heads
+        self._models = nets
+        self._values = None
 
     def build(self, input_shape):
         if self._models is None:
@@ -339,52 +391,41 @@ class MultiHeadValueNets(tf.keras.Model):
             ]
         assert len(self._models) == self.n_heads
         # create value nets
-        self._models = [
-            tf.keras.Sequential([
-                model,
-                self.create_value_model()
-            ])
-            for model in self._models
+        self._values = [
+            self.create_value_model()
+            for i in range(self.n_heads)
         ]
-    
-    def __getitem__(self, key):
-        '''Get a specified value net
 
-        Args:
-            key (int): model index
-
-        Returns:
-            tf.keras.Model: a specified value net
-        '''
-        if self._models is None:
-            raise ValueError(f'Models for {self.name} have not yet been'
-                'created. Models are created when the Model is first called'
-                'on inputs or `build()` is called with and `input_shape`')
-        if not isinstance(key, int):
-            raise KeyError(f'Key must be an `int`, got {type(key)}')
-        
-        try:
-            return self._models[key]
-        except IndexError:
-            raise IndexError(f'Index out of range, n_heads={self.n_heads}'
-                f'got key={key}')
-
-    def call(self, inputs, axis=0, training=True):
+    def call(self, inputs, index=None, axis=0, training=True):
         '''Forward all critics
 
         Args:
             inputs (tf.Tensor): Expecting a batch latents with shape
                 (b, latent), tf.float32
+            index (int): index of value net to forward. If None, forwards
+                all nets. Defaults to None.
             axis (int): axis to stack values.
             training (bool, optional): Training mode. Defaults to True.
 
         Returns:
             tf.Tensor: Value predictions. (Default) shape (n_heads, b, 1)
         '''
-        return tf.stack([
-            self._models[n](inputs, training=training)
-            for n in range(self.n_heads)
-        ], axis=axis)
+        if index is None:
+            # forward all value nets and stack results
+            return tf.stack([
+                self._values[n](
+                    self._models[n](inputs, training=training), 
+                    training=training
+                )
+                for n in range(self.n_heads)
+            ], axis=axis)
+        else:
+            try:
+                x = self._models[index](inputs, training=training)
+                return self._values[index](x, training=training)
+            except IndexError:
+                raise IndexError(f'Index out of range, n_head={self.n_heads}'
+                    f' got index={index}')
 
     def create_value_model(self):
         '''Create model

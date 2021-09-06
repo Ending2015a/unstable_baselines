@@ -346,11 +346,9 @@ class CheckpointManager(tf.train.CheckpointManager):
                         >= self._last_preserved_timestamp)):
                 self._last_preserved_timestamp = timestamp
                 continue
-            
             # skip best checkpoint
             if (self.best_checkpoint and filename == self.best_checkpoint):
                 continue
-
             _delete_file_if_exists(filename + ".index")
             _delete_file_if_exists(filename + ".data-?????-of-?????")
         # only preserve those checkpoints not been deleted
@@ -362,15 +360,12 @@ class CheckpointManager(tf.train.CheckpointManager):
         del self._preserved_metrics
         self._preserved_metrics = preserved_metrics
 
-
     def save(self, checkpoint_number=None,
                    checkpoint_metrics=None,
                    check_interval=True):
-
         # save checkpoints
         save_path = super().save(checkpoint_number=checkpoint_number,
                                  check_interval=check_interval)
-        
         # Deepcopy checkpoint metrics
         _checkpoint_metrics = copy.deepcopy(checkpoint_metrics)
         # save the best checkpoint
@@ -443,7 +438,6 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             filepath (str): path to save configuration
         '''
         config = self.get_config()
-
         ub_utils.safe_json_dump(filepath, config)
 
     @classmethod
@@ -457,7 +451,6 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             : [description]
         '''
         config = ub_utils.safe_json_load(filepath)
-
         return cls.from_config(config)
 
     def save(self, directory: str,
@@ -657,7 +650,6 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         if not file_io.file_exists(config_path):
             raise RuntimeError("Couldn't find the config file for "
                                 f"checkpoint: {checkpoint_path}")
-
         return checkpoint_path
 
     @classmethod
@@ -669,18 +661,13 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         checkpoint_path = cls._preload(file_or_dir,
                                         weights_name,
                                         best)
-
         LOG.debug(f'Restore weights from: {checkpoint_path}')
-
         # Get config path
         config_path = checkpoint_path + CONFIG_SUFFIX
-
         # Reconstruct model from config
         self = cls.load_config(config_path)
-
         # restore weights
         status = tf.train.Checkpoint(model=self).restore(checkpoint_path)
-
         return self
 
     def update(self, other_model, polyak=1.0, all_vars=False):
@@ -690,14 +677,12 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         all_vars: update all variables. If False: only update 
             trainable variables
         '''
-
         if not all_vars:
             var = self.trainable_variables
             target_var = other_model.trainable_variables
         else:
             var = self.variables
             target_var = other_model.variables
-        
         ub_utils.soft_update(var, target_var, polyak=polyak)
 
 
@@ -916,7 +901,10 @@ class BaseAgent(SavableModel):
         '''Preprocess observations before forwarding into nets
         e.g. normalizing observations
         '''
-        return ub_utils.preprocess_observation(obs, self.observation_space)
+        # sortkey to ensure key order. In default, gym sorts spaces by keys
+        return ub_utils.map_nested_tuple((obs, self.observation_space),
+            lambda obs_and_space: ub_utils.preprocess_observation(*obs_and_space),
+            sortkey=True)
 
     def proc_action(self, act):
         '''Postprocess actions output from policy

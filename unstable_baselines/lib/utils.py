@@ -24,6 +24,7 @@ from tensorflow.python.lib.io import file_io
 # --- my module ---
 
 __all__ = [
+    'spaces',
     'NormalActionNoise',
     'StateObject',
     'RunningMeanStd',
@@ -40,16 +41,21 @@ __all__ = [
     'input_tensor',
     'set_optimizer_params',
     'get_tensor_ndims',
-    'flatten_tensor',
+    'flatten_dims',
     'safe_json_dumps',
     'safe_json_loads',
     'safe_json_dump',
     'safe_json_load',
-    'nested_iter',
-    'nested_iter_tuple',
+    'iter_nested',
+    'map_nested',
+    'iter_nested_space',
+    'map_nested_space',
+    'iter_nested_tuple',
+    'map_nested_tuple',
     'nested_to_numpy',
-    'extract_structure',
-    'pack_sequence'
+    'unpack_structure',
+    'pack_sequence',
+    'flatten_space'
 ]
 
 
@@ -58,9 +64,17 @@ __all__ = [
 
 SERIALIZATION_KEY='#SERIALIZED'
 
+# Extra space profiles
+class spaces:
+    All = [gym.spaces.Box, gym.spaces.Discrete,
+           gym.spaces.MultiBinary, gym.spaces.MultiDiscrete,
+           gym.spaces.Tuple, gym.spaces.Dict]
+    NonNested = [gym.spaces.Box, gym.spaces.Discrete,
+                 gym.spaces.MultiBinary, gym.spaces.MultiDiscrete]
+    Nested = [gym.spaces.Tuple, gym.spaces.Dict]
 
 # === Action noises ===
-#TODO: Serializable Action noise 
+#TODO: Move action noises to environment wrapper
 class NormalActionNoise():
     def __init__(self, mean, scale):
         self.mean = mean
@@ -77,8 +91,18 @@ class NormalActionNoise():
 
 # === StateObject ===
 class StateObject(dict):
-    '''StateObject can store model states, and it can
-    be serialized by JSON.
+    '''An object-like dictionary that you can get/set
+    items/attributes by either __getitem__/__setitem__
+    or __getattr__/__setattr__.
+    For example:
+    >>> d = StateObject()
+    >>> d['abc'] = 10
+    >>> print(d['abc'])
+    This is equivalent to
+    >>> d.abc = 10
+    >>> print(d.abc)
+    Also, StateObject can be serialized by JSON by calling
+    `tostring` and `fromstring`.
     '''
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
@@ -373,11 +397,10 @@ def is_bounded(space):
 
 # === TensorFlow utils ===
 
-def input_tensor(shape, dtype=np.float32, batch_size=1):
-    # dummy input tensor
-    shape = tf.TensorShape(shape).as_list()
-    shape = tf.TensorShape([batch_size] + shape)
-    return tf.zeros(shape, dtype=dtype)
+def input_tensor(space, batch_size=1):
+    _tensor_op = lambda sp: (tf.zeros((batch_size, *sp.shape), 
+                                       dtype=sp.dtype))
+    return map_nested_space(space, _tensor_op)
 
 def set_optimizer_params(optimizer, param_list):
     # Set optimizer tracking parameters
@@ -409,7 +432,7 @@ def preprocess_observation(inputs, obs_space, dtype=tf.float32):
         pass
     else:
         raise NotImplementedError("Preprocessing not implemented for "
-                                "{}".format(obs_space))
+                                f"{type(obs_space)}")
 
     return tf.cast(inputs, dtype=dtype)
 
@@ -419,7 +442,7 @@ def get_tensor_ndims(tensor: tf.Tensor):
     return ndims
 
 
-def flatten_tensor(tensor: tf.Tensor, begin, end=None):
+def flatten_dims(tensor: tf.Tensor, begin, end=None):
     '''Collapse dims
 
     Flatten tensor from dim `begin` to dim `end`
@@ -464,8 +487,8 @@ def soft_update(target_vars, source_vars, polyak=0.005):
         polyak (float, optional): Smooth rate. Defaults to 0.005.
     '''
     if len(target_vars) != len(source_vars):
-        raise ValueError('Length does not match, got {} and {}'.format(
-                        len(target_vars), len(source_vars)))
+        raise ValueError('Length does not match, '
+            f'got {len(target_vars)} and {len(source_vars)}')
 
     for (tar_var, src_var) in zip(target_vars, source_vars):
         tar_var.assign((1.-polyak) * tar_var + polyak * src_var)
@@ -556,102 +579,187 @@ def safe_json_load(filepath,
 
     return obj
 
-
 # === nested ops ===
 
-def nested_iter(data, op, *args, first=False, **kwargs):
-    '''Iterate over nested data
+def iter_nested(data, sortkey=False):
+    '''Iterate over nested data structure
+    Note: Use `tuple` instead of `list`. A list type
+    object is treated as an item.
+
+    For example:
+    >>> data = {'a': (1, 2), 'b': 3}
+    >>> list(v for v in iter_nested(data))
+    [1, 2, 3]
+
+    Args:
+        data (tuple or dict): A nested data.
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+    '''
+    def _inner_iter_nested(data):
+        if isinstance(data, dict):
+            keys = sorted(data.keys()) if sortkey else data.keys()
+            for k in keys:
+                yield from _inner_iter_nested(data[k])
+        elif isinstance(data, tuple):
+            for v in data:
+                yield from _inner_iter_nested(v)
+        else:
+            yield data
+    return _inner_iter_nested(data)
+
+def map_nested(data, op, *args, sortkey=False, **kwargs):
+    '''A nested version of map function
     NOTE: Use `tuple` instead of `list`. A list type 
     object is treated as an item.
 
     Args:
         data (tuple or dict): A nested data
         op (function): A function operate on each data
-        first (bool): Only iterate on the first item
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
     '''
     if not callable(op):
         raise ValueError('`op` must be a callable')
 
-    def _inner_nested_iter(data):
+    def _inner_map_nested(data):
         if isinstance(data, dict):
-            if first:
-                return _inner_nested_iter(
-                            next(iter(data.values())))
-            else:
-                return {k: _inner_nested_iter(v)
-                    for k, v in data.items()}
+            keys = sorted(data.keys()) if sortkey else data.keys()
+            return {k: _inner_map_nested(data[k])
+                        for k in keys}
         elif isinstance(data, tuple):
-            if first:
-                return _inner_nested_iter(
-                            next(iter(data)))
-            else:
-                return tuple(_inner_nested_iter(v)
-                                for v in data)
+            return tuple(_inner_map_nested(v)
+                            for v in data)
         else:
             return op(data, *args, **kwargs)
-    return _inner_nested_iter(data)
+    return _inner_map_nested(data)
 
-def nested_iter_space(space, op, *args, **kwargs):
+def iter_nested_space(space, sortkey=False):
+    '''Iterate over nested gym space. Similar to iter_nested
+    but it's for gym spaces.
+
+    Args:
+        space (gym.Space): Nested or non-nested gym space
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+    '''
+    def _inner_iter_nested(space):
+        if isinstance(space, gym.spaces.Dict):
+            spaces = space.spaces
+            keys = sorted(spaces.keys()) if sortkey else spaces.keys()
+            for k in keys:
+                yield from _inner_iter_nested(spaces[k])
+        elif isinstance(space, gym.spaces.Tuple):
+            for v in space.spaces:
+                yield from _inner_iter_nested(v)
+        else:
+            yield space
+    return _inner_iter_nested(space)
+
+def map_nested_space(space, op, *args, sortkey=False, **kwargs):
+    '''A nested version of map function. Similar to map_nested
+    but it's for gym spaces.
+
+    Args:
+        space (gym.Space): Nested or non-nested gym space
+        op (callable): A function operate on each data
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+    '''
     if not callable(op):
         raise ValueError('`op` must be a callable')
-    def _inner_nested_iter_space(space):
+
+    def _inner_map_nested(space):
         if isinstance(space, gym.spaces.Dict):
-            return {k: _inner_nested_iter_space(v)
-                for k, v in space.spaces.items()}
+            spaces = space.spaces
+            keys = sorted(spaces.keys()) if sortkey else spaces.keys()
+            return {k: _inner_map_nested(spaces[k])
+                        for k in keys}
         elif isinstance(space, gym.spaces.Tuple):
-            return tuple(_inner_nested_iter_space(v)
+            return tuple(_inner_map_nested(v)
                             for v in space.spaces)
         else:
             return op(space, *args, **kwargs)
-    return _inner_nested_iter_space(space)
+    return _inner_map_nested(space)
 
-def nested_iter_tuple(data_tuple, op, *args, **kwargs):
-    '''Iterate over a tuple of nested data. Each nested
-    data must have a same nested structure.
-    NOTE: Use `tuple` instead of `list`. A list type
-    object is treated as an item.
+def iter_nested_tuple(data_tuple, sortkey=False):
+    '''Iterate over a tuple of nested structures. Similar to iter_nested
+    but it iterates each of each nested data in the input tuple.
+    For example:
+    >>> a = {'x': 1, 'y': (2, 3)}
+    >>> b = {'u': 4, 'v': (5, 6)}
+    >>> list(iter_nested_tuple((a, b)))
+    [(1, 4), (2, 5), (3, 6)]
 
     Args:
-        data_tuple (tuple): [description]
-        op ([type]): [description]
+        data_tuple (tuple): A tuple of nested data.
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+    '''
+    if not isinstance(data_tuple, tuple):
+        raise TypeError('`data_tuple` only accepts tuple, '
+                f'got {type(data_tuple)}')
+    def _inner_iter_nested(data_tuple):
+        if isinstance(data_tuple[0], dict):
+            keys = data_tuple[0].keys()
+            keys = sorted(keys) if sortkey else keys
+            for k in keys:
+                yield from _inner_iter_nested(
+                        tuple(data[k] for data in data_tuple))
+        elif isinstance(data_tuple[0], tuple):
+            for k in range(len(data_tuple[0])):
+                yield from _inner_iter_nested(
+                    tuple(data[k] for data in data_tuple))
+        else:
+            yield data_tuple
+    return _inner_iter_nested(data_tuple)
+
+def map_nested_tuple(data_tuple, op, *args, sortkey=False, **kwargs):
+    '''A nested version of map function. Similar to map_nested
+    but it iterates each of each nested data in the input tuple.
+
+    Args:
+        data_tuple (tuple): A tuple of nested data.
+        op (callable): A function operate on each data
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
     '''
     if not callable(op):
         raise ValueError('`op` must be a callable')
-        
     if not isinstance(data_tuple, tuple):
         raise TypeError('`data_tuple` only accepts tuple, '
-                'got {}'.format(type(data_tuple)))
-    
-    def _inner_nested_iter_tuple(data_tuple):
+                f'got {type(data_tuple)}')
+    def _inner_map_nested(data_tuple):
         if isinstance(data_tuple[0], dict):
-            return {k: _inner_nested_iter_tuple(
-                            tuple(data[k]
-                            for data in data_tuple))
-                        for k in data_tuple[0].keys()}
+            keys = data_tuple[0].keys()
+            keys = sorted(keys) if sortkey else keys
+            return {k: _inner_map_nested(
+                        tuple(data[k] for data in data_tuple))
+                    for k in keys}
         elif isinstance(data_tuple[0], tuple):
-            return tuple(_inner_nested_iter_tuple(
-                            tuple(data[idx] 
-                                 for data in data_tuple))
-                        for idx in range(len(data_tuple[0])))
+            return tuple(_inner_map_nested(
+                        tuple(data[idx] for data in data_tuple))
+                    for idx in range(len(data_tuple[0])))
         else:
             return op(data_tuple, *args, **kwargs)
-    return _inner_nested_iter_tuple(data_tuple)
+    return _inner_map_nested(data_tuple)
 
-def nested_to_numpy(data):
+def nested_to_numpy(data, sortkey=False):
     '''Convert all items in a nested data into 
     numpy arrays
 
     Args:
         data (dict, tuple): A nested data
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
 
     Returns:
         dict, tuple: A nested data same as `data`
     '''    
     op = lambda arr: np.asarray(arr)
-    return nested_iter(data, op)
+    return map_nested(data, op, sortkey=sortkey)
 
-
-def extract_structure(data):
+def unpack_structure(data, sortkey=False):
     '''Extract structure and flattened data from a nested data
     For example:
         >>> data = {'a': 'abc', 'b': (2.0, [3, 4, 5])}
@@ -660,26 +768,48 @@ def extract_structure(data):
         ['abc', 2.0, [3, 4, 5]]
         >>> struct
         {'a': 0, 'b': (1, 2)}
+    
+    Args:
+        data (dict, tuple): A nested data
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+
     '''
     _count_op = lambda v, c: next(c)
     counter = itertools.count(0)
-    struct = nested_iter(data, _count_op, counter)
+    struct = map_nested(data, _count_op, counter, sortkey=sortkey)
     size = next(counter)
     flat_data = [None] * size
     def _flat_op(ind_and_data, flat_data):
         ind, data = ind_and_data
         flat_data[ind] = data
-    nested_iter_tuple((struct, data), _flat_op, flat_data)
+    map_nested_tuple((struct, data), _flat_op, flat_data, sortkey=sortkey)
     return struct, flat_data
 
-def pack_sequence(struct, flat_data):
+def pack_sequence(struct, flat_data, sortkey=False):
     '''An inverse operation of `extract_structure`
 
     Args:
         struct: A nested structure each data field contains
             an index of elements in `flat_data`
-        flat_data (list): flattened data
+        flat_data (list): flattened data.
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
     '''
     _struct_op = lambda ind, flat: flat[ind]
-    data = nested_iter(struct, _struct_op, flat_data)
+    data = map_nested(struct, _struct_op, flat_data, sortkey=sortkey)
     return data
+
+def flatten_space(space: gym.Space, sortkey=False):
+    '''Flatten gym's nested space, like gym.Dict or gym.Tuple,
+    to a tuple of spaces.
+
+    Args:
+        space (gym.Space): Nested or non-nested space.
+        sortkey (bool): Whether to sort dict's key. Defaults
+            to False.
+
+    Returns:
+        tuple: Flattened gym spaces.
+    '''
+    return tuple(v for v in iter_nested_space(space, sortkey=sortkey))

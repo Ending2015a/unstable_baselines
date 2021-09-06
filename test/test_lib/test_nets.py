@@ -85,6 +85,94 @@ class TestNetsModule(TestCase):
         self.assertArrayEqual((batch_size, output_dim), outputs.shape)
         self.assertEqual(8, len(net.trainable_variables))
 
+    def test_awesome_net_box_space(self):
+        force_mlp = False
+        mlp_units = [64, 64]
+        batch_size = 2
+        space_shape = (16,)
+        sp = gym.spaces.Box(low=-1, high=1, shape=space_shape, dtype=np.float32)
+        net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
+        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
+                        type(net._models[0]).__name__)
+        inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
+        outputs = net(inputs)
+        self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
+
+    def test_awesome_net_image_space(self):
+        force_mlp = False
+        space_shape = (64, 64, 3)
+        batch_size = 2
+        sp = gym.spaces.Box(low=0, high=255, shape=space_shape,
+                            dtype=np.uint8)
+        net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp)
+        self.assertTrue(isinstance(net._models[0], ub_nets.NatureCnn), 
+                        type(net._models[0]).__name__)
+        inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
+        outputs = net(inputs)
+        self.assertEqual((batch_size, 512), outputs.shape)
+
+    def test_awesome_net_image_space_force_mlp(self):
+        force_mlp = True
+        space_shape = (64, 64, 3)
+        mlp_units = [64, 64]
+        batch_size = 2
+        sp = gym.spaces.Box(low=0, high=255, shape=space_shape,
+                            dtype=np.uint8)
+        net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
+        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
+                        type(net._models[0]).__name__)
+        inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
+        outputs = net(inputs)
+        self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
+
+    def test_awesome_net_dict_space(self):
+        force_mlp = False
+        sp1_shape = (64, 64, 3)
+        sp2_shape = (16,)
+        mlp_units = [64, 64]
+        batch_size = 2
+        sp1 = gym.spaces.Box(low=0, high=255, shape=sp1_shape,
+                            dtype=np.uint8)
+        sp2 = gym.spaces.Box(low=-1, high=1, shape=sp2_shape,
+                            dtype=np.float32)
+        # gym default sorts spaces by keys
+        sp = gym.spaces.Dict({'sp2': sp2, 'sp1': sp1})
+        net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
+        self.assertTrue(isinstance(net._models[0], ub_nets.NatureCnn),
+                        type(net._models[0]).__name__)
+        self.assertTrue(isinstance(net._models[1], ub_nets.MlpNet),
+                        type(net._models[1]).__name__)
+        inputs = {
+            'sp1': tf.zeros((batch_size,)+sp1_shape, dtype=np.float32),
+            'sp2': tf.zeros((batch_size,)+sp2_shape, dtype=np.float32)
+        }
+        outputs = net(inputs)
+        self.assertEqual((batch_size, mlp_units[-1]+512), outputs.shape)
+    
+    def test_awesome_net_dict_space_force_mlp(self):
+        force_mlp = True
+        sp1_shape = (64, 64, 3)
+        sp2_shape = (16,)
+        mlp_units = [64, 64]
+        batch_size = 2
+        sp1 = gym.spaces.Box(low=0, high=255, shape=sp1_shape,
+                            dtype=np.uint8)
+        sp2 = gym.spaces.Box(low=-1, high=1, shape=sp2_shape,
+                            dtype=np.float32)
+        # gym default sorts spaces by keys
+        sp = gym.spaces.Dict({'sp2': sp2, 'sp1': sp1})
+        net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
+        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
+                        type(net._models[0]).__name__)
+        self.assertTrue(isinstance(net._models[1], ub_nets.MlpNet),
+                        type(net._models[1]).__name__)
+        inputs = {
+            'sp1': tf.zeros((batch_size,)+sp1_shape, dtype=np.float32),
+            'sp2': tf.zeros((batch_size,)+sp2_shape, dtype=np.float32)
+        }
+        outputs = net(inputs)
+        self.assertEqual((batch_size, mlp_units[-1]*2), outputs.shape)
+
     def test_categorical_policy_net(self):
         batch_size = 5
         act_dim = 16
@@ -239,10 +327,10 @@ class TestNetsModule(TestCase):
         self.assertArrayEqual((n_heads, batch_size, 1), val.shape)
         self.assertEqual(2*n_heads, len(vf.trainable_variables))
         # test first head
-        val = vf[0](obs)
+        val = vf(obs, 0)
         self.assertArrayEqual((batch_size, 1), val.shape)
         # test second head
-        val = vf[1](obs)
+        val = vf(obs, 1)
         self.assertArrayEqual((batch_size, 1), val.shape)
     
     def test_multi_head_value_nets_w_share_net(self):
@@ -259,10 +347,10 @@ class TestNetsModule(TestCase):
         self.assertArrayEqual((n_heads, batch_size, 1), val.shape)
         self.assertEqual(2*n_heads + 4, len(vf.trainable_variables))
         # test first head
-        val = vf[0](obs)
+        val = vf(obs, 0)
         self.assertArrayEqual((batch_size, 1), val.shape)
         # test second head
-        val = vf[1](obs)
+        val = vf(obs, 1)
         self.assertArrayEqual((batch_size, 1), val.shape)
 
     def test_multi_head_value_nets_w_nets(self):
@@ -280,10 +368,10 @@ class TestNetsModule(TestCase):
         self.assertArrayEqual((n_heads, batch_size, 1), val.shape)
         self.assertEqual(2*n_heads + 4 + 2, len(vf.trainable_variables))
         # test first head
-        val = vf[0](obs)
+        val = vf(obs, 0)
         self.assertArrayEqual((batch_size, 1), val.shape)
         # test second head
-        val = vf[1](obs)
+        val = vf(obs, 1)
         self.assertArrayEqual((batch_size, 1), val.shape)
 
     def test_categorical_policy_net_exception(self):
@@ -307,18 +395,13 @@ class TestNetsModule(TestCase):
         obs_dim = 60
         n_heads = 2
         vf  = ub_nets.MultiHeadValueNets(n_heads=n_heads)
-        with self.assertRaises(ValueError):
-            vf[0] # Model not created
         obs = tf.zeros((batch_size, obs_dim), dtype=tf.float32)
         val = vf(obs)
-        vf[0] # Model created
+        vf(obs, 0) # Model created
         with self.assertRaises(IndexError):
-            vf[2] # Index out of range
-
-        with self.assertRaises(KeyError):
-            vf['1']
-        with self.assertRaises(KeyError):
-            vf[:] # slice
+            vf(obs, 2) # Index out of range
+        with self.assertRaises(TypeError):
+            vf(obs, '1')
 
     def test_custom_multi_head_value_nets(self):
         batch_size = 5

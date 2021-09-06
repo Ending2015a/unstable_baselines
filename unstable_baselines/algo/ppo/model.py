@@ -75,7 +75,7 @@ class ValueNet(ub.nets.ValueNet):
 # === Agent ===
 
 class Agent(ub.base.BaseAgent):
-    support_obs_spaces = [gym.spaces.Box]
+    support_obs_spaces = ub.utils.spaces.All
     support_act_spaces = [gym.spaces.Box, gym.spaces.Discrete]
     def __init__(self, observation_space, 
                        action_space, 
@@ -118,13 +118,14 @@ class Agent(ub.base.BaseAgent):
         '''Setup models
         Override this method to customize nets
         '''
-        # check if we can use Nature CNN as the feature extractors
-        use_cnn = (ub.utils.is_image_space(self.observation_space)
-                    and not self.force_mlp)
-        if use_cnn:
-            create_net_fn = lambda: ub.nets.NatureCnn()
-        else:
-            create_net_fn = lambda: ub.nets.MlpNet(self.mlp_units)
+        # AwesomeNet automatically handles complex observations
+        # e.g. Dict or Tuple and creates either NatureCnn or 
+        # MlpNet for each space
+        create_net_fn = lambda: ub.nets.AwesomeNet(
+            input_space = self.observation_space,
+            force_mlp   = self.force_mlp,
+            mlp_units   = self.mlp_units
+        )
         # create base nets, feature extractors
         if self.share_net:
             # share base net
@@ -142,9 +143,9 @@ class Agent(ub.base.BaseAgent):
         '''(Override) Setup agent model'''
         self._setup_model()
         # construct network params
-        inputs = ub.utils.input_tensor(self.observation_space.shape)
-        self.call_policy(inputs, proc_obs=False)
-        self.call_value(inputs, proc_obs=False)
+        inputs = ub.utils.input_tensor(self.observation_space)
+        self.call_policy(inputs, proc_obs=True)
+        self.call_value(inputs, proc_obs=True)
 
     # --- forwrd group ---
     def call_policy(self, inputs, proc_obs=True, training=True):
@@ -237,7 +238,7 @@ class Agent(ub.base.BaseAgent):
         return config
 
 class PPO(ub.base.OnPolicyModel):
-    support_obs_spaces = [gym.spaces.Box]
+    support_obs_spaces = ub.utils.spaces.All
     support_act_spaces = [gym.spaces.Box, gym.spaces.Discrete]
     def __init__(self,
         env,
@@ -483,11 +484,11 @@ class PPO(ub.base.OnPolicyModel):
         loss1 = adv * ratio
         loss2 = adv * tf.clip_by_value(ratio, 1.-self.policy_clip,
                                               1.+self.policy_clip)
-        if self.dual_clip is None:
-            pi_loss = -tf.minimum(loss1, loss2)
-        else:
-            pi_loss = -tf.maximum(tf.minimum(loss1, loss2), self.dual_clip * adv)
-        return tf.math.reduce_mean(pi_loss)
+        pi_loss = tf.minimum(loss1, loss2)
+        if self.dual_clip is not None:
+            clip_loss = tf.maximum(pi_loss, self.dual_clip * adv)
+            pi_loss = tf.where(adv < 0., clip_loss, pi_loss)
+        return -tf.math.reduce_mean(pi_loss)
 
     def value_loss(self, adv, val, old_val):
         '''Compute value loss

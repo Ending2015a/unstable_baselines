@@ -193,7 +193,7 @@ class BaseVecEnv(gym.Env):
         self._closed = True
 
     def _flatten_obs(self, obs_list):
-        obs = ub_utils.nested_iter_tuple(
+        obs = ub_utils.map_nested_tuple(
             tuple(obs_list), lambda obs: np.stack(obs))
         return obs
 
