@@ -661,7 +661,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         checkpoint_path = cls._preload(file_or_dir,
                                         weights_name,
                                         best)
-        LOG.debug(f'Restore weights from: {checkpoint_path}')
+        LOG.debug(f"Restore weights from: {checkpoint_path}")
         # Get config path
         config_path = checkpoint_path + CONFIG_SUFFIX
         # Reconstruct model from config
@@ -895,7 +895,7 @@ class BaseAgent(SavableModel):
     def setup(self):
         '''Setup agent
         '''        
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def proc_observation(self, obs):
         '''Preprocess observations before forwarding into nets
@@ -924,16 +924,63 @@ class BaseAgent(SavableModel):
     @abc.abstractmethod
     def call(self, inputs, training=True):
         '''Forward agent'''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
     
-    @abc.abstractmethod
-    def predict(self, inputs):
-        '''Predict actions'''
-        raise NotImplementedError('Method not implemented')
+    def predict(self, inputs, *args, **kwargs):
+        '''Predict actions
 
-    @abc.abstractmethod
+        Args:
+            inputs (np.ndarray): Batch observations in shape (b, *obs_space.shape)
+                or (*obs_space.shape) for one input.
+
+        Returns:
+            np.ndarray: predicted actions in shape (b, *act_space.shape) or
+                (*act_space.shape) for one input.
+        '''
+        one_sample = (len(inputs.shape) == len(self.observation_space.shape))
+        if one_sample:
+            inputs = np.expand_dims(inputs, axis=0)
+        # predict actions
+        outputs, *_ = self(inputs, *args, training=False, **kwargs)
+        outputs     = np.asarray(outputs)
+        if one_sample:
+            outputs = np.squeeze(outputs, axis=0)
+        return outputs
+
     def get_config(self):
-        return {}
+        return {
+            'observation_space': self.observation_space,
+            'action_space': self.action_space
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        '''Restore model from the given configurations
+
+        Args:
+            config (dict): configurations
+
+        Returns:
+            self
+        '''        
+        
+        # construct method
+        self = cls(**config)
+        # setup model
+        self.setup()
+
+        return self
+
+    def save_config(self, filepath):
+        '''Save model config to `filepath`
+
+        Args:
+            filepath (str): path to save configuration
+        '''
+        config = self.get_config()
+        config.update(BaseAgent.get_config(self))
+
+        ub_utils.safe_json_dump(filepath, config)
 
 
 class BaseRLModel(TrainableModel):
@@ -942,7 +989,7 @@ class BaseRLModel(TrainableModel):
     
     The main differences between off/on policy are:
     * On-policy has no RB warming up stage while off-policy has.
-        So `is_wraming_up()` and `wramup_steps` are diabled
+        So `is_wraming_up()` and `warmup_steps` are diabled
         in default in on-policy template, but one can still
          use them.
     * On-policy may need to precompute rollout returns, this can
@@ -957,7 +1004,7 @@ class BaseRLModel(TrainableModel):
                        n_steps:      int,
                        n_subepochs:  int,
                        n_gradsteps:  int,
-                       wramup_steps: int,
+                       warmup_steps: int,
                        batch_size:   int,
                        verbose:      int = 0,
                        observation_space = None,
@@ -968,7 +1015,7 @@ class BaseRLModel(TrainableModel):
         self.n_steps      = n_steps
         self.n_subepochs  = n_subepochs
         self.n_gradsteps  = n_gradsteps
-        self.wramup_steps = wramup_steps
+        self.warmup_steps = warmup_steps
         self.batch_size   = batch_size
         self.verbose      = verbose
         # initialize states
@@ -1023,31 +1070,31 @@ class BaseRLModel(TrainableModel):
     def setup(self):
         '''Setup model
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def call(self):
         '''Predict batch actions
         '''        
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
     
     @abc.abstractmethod
     def predict(self):
         '''Predict one action
         '''        
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def _collect_step(self, obs=None):
+    def _collect_step(self, obs):
         '''Collect one step
 
         Args:
-            obs (np.ndarray, optional): Current observations. Defaults to None.
+            obs (np.ndarray, optional): Current observations.
 
         Returns:
             np.ndarray: next observations
         '''
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def collect(self, steps, obs=None):
         '''Collect rollouts
@@ -1173,13 +1220,13 @@ class BaseRLModel(TrainableModel):
         Returns:
             dict: loss dict
         '''        
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     @abc.abstractmethod
     def _update_target(self):
         '''Update target networks here
         '''        
-        raise NotImplementedError('Method not implemented')
+        raise NotImplementedError
 
     def train(self, batch_size, subepochs, gradsteps, target_update):
         '''Train one epoch
@@ -1303,7 +1350,7 @@ class BaseRLModel(TrainableModel):
 
     def is_warming_up(self):
         '''Return wraming up state'''
-        return self.num_timesteps < self.wramup_steps
+        return self.num_timesteps < self.warmup_steps
 
     def learn(self, total_timesteps:  int, 
                     log_interval:     int = 1,
@@ -1482,7 +1529,7 @@ class OffPolicyModel(BaseRLModel):
                        n_steps:      int = 4,
                        n_subepochs:  int = 1,
                        n_gradsteps:  int = 1,
-                       wramup_steps: int = int(1e4),
+                       warmup_steps: int = int(1e4),
                        batch_size:   int = 128,
                        verbose:      int = 0,
                        observation_space = None,
@@ -1493,7 +1540,7 @@ class OffPolicyModel(BaseRLModel):
             n_steps           = n_steps,
             n_subepochs       = n_subepochs,
             n_gradsteps       = n_gradsteps,
-            wramup_steps      = wramup_steps,
+            warmup_steps      = warmup_steps,
             batch_size        = batch_size,
             verbose           = verbose,
             observation_space = observation_space,
@@ -1506,7 +1553,7 @@ class OnPolicyModel(BaseRLModel):
                        n_steps:      int = 256,
                        n_subepochs:  int = 4,
                        n_gradsteps:  int = None,
-                       wramup_steps: int = None,
+                       warmup_steps: int = None,
                        batch_size:   int = 128,
                        verbose:      int = 0,
                        observation_space = None,
@@ -1517,7 +1564,7 @@ class OnPolicyModel(BaseRLModel):
             n_steps           = n_steps,
             n_subepochs       = n_subepochs,
             n_gradsteps       = n_gradsteps,
-            wramup_steps      = wramup_steps,
+            warmup_steps      = warmup_steps,
             batch_size        = batch_size,
             verbose           = verbose,
             observation_space = observation_space,

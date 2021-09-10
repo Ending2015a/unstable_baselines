@@ -90,9 +90,9 @@ class Agent(ub.base.BaseAgent):
         manually setup the model.
 
         Args:
-            observation_space (gym.Spaces): The observation space of the env.
+            observation_space (gym.Space): The observation space of the env.
                 Set to None for delayed setup.
-            action_space (gym.Spaces): The action space of the env. Set to None 
+            action_space (gym.Space): The action space of the env. Set to None 
                 for delayed setup.
             share_net (bool, optional): Whether to share the feature extractor 
                 between policy and value network. Defaults to False.
@@ -204,36 +204,18 @@ class Agent(ub.base.BaseAgent):
                       proc_obs: bool = True,
                       proc_act: bool = True,
                       det:      bool = True):
-        '''(Override) Predict actions
-
-        Args:
-            inputs (np.ndarray): Batch observations in shape (b, *obs_space.shape)
-                or in shape (*obs_space.shape) for one observation.
-            proc_obs (bool, optional): Preprocess observations. Defaults to True.
-            proc_act (bool, optional): Postprocess actions. Defaults to True.
-            det (bool, optional): Deterministic actions. Defaults to True.
-
-        Returns:
-            np.ndarray: predicted actions in shape (b, *act_space.shape) or
-                (*act_space.shape) for one observation.
-        '''
-        one_sample  = (len(inputs.shape) == len(self.observation_space.shape))
-        if one_sample:
-            inputs  = np.expand_dims(inputs, axis=0)
-        # predict actions
-        outputs, *_ = self(inputs, proc_obs, proc_act, det, training=False)
-        outputs     = np.asarray(outputs)
-        if one_sample:
-            outputs = np.squeeze(outputs, axis=0)
-        return outputs
+        return super().predict(
+            inputs, 
+            proc_obs=proc_obs,
+            proc_act=proc_act,
+            det=det
+        )
     
     def get_config(self):
         config = {
             'share_net':         self.share_net,
             'force_mlp':         self.force_mlp,
             'mlp_units':         self.mlp_units,
-            'observation_space': self.observation_space,
-            'action_space':      self.action_space,
         }
         return config
 
@@ -412,11 +394,11 @@ class PPO(ub.base.OnPolicyModel):
         )
     
     # --- collect group ---
-    def _collect_step(self, obs=None):
+    def _collect_step(self, obs):
         '''(Override) Collect one sample
 
         Args:
-            obs (np.ndarray, optional): Current observations. Defaults to None.
+            obs (np.ndarray, optional): Current observations.
         
         Returns:
             np.ndarray: next observations
@@ -484,10 +466,12 @@ class PPO(ub.base.OnPolicyModel):
         loss1 = adv * ratio
         loss2 = adv * tf.clip_by_value(ratio, 1.-self.policy_clip,
                                               1.+self.policy_clip)
-        pi_loss = tf.minimum(loss1, loss2)
         if self.dual_clip is not None:
-            clip_loss = tf.maximum(pi_loss, self.dual_clip * adv)
-            pi_loss = tf.where(adv < 0., clip_loss, pi_loss)
+            clip1 = tf.minimum(loss1, loss2)
+            clip2 = tf.maximum(clip1, self.dual_clip * adv)
+            pi_loss = tf.where(adv < 0., clip2, clip1)
+        else:
+            pi_loss = tf.minimum(loss1, loss2)
         return -tf.math.reduce_mean(pi_loss)
 
     def value_loss(self, adv, val, old_val):
@@ -568,10 +552,6 @@ class PPO(ub.base.OnPolicyModel):
         # train model
         losses, kl = self._train_model(batch)
         return losses, kl
-
-    def _train_subepoch(self, batch_size, **kwargs):
-        '''(Override, disabled) Train one subepoch'''
-        pass
 
     def train(self, batch_size, subepochs, **kwargs):
         '''(Override) Train one epoch'''

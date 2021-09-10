@@ -484,17 +484,17 @@ class TestPPOModel(TestCase):
         self.assertTrue(buf.ready_for_sample)
         self.assertFalse(buf.isfull)
         # test buffer contents
-        self.assertArrayEqual((n_samples*n_envs, *obs_shape), 
+        self.assertArrayEqual((n_samples, n_envs, *obs_shape), 
                               buf.data['obs'].shape)
-        self.assertArrayEqual((n_samples*n_envs, *act_shape),
+        self.assertArrayEqual((n_samples, n_envs, *act_shape),
                               buf.data['act'].shape)
-        self.assertArrayEqual((n_samples*n_envs, ),
+        self.assertArrayEqual((n_samples, n_envs),
                               buf.data['done'].shape)
-        self.assertArrayEqual((n_samples*n_envs, ),
+        self.assertArrayEqual((n_samples, n_envs),
                               buf.data['rew'].shape)
-        self.assertArrayEqual((n_samples*n_envs, ),
+        self.assertArrayEqual((n_samples, n_envs),
                               buf.data['val'].shape)
-        self.assertArrayEqual((n_samples*n_envs, ),
+        self.assertArrayEqual((n_samples, n_envs),
                               buf.data['logp'].shape)
 
     def test_ppo_train(self):
@@ -697,8 +697,6 @@ class TestPPOModel(TestCase):
             gamma = gamma, 
             lam   = lam
         )
-        shape = exp_gae.shape
-        exp_gae = exp_gae.swapaxes(0, 1).reshape(shape[0]*shape[1])
         env.seed(1)
         model.run(n_samples)
         gae = model.buffer.data['adv']
