@@ -52,7 +52,7 @@ def default_atari_config(env_id, root_path):
     a.MODEL.verbose         = 2
     # Training parameters
     a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
-    a.LEARN.log_interval    = 1    # epoch
+    a.LEARN.log_interval    = 100  # epoch
     a.LEARN.eval_interval   = 1000 # epoch
     a.LEARN.eval_episodes   = 10
     a.LEARN.eval_max_steps  = 5000
@@ -98,7 +98,7 @@ def default_pybullet_config(env_id, root_path):
     a.MODEL.verbose         = 2
     # Training parameters
     a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 2000 # ~2M
-    a.LEARN.log_interval    = 1    # epoch
+    a.LEARN.log_interval    = 100 # epoch
     a.LEARN.eval_interval   = 200 # epoch
     a.LEARN.eval_episodes   = 10
     a.LEARN.eval_max_steps  = 1000
