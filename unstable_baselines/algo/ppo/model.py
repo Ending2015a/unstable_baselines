@@ -212,11 +212,12 @@ class Agent(ub.base.BaseAgent):
         )
     
     def get_config(self):
-        config = {
+        config = super().get_config()
+        config.update({
             'share_net':         self.share_net,
             'force_mlp':         self.force_mlp,
             'mlp_units':         self.mlp_units,
-        }
+        })
         return config
 
 class PPO(ub.base.OnPolicyModel):
@@ -324,7 +325,7 @@ class PPO(ub.base.OnPolicyModel):
         '''Setup buffers
         Override this method to customize to your replay byffer
         '''
-        self.buffer = ub.data.SequentialBuffer()
+        self.buffer = ub.data.DynamicBuffer()
         self.sampler = ub.data.PermuteSampler(self.buffer)
         
     def _setup_model(self):
@@ -583,7 +584,8 @@ class PPO(ub.base.OnPolicyModel):
         return m_losses
 
     def get_config(self):
-        config = {
+        config = super().get_config()
+        config.update({
             'learning_rate': self.learning_rate,
             'gamma':         self.gamma,
             'gae_lambda':    self.gae_lambda,
@@ -598,5 +600,5 @@ class PPO(ub.base.OnPolicyModel):
             'share_net':     self.share_net,
             'force_mlp':     self.force_mlp,
             'mlp_units':     self.mlp_units
-        }
+        })
         return config

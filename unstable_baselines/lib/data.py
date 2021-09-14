@@ -13,7 +13,15 @@ import numpy as np
 from unstable_baselines.lib import utils as ub_utils
 
 __all__ = [
-
+    'SegmentTree',
+    'ReplayBuffer',
+    'DynamicBuffer',
+    'UniformSampler',
+    'PrioritizedSampler',
+    'PriorSampler', # alias: PrioritizedSampler
+    'PermuteSampler',
+    'compute_nstep_rew',
+    'compute_advantage'
 ]
 
 # === Segment Tree ===
@@ -79,9 +87,9 @@ class SegmentTree(metaclass=abc.ABCMeta):
             end = end >> 1
         return res
 
-    def find(self, value: np.ndarray):
-        '''Find the largest ind such that
-        self.sum(0, ind+1) < value
+    def index(self, value: np.ndarray):
+        '''Return the largest index such that
+        value[0:index+1].sum() < value
         '''
         assert np.min(value) >= 0.0
         assert np.max(value) < self._value[1]
@@ -107,7 +115,8 @@ class SegmentTree(metaclass=abc.ABCMeta):
 
 class RelativeIndex():
     def __init__(self, buffer:  'BaseBuffer',
-                       offsets: tuple = None):
+                       offsets:   tuple = None,
+                       max_sizes: tuple = None):
         '''This class is used to relative indexing
 
         For example, if the buffer has 10 slots and the last element
@@ -132,41 +141,51 @@ class RelativeIndex():
             buffer (BaseBuffer): Buffer
             offsets (int, tuple, np.ndarray): The indices relative to.
                 If None, it is set to `buffer.head`. Defaults to None.
+            max_sizes
         '''
         assert isinstance(buffer, BaseBuffer)
         self.buffer = buffer
         if offsets is None:
-            offsets = self.buffer.head
+            offsets = buffer.head
+        if max_sizes is None:
+            max_sizes = buffer.len_slots()
         self.offsets = np.index_exp[offsets]
+        self.max_sizes = np.index_exp[max_sizes]
+        assert len(self.offsets) == len(self.max_sizes)
 
     def toabs(self, key, offset, max_size):
         '''Convert to absolute indexing'''
         if key is Ellipsis:
             raise NotImplementedError("Relative indexing does not"
                 "support Ellipsis")
-        # formalize indices (slice to indices)
+        # formalize indices (to np.ndarray)
         if isinstance(key, (int, slice)):
             key = np.asarray(range(max_size)[key], dtype=np.int64)
         else:
             key = np.asarray(key, dtype=np.int64)
         if not np.isscalar(offset):
-            # vectorized indexing
+            # vectorized indexing (*key.shape, *offset.shape)
             key = key.reshape(key.shape + (1,)*offset.ndim)
         key = (key + offset) % max_size
         return key
     
     def cvtkeys(self, keys):
+        '''Convert relative keys to absolute keys'''
         keys = np.index_exp[keys]
-        # Currently only support the first dim
-        max_size = self.buffer.len_slots()
-        key = self.toabs(keys[0], self.offsets[0], max_size)
-        if len(self.offsets) > 1:
-            # TODO Support multi-dims
-            assert len(keys) == 1, 'Relative indexing does not support multi-dims'
-            keys = tuple([key, *self.offsets[1:]])
-        else:
-            keys = tuple([key, *keys[1:]])
-        return keys
+        min_len = min(len(self.offsets), len(keys))
+        abs_keys = []
+        for dim in range(min_len):
+            abs_key = self.toabs(
+                keys[dim],
+                self.offsets[dim],
+                self.max_sizes[dim]
+            )
+            abs_keys.append(abs_key)
+        if len(keys) > min_len:
+            abs_keys.extend(keys[min_len:])
+        elif len(self.offsets) > min_len:
+            abs_keys.extend(self.offsets[min_len:])
+        return tuple(abs_keys)
 
     def __getitem__(self, keys):
         return self.buffer[self.cvtkeys(keys)]
@@ -212,7 +231,7 @@ class BaseBuffer(metaclass=abc.ABCMeta):
     
     @property
     def slots(self):
-        '''Return number of slots'''
+        '''Return the number of total slots'''
         return self._slots
     
     @property
@@ -261,6 +280,16 @@ class BaseBuffer(metaclass=abc.ABCMeta):
         self._full   = False
         self._data   = None
 
+    def ravel_index(self, indices: tuple):
+        '''Ravel 2D indices to 1D indices'''
+        assert not self.isnull
+        return np.ravel_multi_index(indices, (self.slots, self.batch))
+
+    def unravel_index(self, indices: np.ndarray):
+        '''Unravel 1D indices to 2D indices'''
+        assert not self.isnull
+        return np.unravel_index(indices, (self.slots, self.batch))
+
     def add(self, data):
         '''Add new batch data into the buffer
 
@@ -268,31 +297,37 @@ class BaseBuffer(metaclass=abc.ABCMeta):
             data (Any): Any nested type of data. Note that the python list
                 is treated as a single element. Each data must have shape 
                 (b, *)
+
+        Return:
+            tuple: 2D indices of the samples
         '''
         # count the batch dimension
         arr = next(iter(ub_utils.iter_nested(data)))
         assert not np.isscalar(arr), f'rank must be > 0'
+        n_samples = len(arr)
         # prepare indices and copy data into the buffer
-        self._set_data(data, indices=self._pos)
+        cur_pos = self._pos
+        self._set_data(data, indices=cur_pos)
         # update cursor position (circular buffer)
         self._pos += 1
         if self._pos >= self._slots:
             self._full = True
             self._pos = self._pos % self._slots
+        return (cur_pos, np.arange(n_samples))
 
     def update(self, data, indices):
         '''Update buffer data'''
         self._set_data(data, indices=indices)
+
+    def len_slots(self):
+        '''Return the number of filled slots'''
+        return (self._slots if self.isfull else self._pos)
 
     def __len__(self):
         '''Return the number of total samples'''
         if self.isnull:
             return 0
         return (self._size if self.isfull else self._pos*self._batch)
-
-    def len_slots(self):
-        '''Return the number of filled slots'''
-        return (self._slots if self.isfull else self._pos)
 
     def __getitem__(self, key):
         '''Get a slice of data
@@ -398,13 +433,15 @@ class ReplayBuffer(BaseBuffer):
             self._assert_keys_exist(data.keys())
         return super()._set_data(data, indices)
 
-class SequentialBuffer(ReplayBuffer):
+class DynamicBuffer(ReplayBuffer):
     def __init__(self, batch: int=None):
-        '''An unlimited replay buffer which stores each sample sequentially. 
-        Note that `buffer.make()` must be called before sampling data.
-
-        Using SequentialReplayBuffer must follow the procedure:
-            Create -> add -> make -> update -> reset
+        '''A dynamic replay buffer which has unlimited spaces to store 
+        sequential nested data. This kind of buffer is used by on-policy 
+        algo, e.g. PPO, which needs to reset buffer frequently and has an
+        uncertained amount of samples. Note that `buffer.make()` must be 
+        called before sampling data. This buffer has the following 
+        procedure:
+            __init__ -> add -> make -> update -> reset
 
         Args:
             batch (int, optional): batch size of replay samples, commonly 
@@ -448,10 +485,13 @@ class SequentialBuffer(ReplayBuffer):
                 'is ready for sampling')
         arr = next(iter(ub_utils.iter_nested(data)))
         assert not np.isscalar(arr), f'rank must be > 0'
+        n_samples = len(arr)
         # copy data into the buffer
+        cur_pos = self._pos
         self._append_data(data)
         # increase number of batch samples
         self._pos += 1
+        return (cur_pos, np.arange(n_samples))
 
     def update(self, indices, **data):
         '''Update buffer contents
@@ -471,11 +511,11 @@ class SequentialBuffer(ReplayBuffer):
         self._data = ub_utils.nested_to_numpy(self._data)
         self._ready_for_sample = True
 
-    def __len__(self):
-        return 0 if self.isnull else self._pos*self._batch
-
     def len_slots(self):
         return self._pos
+
+    def __len__(self):
+        return 0 if self.isnull else self._pos*self._batch
 
     # --- private method ---
     def _calc_space(self, batch: int):
@@ -527,7 +567,11 @@ class BaseSampler(metaclass=abc.ABCMeta):
     @property
     def rel(self):
         '''Relative indexing, relative to sampled indices'''
-        return RelativeIndex(self._buffer, self._cached_inds)
+        return RelativeIndex(
+            self._buffer, 
+            self._cached_inds,
+            (self._buffer.len_slots(), self._buffer.batch)
+        )
 
     def __call__(self, *args, **kwargs):
         '''A shortcut to self.sample()'''
@@ -537,10 +581,15 @@ class BaseSampler(metaclass=abc.ABCMeta):
     def sample(self, batch_size, seq_len):
         '''Random sample replay buffer'''
         raise NotImplementedError
-        
+
+    def add(self, *args, **kwargs):
+        '''Add samples to the buffer'''
+        return self.buffer.add(*args, **kwargs)
+
     def update(self, *args, **kwargs):
         '''Update sampled data to the buffer'''
-        self.buffer.update(*args, **kwargs, indices=self._cached_inds)
+        assert self._cached_inds is not None
+        return self.buffer.update(*args, **kwargs, indices=self._cached_inds)
 
 class UniformSampler(BaseSampler):
     def __init__(self, buffer: BaseBuffer):
@@ -558,9 +607,7 @@ class UniformSampler(BaseSampler):
 
         Args:
             batch_size (int, optional): Batch size to sample. Defaults to None.
-            seq_len (int, optional): Length of sequences. If it's None, the sampled
-                data has shape (b, *data.shape), otherwise, (b, seq, *data.shape).
-                Defaults to None.
+            seq_len (int, optional): Length of sequences. Defaults to None.
         
         Returns:
             Any: Returns a slice of data from the replay buffer. Each element has 
@@ -578,14 +625,118 @@ class UniformSampler(BaseSampler):
         else:
             inds = np.random.randint(len(buf)-seq_len*buf.batch, 
                                      size=(batch_size, 1))
-        inds1, inds2 = np.unravel_index(inds, (buf.slots, buf.batch))
+        inds1, inds2 = buf.unravel_index(inds)
         if seq_len is not None:
             inds1 = inds1 + np.arange(seq_len)
-            inds2 = inds2 + np.zeros_like(inds1) # broadcast
-        # add offset
+            inds2 = np.broadcast_to(inds2, inds1.shape)
+        # shift indices
         inds1 = (inds1 + buf.head) % buf.len_slots()
         self._cached_inds = (inds1, inds2)
         return self.buffer[self._cached_inds]
+
+class PrioritizedSampler(BaseSampler):
+    def __init__(self, buffer: ReplayBuffer,
+                       alpha:      float, 
+                       weight_key: str='w'):
+        '''An implementation of Prioritized Experience Replay
+        from "Prioritized Experience Replay".
+
+        Args:
+            buffer (ReplayBuffer): Replay buffer.
+            alpha (float): Prioritization exponent.
+            weight_key (str, optional): keys to store weights. One can access
+                weights from the sampled batches with this key. Defaults to 'w'.
+        '''
+        super().__init__(buffer)
+        if not isinstance(buffer, ReplayBuffer):
+            raise ValueError(f'{type(self).__name__} does not support'
+                f'{type(buffer).__name__}')
+        if isinstance(buffer, DynamicBuffer):
+            raise ValueError(f'{type(self).__name__} does not '
+                'support DynamicBuffer')
+        self._weight_tree = None
+        self._weight_key  = weight_key
+        self._alpha = alpha
+        self._max_w = 1.0
+        self._min_w = 1.0
+        self._eps = np.finfo(np.float32).eps.item()
+
+    def add(self, *args, **kwargs):
+        '''Add samples to the buffer and weight tree'''
+        _indices = self.buffer.add(*args, **kwargs)
+        indices = self.buffer.ravel_index(_indices)
+        if self._weight_tree is None:
+            self._melloc()
+        self._weight_tree[indices] = self._max_w**self._alpha
+        return _indices
+
+    def update(self, *args, **kwargs):
+        '''Update sampled data to the buffer'''
+        w = kwargs.pop(self._weight_key, None)
+        if w is not None:
+            # update tree weights
+            w = np.abs(np.asarray(w)) + self._eps
+            flat_w = w.flatten()
+            inds = self.buffer.ravel_index(self._cached_inds)
+            self._weight_tree[inds] = flat_w ** self._alpha
+            self._max_w = max(self._max_w, np.max(w))
+            self._min_w = min(self._min_w, np.min(w))
+        return self.buffer.update(*args, **kwargs, indices=self._cached_inds)
+
+    def sample(self, batch_size: int = None, 
+                     seq_len:    int = None, 
+                     beta:     float = 0.0):
+        '''Randomly sample a batch or a batch sequence of data from 
+        the replay buffer
+
+        NOTE: The sequence sampling may sample a data that exceeds the 
+        tail of the circular buffer (ReplayBuffer).
+
+        Args:
+            batch_size (int, optional): Batch size to sample. Defaults to None.
+            seq_len (int, optional): Length of sequences. Defaults to None.
+            beta (float, optional): Importance sampling exponent. Defaults to 0.0.
+
+        Returns:
+            Any: Returns a slice of data from the replay buffer. Each 
+                element has shape (b, *data.shape) if seq_len is None, 
+                otherwise, (b, seq, *data.shape).
+        '''
+        buf = self.buffer
+        if not buf.ready_for_sample:
+            raise RuntimeError('Buffer is not ready for sampling, '
+                'call `buffer.make()` before sampling')
+        if batch_size is None:
+            batch_size = len(buf)
+        if seq_len is None:
+            samp = np.random.rand(batch_size) * self._weight_tree.sum()
+        else:
+            bound = self._weight_tree.sum()
+            samp = np.random.rand(batch_size).reshape(-1, 1) * bound
+        inds = self._weight_tree.index(samp)
+        inds1, inds2 = buf.unravel_index(inds)
+        if seq_len is not None:
+            inds1 = inds1 + np.arange(seq_len)
+            inds2 = np.broadcast_to(inds2, inds1.shape)
+        inds1 = inds1 % buf.len_slots()
+        self._cached_inds = (inds1, inds2)
+        inds = buf.ravel_index(self._cached_inds)
+        # calculate sample weights
+        weight = (self._weight_tree[inds] / self._min_w) ** (-beta)
+        weight = weight / np.max(weight)
+        weight = weight.reshape(inds1.shape)
+        # get batch data
+        batch = self.buffer[self._cached_inds]
+        batch[self._weight_key] = weight
+        return batch
+
+    # --- private methods ---
+    def _melloc(self):
+        '''Create segment tree space'''
+        self._weight_tree = SegmentTree(self.buffer.capacity)
+
+# alias
+PriorSampler = PrioritizedSampler
 
 class PermuteSampler(BaseSampler):
     def __init__(self, buffer: BaseBuffer):
@@ -627,10 +778,13 @@ class PermuteSampler(BaseSampler):
         else:
             #TODO: skip seq_len steps
             inds = np.arange(len(buf)-seq_len*buf.batch).reshape(-1, 1)
-        inds1, inds2 = np.unravel_index(inds, (buf.slots, buf.batch))
+        inds1, inds2 = buf.unravel_index(inds)
+        #inds1, inds2 = np.unravel_index(inds, (buf.slots, buf.batch))
         if seq_len is not None:
             inds1 = inds1 + np.arange(seq_len)
-            inds2 = inds2 + np.zeros_like(inds1) # broadcast
+            inds2 = np.broadcast_to(inds2, inds1.shape)
+        # shift indices
+        inds1 = (inds1 + buf.head) % buf.len_slots()
         # shuffle the indices of the indices of the samples
         permute = np.arange(len(inds1))
         np.random.shuffle(permute)

@@ -33,17 +33,17 @@ class TestDataModule(TestCase):
         # test update
         tree.update(1, 3)
         self.assertEqual(6, tree.sum(start=1, end=3))
-        # test find
+        # test index
         tree[:] = np.arange(1, 11)
-        self.assertEqual(0, tree.find(1))
-        self.assertEqual(1, tree.find(2))
-        self.assertEqual(1, tree.find(3))
-        self.assertEqual(2, tree.find(4))
-        self.assertEqual(3, tree.find(7))
-        self.assertEqual(8, tree.find(45))
-        self.assertEqual(9, tree.find(54))
-        # test find vectorized
-        self.assertArrayEqual([[0], [9]], tree.find([[1], [46]]))
+        self.assertEqual(0, tree.index(1))
+        self.assertEqual(1, tree.index(2))
+        self.assertEqual(1, tree.index(3))
+        self.assertEqual(2, tree.index(4))
+        self.assertEqual(3, tree.index(7))
+        self.assertEqual(8, tree.index(45))
+        self.assertEqual(9, tree.index(54))
+        # test index vectorized
+        self.assertArrayEqual([[0], [9]], tree.index([[1], [46]]))
 
     def test_base_buffer(self):
         capacity = 10
@@ -102,30 +102,57 @@ class TestDataModule(TestCase):
         buf.update(new_data, indices=np.arange(n_samples % capacity))
         self.assertArrayEqual(exp_a0, buf.data['a'][0])
         self.assertArrayEqual(exp_a1, buf.data['a'][1])
+        # test ravel/unravel index
+        def test_ravel(indices):
+            self.assertArrayEqual(
+                np.ravel_multi_index(indices, (buf.slots, buf.batch)),
+                buf.ravel_index(indices))
+        test_ravel(([1, 2, 3], 0))
+        test_ravel(([1, 2, 3], [0]))
+        def test_unravel(indices):
+            self.assertArrayEqual(
+                np.unravel_index(indices, (buf.slots, buf.batch)),
+                buf.unravel_index(indices))
+        test_unravel([4, 5, 6])
+        test_unravel(7)
+
 
     def test_base_buffer_multidim(self):
-        capacity = 10
-        batch = 1
+        capacity = 20
+        batch = 2
         dim = 2
         n_samples = 15 # test circular
         buf = ub_data.BaseBuffer(capacity, batch=batch)
         data = np.arange(n_samples*batch*dim).reshape((n_samples, batch, dim))
         for i in range(n_samples):
             buf.add({'a': data[i]})
-            if i < capacity-1:
+            if (i+1)*batch < capacity:
                 self.assertFalse(buf.isfull)
-                self.assertEqual(i+1, len(buf))
+                self.assertEqual((i+1)*batch, len(buf))
                 self.assertEqual(i+1, buf.len_slots())
                 self.assertEqual(0, buf.head)
             else:
                 self.assertTrue(buf.isfull)
                 self.assertEqual(capacity, len(buf))
-                self.assertEqual(capacity, buf.len_slots())
-            self.assertEqual((i+1)%capacity, buf.tail)
-        exp = np.arange((n_samples-capacity)*2, n_samples*2)
-        exp = exp.reshape(-1, 1, 2)
-        exp = np.roll(exp, n_samples % capacity, axis=0)
+                self.assertEqual(capacity//batch, buf.len_slots())
+            self.assertEqual((i+1)%(capacity//batch), buf.tail)
+        exp = np.arange(n_samples*batch*dim-capacity*dim, n_samples*batch*dim)
+        exp = exp.reshape(-1, 2, 2)
+        exp = np.roll(exp, n_samples % (capacity//batch), axis=0)
         self.assertArrayEqual(exp, buf.data['a'])
+        # test ravel/unravel index
+        def test_ravel(indices):
+            self.assertArrayEqual(
+                np.ravel_multi_index(indices, (buf.slots, buf.batch)),
+                buf.ravel_index(indices))
+        test_ravel(([1, 2, 3], 0))
+        test_ravel(([[1], [2], [3]], [0, 1]))
+        def test_unravel(indices):
+            self.assertArrayEqual(
+                np.unravel_index(indices, (buf.slots, buf.batch)),
+                buf.unravel_index(indices))
+        test_unravel([4, 5, 6])
+        test_unravel(7)
 
     def test_base_buffer_auto_calc_space(self):
         capacity = 10
@@ -325,9 +352,9 @@ class TestDataModule(TestCase):
             buf.add(a=[1])
             buf.add(b=[2]) # key not exists
 
-    def test_sequential_buffer(self):
+    def test_dynamic_buffer(self):
         n_samples = 10
-        buf = ub_data.SequentialBuffer(batch=2)
+        buf = ub_data.DynamicBuffer(batch=2)
         self.assertEqual(np.inf, buf.capacity)
         self.assertEqual(0, buf.head)
         for i in range(n_samples):
@@ -357,9 +384,9 @@ class TestDataModule(TestCase):
         buf.update(a=new_data, indices=np.arange(n_samples//2))
         self.assertArrayEqual(exp, buf.data['a'])
 
-    def test_sequential_buffer_auto_calc_space(self):
+    def test_dynamic_buffer_auto_calc_space(self):
         batch = 2
-        buf = ub_data.SequentialBuffer(batch=batch)
+        buf = ub_data.DynamicBuffer(batch=batch)
         self.assertEqual(0, len(buf))
         self.assertEqual(0, buf.len_slots())
         self.assertEqual(np.inf, buf.capacity)
@@ -371,7 +398,7 @@ class TestDataModule(TestCase):
         self.assertFalse(buf.isfull)
         self.assertFalse(buf.ready_for_sample)
         # auto calc space
-        buf = ub_data.SequentialBuffer(batch=None)
+        buf = ub_data.DynamicBuffer(batch=None)
         self.assertEqual(0, len(buf))
         self.assertEqual(0, buf.len_slots())
         self.assertEqual(np.inf, buf.capacity)
@@ -394,8 +421,8 @@ class TestDataModule(TestCase):
         self.assertFalse(buf.isfull)
         self.assertFalse(buf.ready_for_sample)
 
-    def test_sequential_buffer_exception(self):
-        buf = ub_data.SequentialBuffer(batch=1)
+    def test_dynamic_buffer_exception(self):
+        buf = ub_data.DynamicBuffer(batch=1)
         buf.add(a=[1])
         self.assertFalse(buf.ready_for_sample)
         with self.assertRaises(RuntimeError):
@@ -568,13 +595,13 @@ class TestDataModule(TestCase):
         self.assertTrue(np.all(counts >= 1))
         self.assertTrue(np.all(counts <= 4))
         
-    def test_uniform_sampler_with_sequential_buffer(self):
+    def test_uniform_sampler_with_dynamic_buffer(self):
         n_samples = 10
         batch_ = 2
-        buf = ub_data.SequentialBuffer(batch_)
+        buf = ub_data.DynamicBuffer(batch_)
         samp = ub_data.UniformSampler(buf)
         for i in range(n_samples):
-            buf.add(a=[i, i+n_samples])
+            samp.add(a=[i, i+n_samples])
         self.assertEqual(n_samples*2, len(buf))
         self.assertFalse(buf.ready_for_sample)
         self.assertFalse(buf.isfull)
@@ -603,10 +630,10 @@ class TestDataModule(TestCase):
         samp.update(a=batch['a'])
         self.assertArrayEqual(buf[samp.indices]['a'], batch['a'])
 
-    def test_permute_sampler_with_sequential_buffer(self):
+    def test_permute_sampler_with_dynamic_buffer(self):
         n_samples = 10
         batch_ = 2
-        buf = ub_data.SequentialBuffer(batch_)
+        buf = ub_data.DynamicBuffer(batch_)
         samp = ub_data.PermuteSampler(buf)
         for i in range(n_samples):
             buf.add(a=[i, i+n_samples])
@@ -678,6 +705,60 @@ class TestDataModule(TestCase):
         self.assertTrue(np.all(counts >= 1))
         self.assertTrue(np.all(counts <= 3))
 
+    def test_prioritized_sampler_with_replay_buffer(self):
+        capacity = 10
+        batch = 1
+        alpha = 1.0
+        # test create space
+        buf = ub_data.ReplayBuffer(capacity)
+        self.assertTrue(buf.isnull)
+        samp = ub_data.PrioritizedSampler(buf, alpha)
+        self.assertTrue(samp._weight_tree is None)
+        # add one sample to create space
+        samp.add(i=[1])
+        self.assertTrue(samp._weight_tree is not None)
+        self.assertEqual(buf.capacity, samp._weight_tree._size)
+        self.assertTrue(samp._weight_tree._base > buf.capacity)
+        self.assertEqual(1, samp._weight_tree.sum())
+        samp.add(i=[2])
+        samp.add(i=[3])
+        self.assertEqual(3, samp._weight_tree.sum())
+        # test sample (batch=None)
+        batch = samp.sample(beta=-1.0)
+        self.assertEqual((3,), batch['i'].shape)
+        self.assertArrayEqual(np.ones((3,), dtype=np.float32), batch['w'])
+        # test sample (batch=2)
+        ub_utils.set_seed(1) # i=[2, 3]
+        batch_size = 2
+        batch = samp.sample(batch_size=batch_size, beta=-1.0)
+        self.assertArrayEqual([1, 2], samp.indices[0])
+        self.assertEqual((2,), batch['i'].shape)
+        self.assertArrayEqual(np.ones((2,), dtype=np.float32), batch['w'])
+        samp.update(w=[0.5, 0.5])
+        self.assertAllClose(0.5, samp._min_w) # exponent
+        self.assertAllClose(1.0, samp._max_w) # exponent
+        self.assertAllClose(2, samp._weight_tree.sum())
+        batches = []
+        for n in range(10000):
+            batch = samp.sample(batch_size=batch_size, beta=-1.0) # i=[1, 1]
+            batches.append(batch['i'])
+        samples = np.asarray(batches).flatten()
+        self.assertAllClose(0.5, np.sum(samples==1)/(n*2), atol=1e-2)
+        self.assertAllClose(0.25, np.sum(samples==2)/(n*2), atol=1e-2)
+        self.assertAllClose(0.25, np.sum(samples==3)/(n*2), atol=1e-2)
+        # test sample (batch=3, seq=2)
+        ub_utils.set_seed(2) # i=[[1, 2], [1, 2], [2, 3]]
+        batch_size = 3
+        seq_len = 2
+        batch = samp.sample(batch_size=batch_size, seq_len=seq_len, beta=-1.0)
+        self.assertArrayEqual([[0, 1], [0, 1], [1, 2]], samp.indices[0])
+        self.assertEqual((3, 2), batch['i'].shape)
+        self.assertAllClose([[1, 0.5], [1, 0.5], [0.5, 0.5]], batch['w'], atol=1e-6)
+        samp.update(w=[[0.1, 0.2], [1, 0.5], [0.4, 0.5]])
+        self.assertAllClose(0.1, samp._min_w)
+        self.assertAllClose(1.0, samp._max_w)
+        self.assertAllClose(1.9, samp._weight_tree.sum())
+
     def test_sampler_exception(self):
         with self.assertRaises(ValueError):
             # `buffer` must be an instance of BaseBuffer
@@ -685,7 +766,12 @@ class TestDataModule(TestCase):
         with self.assertRaises(ValueError):
             # `buffer` must be an instance of BaseBuffer
             ub_data.PermuteSampler(None)
-
+        with self.assertRaises(ValueError):
+            # `buffer` must be ReplayBuffer
+            ub_data.PrioritizedSampler(ub_data.BaseBuffer(10), 1.0)
+        with self.assertRaises(ValueError):
+            # `buffer` must be ReplayBuffer
+            ub_data.PrioritizedSampler(ub_data.DynamicBuffer(), 1.0)
 
     def test_compute_nstep_rew(self):
         rew = np.asarray([[1., 0., 1.], [1., 1., 1.]], dtype=np.float32).T

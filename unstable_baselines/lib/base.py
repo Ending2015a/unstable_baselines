@@ -417,7 +417,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         Returns:
             dict: A JSON serializable dictionary.
         '''
-        raise NotImplementedError
+        return {}
 
     @classmethod
     def from_config(cls, config):
@@ -978,8 +978,6 @@ class BaseAgent(SavableModel):
             filepath (str): path to save configuration
         '''
         config = self.get_config()
-        config.update(BaseAgent.get_config(self))
-
         ub_utils.safe_json_dump(filepath, config)
 
 
@@ -1479,7 +1477,8 @@ class BaseRLModel(TrainableModel):
         Returns:
             dict: configurations
         '''
-        config = {
+        config = super().get_config()
+        config.update({
             'n_steps':           self.n_steps,
             'n_subepochs':       self.n_subepochs,
             'n_gradsteps':       self.n_gradsteps,
@@ -1487,7 +1486,7 @@ class BaseRLModel(TrainableModel):
             'verbose':           self.verbose,
             'observation_space': self.observation_space,
             'action_space':      self.action_space
-        }
+        })
         return config
 
     @classmethod
@@ -1515,8 +1514,6 @@ class BaseRLModel(TrainableModel):
             filepath (str): path to save configuration
         '''
         _config = self.get_config()
-        _config.update(BaseRLModel.get_config(self))
-
         config = {
             'state': self.state,
             'config': _config

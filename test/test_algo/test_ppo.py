@@ -589,7 +589,7 @@ class TestPPOModel(TestCase):
         # check if all network variables are correctly restored
         self.assertVariables(model.trainable_variables,
                         loaded_model.trainable_variables)
-        # test optimizers, train one step to create &
+        # test optimizers
         # load optimizer params
         batches = [batch for batch in model.sampler(batch_size)]
         ub_utils.set_seed(1)
@@ -603,10 +603,10 @@ class TestPPOModel(TestCase):
         for key in losses1.keys():
             self.assertEqual(losses1[key], losses2[key])
         self.assertAllClose(kl1, kl2)
-        # check if the number of vars are same
+        # check if vars are same
         self.assertVariables(model.trainable_variables,
                         loaded_model.trainable_variables)
-        # check if the number of params of the optimizer are same
+        # check if params of the optimizer are same
         self.assertVariables(model.optimizer.variables(),
                         loaded_model.optimizer.variables())
 
