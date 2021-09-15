@@ -48,7 +48,7 @@ setup(
         'unstable_baselines.logger': ['ascii_font/pkl/*.pkl']
     },
     install_requires=[
-        'gym>=0.18.0',
+        'gym==0.18.0',
         'tensorflow>=2.3.0',
         'numpy',
         'cloudpickle',
