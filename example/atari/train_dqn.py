@@ -1,6 +1,6 @@
 # This example shows how to train an PPO agent on atari domain
 # For complete experiments, please refer to 
-#     experiments/ppo/run.py
+#     experiments/dqn/run.py
 # --- built in ---
 import os
 import time
@@ -10,7 +10,7 @@ import functools
 import gym
 # --- my module ---
 import unstable_baselines as ub
-from unstable_baselines.algo.ppo import PPO
+from unstable_baselines.algo.dqn import DQN
 
 def parse_config(env_id, root_path):
     env_id    = env_id
@@ -35,30 +35,34 @@ def parse_config(env_id, root_path):
     a.ENV.video             = True   # record video
     # Hyper parameters
     a.MODEL.learning_rate   = 3e-4
+    a.MODEL.buffer_size     = int(1e6)
+    a.MODEL.multi_step      = 1
     a.MODEL.gamma           = 0.99
-    a.MODEL.gae_lambda      = 0.95
-    a.MODEL.policy_clip     = 0.1
-    a.MODEL.value_clip      = 4.0
-    a.MODEL.dual_clip       = 2.0
-    a.MODEL.ent_coef        = 0.01
-    a.MODEL.vf_coef         = 0.5
-    a.MODEL.reg_coef        = 1e-6
+    a.MODEL.tau             = 1.0
+    a.MODEL.reg_coef        = 0.0
     a.MODEL.clipnorm        = 0.5
-    a.MODEL.target_kl       = None
-    a.MODEL.share_net       = True
+    a.MODEL.explore_rate    = 0.3
+    a.MODEL.huber           = True
+    a.MODEL.huber_rate      = 0.1
+    a.MODEL.prioritized     = False
+    a.MODEL.prio_alpha      = 0.6
+    a.MODEL.prio_beta       = 0.4
+    a.MODEL.dueling         = False
     a.MODEL.force_mlp       = False
     a.MODEL.mlp_units       = [64, 64]
-    a.MODEL.n_steps         = 125
-    a.MODEL.n_subepochs     = 8
+    a.MODEL.n_steps         = 4
+    a.MODEL.n_gradsteps     = 1
+    a.MODEL.warmup_steps    = int(1e4)
     a.MODEL.batch_size      = 256
     a.MODEL.verbose         = 2
     # Training parameters
-    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
-    a.LEARN.log_interval    = 1    # epoch
-    a.LEARN.eval_interval   = 1000 # epoch
+    a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 312500 # ~10M
+    a.LEARN.target_update   = 625  # gradstep
+    a.LEARN.log_interval    = 1000 # epoch
+    a.LEARN.eval_interval   = 10000 # epoch
     a.LEARN.eval_episodes   = 5
     a.LEARN.eval_max_steps  = 5000
-    a.LEARN.save_interval   = 1000 # epoch
+    a.LEARN.save_interval   = 10000 # epoch
     a.LEARN.save_path       = f'{root_path}/save'
     a.LEARN.tb_logdir       = root_path
     # Performance evaluations
@@ -106,10 +110,10 @@ def main(a):
     # =============== Reset logger ==============
     ub.logger.Config.use(filename=a.ARGS.logging, level=a.ARGS.log_level,
                     colored=True, reset=False)
-    LOG = ub.logger.getLogger('PPO')
+    LOG = ub.logger.getLogger('DQN')
     # ========== Print welcome message ==========
     LOG.add_row('')
-    LOG.add_rows('PPO', fmt='{:@f:ANSI_Shadow}', align='center')
+    LOG.add_rows('DQN', fmt='{:@f:ANSI_Shadow}', align='center')
     LOG.add_line()
     LOG.add_rows(ub.__copyright__)
     LOG.flush('INFO')
@@ -133,19 +137,19 @@ def main(a):
     # =============== Train model ===============
     try:
         # --- Setup model & train ---
-        model = PPO(env, **a.MODEL).learn(eval_env=eval_env, **a.LEARN)
+        model = DQN(env, **a.MODEL).learn(eval_env=eval_env, **a.LEARN)
         LOG.info('DONE')
         # Save model
         saved_path = model.save(a.LEARN.save_path)
         LOG.info(f'Saving model to {saved_path}')
         del model
         # --- Load model from the latest checkpoint ---
-        loaded_model = PPO.load(a.LEARN.save_path)
+        loaded_model = DQN.load(a.LEARN.save_path)
         # Evaluate model
         LOG.info('Evaluating the latest model ...')
         evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
         # --- Load model from the best checkpoint ---
-        loaded_model = PPO.load(a.LEARN.save_path, best=True)
+        loaded_model = DQN.load(a.LEARN.save_path, best=True)
         # Evaluate model
         LOG.info('Evaluating the best model ...')
         evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
@@ -155,7 +159,7 @@ def main(a):
     eval_env.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Proximal Policy Optimization')
+    parser = argparse.ArgumentParser(description='Double Deep Q-learning')
     parser.add_argument('--env_id', type=str, default='BeamRiderNoFrameskip-v4')
     parser.add_argument('--root',   type=str, default='log/ppo')
     args = parser.parse_args()

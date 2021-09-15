@@ -445,7 +445,8 @@ class DQN(ub.base.OffPolicyModel):
         if self.huber:
             # huber loss
             delta = tf.convert_to_tensor(self.huber_rate)
-            losses = tf.where(td <= delta, 0.5 * tf.math.square(td),
+            losses = tf.where(tf.math.abs(td) <= delta, 
+                0.5 * tf.math.square(td),
                 delta * tf.math.abs(td) - 0.5 * tf.math.square(delta))
         else:
             # mse loss
@@ -476,7 +477,6 @@ class DQN(ub.base.OffPolicyModel):
         with tf.GradientTape() as tape:
             tape.watch(vars)
             td = self.td_error(**batch)
-            td = tf.math.abs(td)
             # compute losses
             td_loss  = self.td_loss(td, w=w)
             reg_loss = self.reg_loss(vars)
@@ -489,7 +489,7 @@ class DQN(ub.base.OffPolicyModel):
             'loss':     loss,
             'td_loss':  td_loss,
             'reg_loss': reg_loss
-        }, td
+        }, tf.math.abs(td)
 
     def _sample_nstep_batch(self, batch_size):
         '''Sample a batch of replay with n-step rewards (if enabled)
