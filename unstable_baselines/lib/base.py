@@ -1017,10 +1017,10 @@ class BaseRLModel(TrainableModel):
         self.batch_size   = batch_size
         self.verbose      = verbose
         # initialize states
-        self.env               = None
-        self.buffer            = None
-        self.tb_writter        = None
-        self.n_envs            = 0
+        self.env          = None
+        self.buffer       = None
+        self.tb_writer    = None
+        self.n_envs       = 0
 
         self.observation_space = observation_space
         self.action_space      = action_space

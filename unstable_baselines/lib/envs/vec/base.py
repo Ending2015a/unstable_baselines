@@ -70,7 +70,7 @@ class BaseVecEnv(gym.Env):
     def __init__(self,
         env_fns:      list,
         worker_class: BaseEnvWorker,
-        rms_norm:     Union[str, bool, ub_utils.RMSNormalizer] = None,
+        rms_norm:     Union[str, bool, ub_utils.RMSNormalizer] = False,
         auto_reset:   bool = True
     ):
         self._worker_class = worker_class

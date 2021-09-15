@@ -105,7 +105,7 @@ class TestSubprocVecEnvModule(TestCase):
             functools.partial(create_fake_env, i, space_type) 
             for i in range(num_envs)
         ]
-        envs = subproc.SubprocVecEnv(env_fns)
+        envs = subproc.SubprocVecEnv(env_fns, rms_norm=None)
         self.assertTrue(isinstance(envs.rms_norm, utils.RMSNormalizer))
         self.assertEqual(envs.rms_norm.enabled, should_enable)
         self.assertEqual(envs.rms_norm.fixed, not should_enable)

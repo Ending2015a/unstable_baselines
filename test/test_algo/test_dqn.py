@@ -415,4 +415,31 @@ class TestDQNModel(TestCase):
         self.assertArrayNotEqual(exp, res)
         self.assertTrue(np.all(res >= 0.0))
 
+    def test_dqn_cartpole(self):
+        n_envs = 10
+        ub_utils.set_seed(1)
+        envs = [gym.make('CartPole-v0') for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        env.seed(1)
+        eval_env = gym.make('CartPole-v0')
+        eval_env.seed(0)
+        model = dqn_model.DQN(
+            env,
+            buffer_size=20000,
+            multi_step=3,
+            learning_rate=1e-3,
+            gamma=0.8,
+            mlp_units=[128, 128],
+            batch_size=64,
+            n_steps=10,
+            verbose=0,
+        ).learn(
+            200000,
+            target_update=100
+        )
+        results = model.eval(eval_env, 20, 200)
+        metrics = model.get_eval_metrics(results)
+        self.assertAllClose(200.0, metrics['mean-reward'])
+        self.assertAllClose(200.0, metrics['mean-steps'])
+
 

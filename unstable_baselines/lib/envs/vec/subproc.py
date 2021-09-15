@@ -149,7 +149,7 @@ class SubprocEnvWorker(vec_base.BaseEnvWorker):
 class SubprocVecEnv(vec_base.BaseVecEnv):
     def __init__(self,
         env_fns: list,
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None,
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = False,
         auto_reset: bool = True,
     ):
         super().__init__(env_fns, SubprocEnvWorker, rms_norm, auto_reset)

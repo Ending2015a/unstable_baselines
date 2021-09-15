@@ -411,11 +411,19 @@ def set_optimizer_params(optimizer, param_list):
     return optimizer
 
 def preprocess_observation(inputs, obs_space, dtype=tf.float32):
+    '''Preprocess non-float observations
+    If the input's dtype is not float32 or float64 we normalize it.
+    '''
+    inputs = tf.convert_to_tensor(inputs)
+    # Do nothing if input is a float
+    if tf.as_dtype(inputs.dtype) in [tf.float32, tf.float64]:
+        return tf.cast(inputs, dtype=dtype)
+    # Normalize
     if isinstance(obs_space, gym.spaces.Box):
-        inputs = tf.cast(inputs, dtype=tf.float32)
+        inputs = tf.cast(inputs, dtype=dtype)
         if is_bounded(obs_space):
-            low    = tf.constant(obs_space.low, dtype=tf.float32)
-            high   = tf.constant(obs_space.high, dtype=tf.float32)
+            low    = tf.constant(obs_space.low, dtype=dtype)
+            high   = tf.constant(obs_space.high, dtype=dtype)
             inputs = normalize(inputs, low, high, 0., 1.)
     elif isinstance(obs_space, gym.spaces.Discrete):
         depth  = tf.constant(obs_space.n, dtype=tf.int32)

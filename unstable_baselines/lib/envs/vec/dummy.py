@@ -60,7 +60,7 @@ class EnvWorker(vec_base.BaseEnvWorker):
 class DummyVecEnv(vec_base.BaseVecEnv):
     def __init__(self,
         env_fns: list, 
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None,
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = False,
         auto_reset: bool = True,
     ):
         super().__init__(env_fns, EnvWorker, rms_norm, auto_reset)
@@ -69,7 +69,7 @@ class DummyVecEnv(vec_base.BaseVecEnv):
 class VecEnv(vec_base.BaseVecEnv):
     def __init__(self, 
         envs: list,
-        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = None,
+        rms_norm: Union[str, bool, ub_utils.RMSNormalizer] = False,
         auto_reset: bool = True,
     ):
         env_fns = [lambda i=j: envs[i] for j in range(len(envs))]
