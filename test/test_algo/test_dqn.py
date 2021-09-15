@@ -16,6 +16,7 @@ from parameterized import parameterized
 
 # --- my module ---
 from unstable_baselines.lib import utils as ub_utils
+from unstable_baselines.lib import sche as ub_sche
 from unstable_baselines.lib import data as ub_data
 from unstable_baselines.lib import nets as ub_nets
 from unstable_baselines.lib.envs import vec as ub_vec
@@ -390,3 +391,28 @@ class TestDQNModel(TestCase):
         # check if params of the optimizers are same
         self.assertVariables(model.optimizer.variables(),
                     loaded_model.optimizer.variables())
+
+    @parameterized.expand([
+        (True,),
+        (False,)
+    ])
+    def test_dqn_prioritized(self, huber):
+        n_envs = 3
+        ub_utils.set_seed(1)
+        envs = [FakeImageEnv() for _ in range(n_envs)]
+        env = ub_vec.VecEnv(envs)
+        model = dqn_model.DQN(env, prioritized=True, warmup_steps=5)
+        self.assertTrue(isinstance(model.prio_beta, ub_sche.Scheduler))
+        self.assertTrue(isinstance(model.sampler, ub_data.PriorSampler))
+        n_samples = 10
+        batch_size = 10
+        model.run(n_samples)
+        res = model.sampler._weight_tree[:n_samples*n_envs]
+        exp = np.ones_like(res, dtype=np.float32)
+        self.assertArrayEqual(exp, res)
+        model._train_step(batch_size)
+        res = model.sampler._weight_tree[:n_samples*n_envs]
+        self.assertArrayNotEqual(exp, res)
+        self.assertTrue(np.all(res >= 0.0))
+
+
