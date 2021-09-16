@@ -182,12 +182,12 @@ def _get_best_checkpoint(checkpoint_dir, latest_filename=None):
     """Find the filename of the best checkpoint file.
 
     Args:
-      checkpoint_dir: Directory where the variables were saved.
-      latest_filename: Optional name for the checkpoint state file
-        that contains the best checkpoint filenames.
+        checkpoint_dir: Directory where the variables were saved.
+        latest_filename: Optional name for the checkpoint state file
+            that contains the best checkpoint filenames.
 
     Returns:
-      The full path to the best checkpoint or `None` if no checkpoint was found.
+        The full path to the best checkpoint or `None` if no checkpoint was found.
 
     """
     ckpt = _get_best_checkpoint_state(checkpoint_dir, latest_filename)
@@ -252,12 +252,12 @@ def _default_metric_compare_fn(last_metrics, new_metrics):
     """Compare two metrics
 
     Args:
-      last_metrics: previous metrics. A comparable object.
-      new_metrics: new metrics. A comparable object.
+        last_metrics: previous metrics. A comparable object.
+        new_metrics: new metrics. A comparable object.
 
     Returns:
-      True if new_metrics is equal to or better than the last_metrics. 
-      False, otherwise.
+        True if new_metrics is equal to or better than the last_metrics.
+            False, otherwise.
     """
     if last_metrics is None:
         return True
@@ -284,7 +284,7 @@ class CheckpointManager(tf.train.CheckpointManager):
     the best performed model.
 
     Example usage:
-    
+
     ```python
     import unstable_baselines as ub
     checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
@@ -325,7 +325,6 @@ class CheckpointManager(tf.train.CheckpointManager):
 
         # Restore best checkpoint state
         recovered_state = _get_best_checkpoint_state(directory)
-        current_clock = time.time()
         self._preserved_metrics = collections.OrderedDict()
         if recovered_state is None:
             self._best_checkpoint = None
@@ -380,18 +379,15 @@ class CheckpointManager(tf.train.CheckpointManager):
     def _sweep_checkpoints(self):
         """Replaces super()._sweep"""
         if not self._max_to_keep:
-            # Does not update self._last_preserved_timestamp, since everything is kept
-            # in the active set.
+            # Does not update self._last_preserved_timestamp, since everything is
+            # kept in the active set.
             return
         while len(self._maybe_delete) > self._max_to_keep:
             filename, timestamp = self._maybe_delete.popitem(last=False)
 
-            if (
-                self._keep_checkpoint_every_n_hours and (
-                    timestamp - self._keep_checkpoint_every_n_hours * 3600. >=
-                    self._last_preserved_timestamp
-                )
-            ):
+            if (self._keep_checkpoint_every_n_hours
+                and (timestamp - self._keep_checkpoint_every_n_hours * 3600.
+                     >= self._last_preserved_timestamp)):
                 self._last_preserved_timestamp = timestamp
                 continue
             # skip best checkpoint
@@ -454,27 +450,27 @@ class CheckpointManager(tf.train.CheckpointManager):
 
 class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
     """Provides a common interface to handle model save/load operations.
-    
+
     Subclassing to make the weights and configurations of a keras model
-    can be easily saved/loaded by calling `save` and `load`. One 
+    can be easily saved/loaded by calling `save` and `load`. One
     should also override `get_config` method to support this feature.
-    `get_config` returns a dictionary representing the configuration of 
+    `get_config` returns a dictionary representing the configuration of
     the model and will be passed into `__init__` of your model class on
     loading saved model. One can also override `from_config` to customize
     model creation on loading.
 
     Example usage:
-    
+
     ```python
     class MyModel(ub.base.SavableModel):
         def __init__(self, param):
             self.param = param
-        
+
         def get_config(self):
             return {
                 'param': self.param
             }
-    
+
     model = MyModel(10)
     model.save("/tmp/my_model")
     loaded_model = MyModel.load("/tmp/my_model")
@@ -512,7 +508,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         """Get model configuration
 
         Returns:
-          dict: A JSON serializable dictionary.
+            dict: A JSON serializable dictionary.
         """
         return {}
 
@@ -521,10 +517,10 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         """Reconstruct model from configuration
 
         Args:
-          config (dict): dictionary deserialized from JSON.
+            config (dict): dictionary deserialized from JSON.
 
         Returns:
-          SavableModel: reconstructed model
+            SavableModel: reconstructed model
         """
         return cls(**config)
 
@@ -532,7 +528,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         """Save model configuration to `filepath`
 
         Args:
-          filepath(str): path to save configuration
+            filepath(str): path to save configuration
         """
         config = self.get_config()
         ub_utils.safe_json_dump(filepath, config)
@@ -542,10 +538,10 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         """Load and reconstruct model from configuration
 
         Args:
-          filepath(str): path to load configuration
+            filepath(str): path to load configuration
 
         Returns:
-          SavableModel: new model from loaded configurations
+            SavableModel: new model from loaded configurations
 
         """
         config = ub_utils.safe_json_load(filepath)
@@ -562,13 +558,13 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         **kwargs
     ):
         """Save model weights and configurations
-        
+
         Default the weights are saved to
-          `{directory}/{weights_name}-{checkpoint_number}.index`
-          `{directory}/{weights_name}-{checkpoint_number}.data-?????-of-?????`
+            `{directory}/{weights_name}-{checkpoint_number}.index`
+            `{directory}/{weights_name}-{checkpoint_number}.data-?????-of-?????`
         and config files are saved to
-          `{directory}/{weights_name}-{checkpoint_number}.config.json`
-        
+            `{directory}/{weights_name}-{checkpoint_number}.config.json`
+
         In addition, `checkpoint` and `best_checkpoint` are created.
         The former is used to store the checkpoint information (latest
         checkpoint, checkpoint paths, timestamps). The latter is used
@@ -580,15 +576,15 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             compare_fn(last_metrics, new_metrics)
         and pass to `metrics_compare_fn`. The `metrics_compare_fn`
         returns True if `new_metrics` is better than `last_metrics`.
-        
+
         Example usage:
-        
+
         ```python
         model.save("/tmp/my_model", "weights")
         ```
-        
+
         This creates a checkpoint structure:
-        
+
         /tmp/my_model/
         ├── checkpoint
         ├── best_checkpoint
@@ -597,17 +593,17 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         └── weights-1.index
 
         Args:
-          directory (str): root path to save weights and config
-          weights_name (str): filename prefix. Defaults to "weights".
-          checkpoint_number (int): checkpoint number. Defaults to None.
-          checkpoint_metrics (Any, optional): model metrics used to determine the
-            best model. Defaults to None.
-          metrics_compare_fn (Callable, optional): a callback taking two arguments
-            (last_metrics, new_metrics) defines the comparison method of two metrics.
-            Return True if `new_metrics` is better than or equal to `last_metrics`.
-            Defaults to None.
-          max_to_keep (int, optional): maximum number of checkpoints to
-            keep. Defaults to None.
+            directory (str): root path to save weights and config
+            weights_name (str): filename prefix. Defaults to "weights".
+            checkpoint_number (int): checkpoint number. Defaults to None.
+            checkpoint_metrics (Any, optional): model metrics used to determine
+                the best model. Defaults to None.
+            metrics_compare_fn (Callable, optional): a callback taking two
+                arguments (last_metrics, new_metrics) defines the comparison
+                method of two metrics. Return True if `new_metrics` is better
+                than or equal to `last_metrics`. Defaults to None.
+            max_to_keep (int, optional): maximum number of checkpoints to
+                keep. Defaults to None.
 
         Returns:
           str: Path to the checkpoint where it is saved
@@ -657,26 +653,26 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
     ):
         """This method returns the aboluste path of the checkpoint file
         that best matched to the input arguments.
-        
+
         `file_or_dir` can be the root directory of all checkpoints
         (containing `checkpoint` and `best_checkpoint` file), or
         can be the full path to a specific checkpoint file (Eg.
         './my_model/weights-10'). The checkpoint searching priority
         is:
-        
+
         1. If a directory is provided, it trys to retrieve the checkpoint
             path from `checkpoint` or `best_checkpoint`. In this case,
             `weights_name` is ignored.
         2. It tests if `{file_or_dir}/{weights_name}` is a valid checkpoint
             path. If yes, return this path.
-        3. If `file_or_dir` is not a directory, it tests if `{file_or_dir}` 
-            is a valid checkpoint path. `weights_name` is also ignored in 
+        3. If `file_or_dir` is not a directory, it tests if `{file_or_dir}`
+            is a valid checkpoint path. `weights_name` is also ignored in
             this case.
-        
+
         Example:
 
         Assume we have the following checkpoint structure
-        
+
             /tmp/my_model/
             ├── checkpoint
             ├── best_checkpoint
@@ -689,7 +685,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
             ├── weights-15.config.json
             ├── weights-15.data-00000-of-00001
             └── weights-15.index
-        
+
         Case 1: A valid checkpoint root directory is provided
         ```python
         >>> SavableModel._preload('/tmp/my_model')
@@ -697,14 +693,14 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         >>> SavableModel._preload('/tmp/my_model', weights_name='whatever')
         /tmp/my_model/weights-15
         ```
-        
+
         Case 2: Not a valid checkpoint directory (`checkpoint` or
             `best_checkpoint` is deleted)
         ```python
         >>> SavableModel._preload('/tmp/my_model', weights_name='weights-5')
         /tmp/my_model/weights-5
         ```
-        
+
         Case 3: A full checkpoint path is provided
         ```python
         >>> SavableModel._preload('/tmp/my_model/weights-10')
@@ -712,17 +708,17 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         ```
 
         Args:
-          file_or_dir (str): path to the checkpoint directory or
-            a full checkpoint path.
-          weights_name (str): weights name. Defaults to "weights".
-          best (bool): whether to restore the best checkpoint.
-            Defaults to False.
+            file_or_dir (str): path to the checkpoint directory or
+                a full checkpoint path.
+            weights_name (str): weights name. Defaults to "weights".
+            best (bool): whether to restore the best checkpoint.
+                Defaults to False.
 
         Returns:
-          str: checkpoint path (absolute path).
+            str: checkpoint path (absolute path).
 
         Raises:
-          RuntimeError: couldn't find a valid checkpoint path.
+            RuntimeError: couldn't find a valid checkpoint path.
         """
 
         checkpoint_path = None
@@ -781,14 +777,14 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         """Load model from checkpoint. See SavableModel._preload
 
         Args:
-          file_or_dir (str): path to the checkpoint directory or
-            a full checkpoint path.
-          weights_name (str): weights name. Defaults to "weights".
-          best (bool): whether to restore the best checkpoint.
-            Defaults to False.
+            file_or_dir (str): path to the checkpoint directory or
+                a full checkpoint path.
+            weights_name (str): weights name. Defaults to "weights".
+            best (bool): whether to restore the best checkpoint.
+                Defaults to False.
 
         Returns:
-          SavableModel: loaded model.
+            SavableModel: loaded model.
         """
         # find checkpoint path
         checkpoint_path = cls._preload(file_or_dir, weights_name, best)
@@ -798,7 +794,7 @@ class SavableModel(tf.keras.Model, metaclass=abc.ABCMeta):
         # Reconstruct model from config
         self = cls.load_config(config_path)
         # restore weights
-        status = tf.train.Checkpoint(model=self).restore(checkpoint_path)
+        tf.train.Checkpoint(model=self).restore(checkpoint_path)
         return self
 
     def update(self, other_model, polyak=1.0, all_vars=False):
@@ -858,7 +854,7 @@ class TrainableModel(SavableModel):
 
     @abc.abstractmethod
     def train(self):
-        """Train the model for one epoch. The entry point of a complete 
+        """Train the model for one epoch. The entry point of a complete
         training procedure is defined in TrainableModel.learn
         """
         raise NotImplementedError
@@ -873,7 +869,7 @@ class TrainableModel(SavableModel):
         return it self after the training done.
 
         Returns:
-          TrainableModel: self
+            TrainableModel: self
         """
         raise NotImplementedError
 
@@ -883,8 +879,8 @@ class TrainableModel(SavableModel):
         its metrics.
 
         Args:
-          last_metrics: metrics of current the best checkpoint.
-          new_metrics: metrics of the new checkpoint.
+            last_metrics: metrics of current the best checkpoint.
+            new_metrics: metrics of the new checkpoint.
 
         Returns:
             True if `new_metrics` is better than or equal to `last_metrics`
@@ -904,20 +900,20 @@ class TrainableModel(SavableModel):
         """Save model checkpoint. See `SavableModel.save()` for details.
 
         Args:
-          directory (str): root path to save weights and config
-          weights_name (str): filename prefix. Defaults to "weights".
-          checkpoint_number (int): checkpoint number. Defaults to None.
-          checkpoint_metrics (Any, optional): model metrics used to determine the
-            best model. Defaults to None.
-          metrics_compare_fn (Callable, optional): a callback taking two arguments
-            (last_metrics, new_metrics) defines the comparison method of two metrics.
-            Return True if `new_metrics` is better than or equal to `last_metrics`.
-            Defaults to None.
-          max_to_keep (int, optional): maximum number of checkpoints to
-            keep. Defaults to None.
+            directory (str): root path to save weights and config
+            weights_name (str): filename prefix. Defaults to "weights".
+            checkpoint_number (int): checkpoint number. Defaults to None.
+            checkpoint_metrics (Any, optional): model metrics used to determine
+                the best model. Defaults to None.
+            metrics_compare_fn (Callable, optional): a callback taking two
+                arguments (last_metrics, new_metrics) defines the comparison
+                method of two metrics. Return True if `new_metrics` is better
+                than or equal to `last_metrics`. Defaults to None.
+            max_to_keep (int, optional): maximum number of checkpoints to
+                keep. Defaults to None.
 
         Returns:
-          str: path to the checkpoint where it is saved
+            str: path to the checkpoint where it is saved
         """
         if metrics_compare_fn is None:
             metrics_compare_fn = self.metrics_compare_fn
@@ -935,7 +931,7 @@ class TrainableModel(SavableModel):
         """Save the model configurations to `filepath`
 
         Args:
-          filepath (str): path to save configuration
+            filepath (str): path to save configuration
         """
         _config = self.get_config()
 
@@ -948,10 +944,10 @@ class TrainableModel(SavableModel):
         """Load model configurations and reconstruct a new model
 
         Args:
-          filepath (str): path to load config file
+            filepath (str): path to load config file
 
         Returns:
-          TrainableModel: loaded model.
+            TrainableModel: loaded model.
         """
         config = ub_utils.safe_json_load(filepath)
 
@@ -1013,7 +1009,7 @@ class TrainableModel(SavableModel):
 
 class BaseAgent(SavableModel):
     """A general template for model-free RL agent
-    
+
     Attributes:
         support_obs_spaces (list): the support list of observation space types.
         support_act_spaces (list): the support list of action space types.
@@ -1081,7 +1077,7 @@ class BaseAgent(SavableModel):
         """Preprocess observations before forwarding into the nets
         e.g. normalizing image observations. A nested space is also
         supported, e.g. `gym.spaces.Tuple`, `gym.spaces.Dict`.
-        
+
         Note that in default, this normalizes the observation only if
         they are not in tf.float32 or tf.float64. For example, tf.uint8
         is normalized if its observation space has a limited low/high bounds.
@@ -1110,7 +1106,7 @@ class BaseAgent(SavableModel):
             act (Any): predicted actions.
         """
         if isinstance(self.action_space, gym.spaces.Box):
-            #TODO: can this be done in one line for both tensor and
+            # TODO: can this be done in one line for both tensor and
             # non-tensor types?
             if tf.is_tensor(act):
                 act = tf.clip_by_value(
@@ -1129,12 +1125,12 @@ class BaseAgent(SavableModel):
         """Make action predictions from one input sample or one batch samples
 
         Args:
-          inputs (np.ndarray): batch observations in shape (b, *obs.shape)
-            or (*obs.shape) for one input.
+            inputs (np.ndarray): batch observations in shape (b, *obs.shape)
+                or (*obs.shape) for one input.
 
         Returns:
-          np.ndarray: predicted actions in shape (b, *act.shape) or
-            (*act.shape) for one input.
+            np.ndarray: predicted actions in shape (b, *act.shape) or
+                (*act.shape) for one input.
         """
         one_sample = (len(inputs.shape) == len(self.observation_space.shape))
         if one_sample:
@@ -1182,11 +1178,10 @@ class BaseAgent(SavableModel):
         """Restore model from the given configurations
 
         Args:
-          config (dict): configurations
+            config (dict): configurations
 
         Returns:
-          self
-
+            self
         """
 
         # construct method
@@ -1200,10 +1195,7 @@ class BaseAgent(SavableModel):
         """Save model config to `filepath`
 
         Args:
-          filepath (str): path to save configuration
-
-        Returns:
-
+            filepath (str): path to save configuration
         """
         config = self.get_config()
         ub_utils.safe_json_dump(filepath, config)
@@ -1212,7 +1204,7 @@ class BaseAgent(SavableModel):
 class BaseRLModel(TrainableModel):
     """Provides a common interface for either
     off-policy or on-policy RL algos.
-    
+
     The main differences between off/on policy are:
     - On-policy has no replay buffer warming up stage while off-policy has.
         So `is_wraming_up` method and `warmup_steps` are diabled in default
@@ -1226,14 +1218,14 @@ class BaseRLModel(TrainableModel):
     The training loop has the following structure:
     1. The training loop, invoked by calling `learn`, trains the model for
         several epochs.
-    2. In each epoch, the model calls `run` to collects `n_steps` times the 
-        number of vectorized environments of samples, and saves them to the 
+    2. In each epoch, the model calls `run` to collects `n_steps` times the
+        number of vectorized environments of samples, and saves them to the
         replay buffer. The sample collection method is defined in `_collect_step`.
     3. Run `n_subepochs` times of subepochs in each epoch.
     4. Each subepoch runs `n_gradsteps` times of gradient updates, each with one
-        minibatch sampled from the replay buffer. The `batch_size` defines the 
+        minibatch sampled from the replay buffer. The `batch_size` defines the
         size of the minibatch. One gradient update is defined in `_train_step`.
-    
+
     Grouping methods by its behaviour:
     - Initialization: `__init__`, `setup`, `set_env`
     - Inferencing: `call`, `predict`
@@ -1265,14 +1257,14 @@ class BaseRLModel(TrainableModel):
     ):
         """Initialize training procedure
 
-        `env` can be None for delayed setup. In this case, you should call 
+        `env` can be None for delayed setup. In this case, you should call
         `set_env` then call `setup` to manually setup the model.
 
         Args:
             env (ub.envs.BaseVecEnv): vectorized environments.
             n_steps (int): number of steps collected in each epoch.
             n_subepochs (int): number of subepochs in each epoch.
-            n_gradsteps (int): number of steps of gradient updates in 
+            n_gradsteps (int): number of steps of gradient updates in
                 each subepochs.
             warmup_steps (int): number of steps before starting the training loop
             batch_size (int): size of minibatch
@@ -1281,8 +1273,8 @@ class BaseRLModel(TrainableModel):
             observation_space (gym.Space, optional): observation space. This
                 argument is used when constructing from the checkpoint. So it
                 can be omitted. Defaults to None.
-            action_space (gym.Space, optional): action space. This argument is 
-                used when constructing from the checkpoint. So it can be 
+            action_space (gym.Space, optional): action space. This argument is
+                used when constructing from the checkpoint. So it can be
                 omitted. Defaults to None.
         """
         super().__init__(**kwargs)
@@ -1308,13 +1300,13 @@ class BaseRLModel(TrainableModel):
 
     def set_env(self, env):
         """Set the training environments.
-        
+
         If the environment is already set, you can call this function
         to change the environment. But the observation space and action
         space must be consistent with the original one.
 
         Args:
-          env (ub.envs.BaseVecEnv): training environment.
+            env (ub.envs.BaseVecEnv): training environment.
         """
         if not isinstance(env, ub_vec.BaseVecEnv):
             raise RuntimeError('Envrionement must be a vectorized env')
@@ -1368,10 +1360,10 @@ class BaseRLModel(TrainableModel):
         """Collect one step rollout from the environment.
 
         Args:
-          obs (np.ndarray): current observations.
+            obs (np.ndarray): current observations.
 
         Returns:
-          np.ndarray: next observations
+            np.ndarray: next observations
         """
         raise NotImplementedError
 
@@ -1380,12 +1372,12 @@ class BaseRLModel(TrainableModel):
         `obs` is not given.
 
         Args:
-          steps (int): number of steps to collect
-          obs (np.ndarray, optional): current observations. Defaults to None.
-            set to None to reset the envs.
+            steps (int): number of steps to collect
+            obs (np.ndarray, optional): current observations. Defaults to None.
+                set to None to reset the envs.
 
         Returns:
-          np.ndarray: next observations
+            np.ndarray: next observations
         """
         if obs is None:
             obs = self.env.reset()
@@ -1400,11 +1392,11 @@ class BaseRLModel(TrainableModel):
         buffer preprocessing, e.g. compute GAE here.
 
         Args:
-          steps (int): number of steps to collect
-          obs (np.ndarray, optional): current observations. Defaults to None.
+            steps (int): number of steps to collect
+            obs (np.ndarray, optional): current observations. Defaults to None.
 
         Returns:
-          np.ndarray: current observations
+            np.ndarray: current observations
         """
         return self.collect(steps, obs=obs)
 
@@ -1412,10 +1404,10 @@ class BaseRLModel(TrainableModel):
         """Compute evaluation metrics from evaluation results
 
         Args:
-          results(dict): evaluation results
+            results(dict): evaluation results
 
         Returns:
-          dict: evaluation metrics
+            dict: evaluation metrics
         """
         if not results:
             return None
@@ -1442,11 +1434,11 @@ class BaseRLModel(TrainableModel):
         Default is the mean of episode rewards.
 
         Args:
-          metrics(dict): evaluation metrics, usually generated by calling
-            `self.get_eval_metrics`.
+            metrics(dict): evaluation metrics, usually generated by calling
+                `self.get_eval_metrics`.
 
         Returns:
-          Any: metrics for selecting the best model.
+            Any: metrics for selecting the best model.
         """
         if (not isinstance(metrics, dict) or 'mean-reward' not in metrics):
             return None
@@ -1457,13 +1449,13 @@ class BaseRLModel(TrainableModel):
         to `max_steps`
 
         Args:
-          env (gym.Env): a gym environment for evaluation.
-          n_episodes (int): number of episodes to evaluate.
-          max_steps (int): the maximum number of steps. Set to -1 to run forever
-            until the environment done.
+            env (gym.Env): a gym environment for evaluation.
+            n_episodes (int): number of episodes to evaluate.
+            max_steps (int): the maximum number of steps. Set to -1 to run forever
+                until the environment done.
 
         Returns:
-          list: a list of dict containing the evaluation results per episode.
+            list: a list of dict containing the evaluation results per episode.
         """
         if n_episodes <= 0:
             return None
@@ -1492,10 +1484,10 @@ class BaseRLModel(TrainableModel):
         """Train for one step (one gradient update).
 
         Args:
-          batch_size(int): mini-batch size.
+            batch_size(int): mini-batch size.
 
         Returns:
-          dict: loss dict
+            dict: loss dict
         """
         raise NotImplementedError
 
@@ -1510,13 +1502,13 @@ class BaseRLModel(TrainableModel):
         """Train one epoch
 
         Args:
-          batch_size (int): size of minibatch.
-          subepochs (int): number of subepochs
-          gradsteps (int): Number of steps of gradient updates per subepoch
-          target_update (int): target networks update frequency.
+            batch_size (int): size of minibatch.
+            subepochs (int): number of subepochs
+            gradsteps (int): Number of steps of gradient updates per subepoch
+            target_update (int): target networks update frequency.
 
         Returns:
-          dict: loss dict
+            dict: loss dict
         """
         all_losses = []
         for subepoch in range(subepochs):
@@ -1598,7 +1590,7 @@ class BaseRLModel(TrainableModel):
                 self.LOG.add_line()
 
                 if self.is_warming_up():
-                    self.LOG.add_row(f'Collecting rollouts')
+                    self.LOG.add_row('Collecting rollouts')
                 else:
                     name = '\n'.join(map(str, losses.keys()))
                     loss = '\n'.join(map('{:.6f}'.format, losses.values()))
@@ -1618,7 +1610,7 @@ class BaseRLModel(TrainableModel):
         1 = silent
         2 = print evaluation metrics
         3 = print episode results and metrics
-        #TODO remove n_episodes
+        TODO remove n_episodes
 
         Args:
             n_episodes (int): number of evaluation episodes.
@@ -1631,7 +1623,7 @@ class BaseRLModel(TrainableModel):
 
         if verbose > 1:
             if verbose > 2 and results is not None:
-                self.LOG.set_header(f'Evaluation results')
+                self.LOG.set_header('Evaluation results')
                 for ep in range(n_episodes):
                     self.LOG.subgroup(f'Episode {ep+1}')
                     labels = '\n'.join(results[ep].keys())
@@ -1711,7 +1703,7 @@ class BaseRLModel(TrainableModel):
             eval_interval (int, optional): evaluation frequency (unit: epoch).
                 Defaults to 1.
             eval_episodes (int, optional): evaluation episodes. Defaults to 5.
-            eval_max_steps (int, optional): maximum number of steps of each 
+            eval_max_steps (int, optional): maximum number of steps of each
                 episode when evaluating. Defaults to 1000.
             save_interval (int, optional): checkpoint frequency (unit: epoch).
                 Defaults to 1.
@@ -1721,7 +1713,7 @@ class BaseRLModel(TrainableModel):
                 (unit: gradstep) Defaults to 2.
             tb_logdir (str, optional): path to store tensorboard files. None to
                 disable logging. Defaults to None.
-            reset_timesteps (bool, optional): reset the training states. 
+            reset_timesteps (bool, optional): reset the training states.
                 Defaults to False.
 
         Raises:
@@ -1807,8 +1799,8 @@ class BaseRLModel(TrainableModel):
                 self.log_eval(eval_episodes, eval_results, eval_metrics)
 
             # save model
-            if ((save_path is not None) and (save_interval is not None) and
-                (self.num_epochs % save_interval) == 0):
+            if ((save_path is not None) and (save_interval is not None)
+                    and (self.num_epochs % save_interval) == 0):
                 # compute metrics
                 checkpoint_metrics = self.get_save_metrics(eval_metrics)
                 saved_path = self.save(
@@ -1868,7 +1860,7 @@ class OffPolicyModel(BaseRLModel):
         n_steps: int = 4,
         n_subepochs: int = 1,
         n_gradsteps: int = 1,
-        warmup_steps: int = int(1e4),
+        warmup_steps: int = 10000,
         batch_size: int = 128,
         verbose: int = 0,
         observation_space=None,
