@@ -45,8 +45,8 @@ class Actor(ub.nets.PolicyNet):
     '''Actor network'''
     support_spaces = [gym.spaces.Box]
     def __init__(self, action_space, 
-                       squash: bool = True, 
-                       units:  list = [256, 256],
+                       squash: bool = True,
+                       net          = None
                        **kwargs):
         '''Create actor
 
@@ -55,9 +55,9 @@ class Actor(ub.nets.PolicyNet):
                 one of the types listed in `support_spaces`
             squash (bool, optional): Tanh squashed for gaussian distribution.
                 Defaults to True.
+            net (tf.keras.Model, optional): Base net. Defaults to None
         '''        
-        super().__init__(action_space, squash=squash, **kwargs)
-        self.units = units
+        super().__init__(action_space, squash=squash, net=net, **kwargs)
 
     def call(self, inputs, training=True):
         '''Forward actor
@@ -72,24 +72,19 @@ class Actor(ub.nets.PolicyNet):
         '''
         return super().call(inputs, training=training)
 
-    def get_model(self):
-        '''Base model'''
-        return ub.nets.MlpNet(self.units)
-
 class Critic(ub.nets.MultiHeadValueNets):
     '''Critic networks'''
-    def __init__(self, action_space, 
-                       n_critics: int = 2, 
-                       units:    list = [256, 256],
+    def __init__(self, action_space,
+                       n_critics: int = 2,
+                       nets           = None,
                        **kwargs):
         '''Create critics, state-action value function
 
         Args:
             n_critics (int, optional): number of critics. Defaults to 2.
-        '''        
-        super().__init__(n_heads=n_critics, **kwargs)
-        self.units = units
-
+            nets (tf.keras.Model, optional): See ub.nets.MultiHeadValueNets
+        '''
+        super().__init__(n_heads=n_critics, nets=nets, **kwargs)
         if isinstance(action_space, gym.spaces.Box):
             self.action_dims = 1
         elif isinstance(action_space, gym.spaces.Discrete):
@@ -111,17 +106,13 @@ class Critic(ub.nets.MultiHeadValueNets):
         '''
         return super().call(inputs, training=training)
 
-    def get_model(self):
-        return tf.keras.Sequential([
-            tf.keras.layers.Concatenate(),
-            ub.nets.MlpNet(self.units),
-            tf.keras.layers.Dense(self.action_dims)
-        ])
+    def create_value_net(self):
+        return tf.keras.layers.Dense(self.action_dims)
 
 
 class Agent(ub.base.BaseAgent):
     support_obs_spaces = [gym.spaces.Box]
-    support_obs_spaces = [gym.spaces.Box]
+    support_act_spaces = [gym.spaces.Box]
     def __init__(self, 
         observation_space, 
         action_space,
@@ -150,16 +141,18 @@ class Agent(ub.base.BaseAgent):
         self.critic = None
 
         if observation_space is not None and action_space is not None:
-            self.setup_model()
+            self.setup()
 
     def _setup_model(self):
         # create actor, critic net
+        base_net = ub.nets.MlpNet(self.units)
+        base_nets = [ub.nets.MlpNet(self.units) for n in self.n_critics]
         self.actor  = Actor(self.action_space, squash=self.squash, 
-                            units=self.units)
+                            net=base_net)
         self.critic = Critic(self.action_space, n_critics=self.n_critics, 
-                            units=self.units)
+                            nets=base_nets)
 
-    def setup_model(self):
+    def setup(self):
         '''Setup agent model'''
         self._setup_model()
         # construct networks
@@ -373,7 +366,7 @@ class SAC(ub.base.OffPolicyModel):
         self.critic_optimizer = None
 
         if env is not None:
-            self.setup_model()
+            self.setup()
 
     def _setup_buffer(self):
         '''Override this method to customize to your replay buffer'''
@@ -420,7 +413,7 @@ class SAC(ub.base.OffPolicyModel):
             clipnorm      = self.clipnorm
         )
 
-    def setup_model(self):
+    def setup(self):
         '''Setup model, optimizer and scheduler for training'''
         self._setup_buffer()
         self._setup_model()
@@ -458,7 +451,7 @@ class SAC(ub.base.OffPolicyModel):
             det      = det
         )
 
-    def _run_step(self, obs=None):
+    def _collect_step(self, obs=None):
         '''Collect one sample
 
         Args:

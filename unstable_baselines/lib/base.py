@@ -1441,7 +1441,7 @@ class BaseRLModel(TrainableModel):
             return None
         return metrics['mean-reward']
 
-    def eval(self, env, n_episodes, max_steps):
+    def eval(self, env, n_episodes, max_steps, render=False):
         """Evaluate model for `n_episodes` episodes and limits the maximum steps
         to `max_steps`
 
@@ -1450,6 +1450,8 @@ class BaseRLModel(TrainableModel):
             n_episodes (int): number of episodes to evaluate.
             max_steps (int): the maximum number of steps. Set to -1 to run forever
                 until the environment done.
+            render (bool, optional): whether to render the environment screen.
+                Defaults to False.
 
         Returns:
             list: a list of dict containing the evaluation results per episode.
@@ -1470,6 +1472,8 @@ class BaseRLModel(TrainableModel):
                 obs, rew, done, info = env.step(acts)
                 total_rews += rew
                 total_steps += 1
+                if render:
+                    env.render('human')
                 if done:
                     break
             # append eval results
