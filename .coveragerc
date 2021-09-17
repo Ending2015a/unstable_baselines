@@ -1,0 +1,25 @@
+[run]
+branch = False
+source = 
+    unstable_baselines/
+omit = 
+    # Unittest
+    test/*
+    # Logger (submodule)
+    unstable_baselines/logger/*
+    # Examples
+    example/*
+    # Deprecated packages (will be removed)
+    unstable_baselines/dep/*
+    # Experiments
+    */run.py
+
+[report]
+include = 
+    unstable_baselines/*
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    pass
+    # sub-process function
+    def _subproc_worker
