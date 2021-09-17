@@ -15,7 +15,7 @@ A Deep Reinforcement Learning codebase in TensorFlow 2.0 with an unified, flexib
 | **Standalone implementations** | :heavy_check_mark:  | :heavy_minus_sign:  | :x: <sup>(4)</sup> |
 
 <sup>(1) Currently only support DQN, C51, PPO, TD3, ...etc. We are still working on other algorithms.</sup><br>
-<sup>(2) For example, in Stable-Baselines, you need to [write this yucky custom callbacks](https://stable-baselines3.readthedocs.io/en/master/guide/examples.html#using-callback-monitoring-training) to save the best-performed model :vomiting_face:, while in Unstable Baselines, they are automatically saved.</sup><br>
+<sup>(2) For example, in Stable-Baselines, you need to [write this disgusting custom callback](https://stable-baselines3.readthedocs.io/en/master/guide/examples.html#using-callback-monitoring-training) to save the best-performed model :vomiting_face:, while in Unstable Baselines, they are automatically saved.</sup><br>
 <sup>(3) If you have traced Stable-baselines or OpenAI/baselines once, you'll never do that again.</sup><br>
 <sup>(4) Many cross-dependencies across all algos make the code very hard to trace, for example [baselines/common/policies.py](https://github.com/openai/baselines/blob/master/baselines/common/policies.py#L3), [baselines/a2c/a2c.py](https://github.com/openai/baselines/blob/master/baselines/a2c/a2c.py#L14).... Great job! OpenAI!:cat:</sup><br>
 
