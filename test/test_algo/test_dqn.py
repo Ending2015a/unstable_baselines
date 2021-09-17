@@ -11,6 +11,8 @@ import gym
 import numpy as np
 import tensorflow as tf 
 tf.config.run_functions_eagerly(True)
+# we only test on cpu
+tf.config.set_visible_devices([], 'GPU')
 
 from parameterized import parameterized
 
@@ -414,3 +416,35 @@ class TestDQNModel(TestCase):
         res = model.sampler._weight_tree[:n_samples*n_envs]
         self.assertArrayNotEqual(exp, res)
         self.assertTrue(np.all(res >= 0.0))
+
+    @parameterized.expand([
+        (False,),
+        (True,),
+    ])
+    def test_dqn_cartpole(self, prioritized):
+        with ub_utils.run_eagerly(False):
+            ub_utils.set_seed(1)
+            env = ub_vec.VecEnv([gym.make('CartPole-v0') for _ in range(10)])
+            env.seed(1)
+            eval_env = gym.make('CartPole-v0')
+            eval_env.seed(0)
+            model = dqn_model.DQN(
+                env,
+                buffer_size=20000,
+                multi_step=3,
+                prioritized=prioritized,
+                learning_rate=1e-3,
+                gamma=0.8,
+                batch_size=128,
+                n_steps=10
+            ).learn(
+                150000,
+                target_update=100,
+                verbose=1
+            )
+            # evaluate model
+            results = model.eval(eval_env, 20, 200)
+            metrics = model.get_eval_metrics(results)
+            self.assertAllClose(200.0, metrics['mean-reward'])
+            env.close()
+            eval_env.close()

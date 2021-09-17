@@ -54,7 +54,6 @@ def parse_config(env_id, root_path):
     a.MODEL.n_gradsteps     = 1
     a.MODEL.warmup_steps    = int(1e4)
     a.MODEL.batch_size      = 256
-    a.MODEL.verbose         = 2
     # Training parameters
     a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 312500 # ~10M
     a.LEARN.target_update   = 625  # gradstep
@@ -65,6 +64,7 @@ def parse_config(env_id, root_path):
     a.LEARN.save_interval   = 10000 # epoch
     a.LEARN.save_path       = f'{root_path}/save'
     a.LEARN.tb_logdir       = root_path
+    a.LEARN.verbose         = 3
     # Performance evaluations
     a.EVAL.n_episodes       = 10
     a.EVAL.max_steps        = 10000

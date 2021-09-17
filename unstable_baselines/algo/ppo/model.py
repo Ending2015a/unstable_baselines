@@ -229,13 +229,13 @@ class PPO(ub.base.OnPolicyModel):
         learning_rate: float = 3e-4,
         gamma:         float = 0.99,
         gae_lambda:    float = 0.95,
-        policy_clip:   float = 0.2,
+        policy_clip:   float = 0.05,
         value_clip:    float = None,
         dual_clip:     float = None,
         ent_coef:      float = 0.01,
         vf_coef:       float = 0.5,
         reg_coef:      float = 0.0,
-        clipnorm:      float = 0.5,
+        clipnorm:      float = None,
         target_kl:     float = None,
     # --- architecture parameters ---
         share_net:      bool = False,
@@ -245,7 +245,6 @@ class PPO(ub.base.OnPolicyModel):
         n_steps:         int = 256,
         n_subepochs:     int = 4,
         batch_size:      int = 128,
-        verbose:         int = 0,
         **kwargs
     ):
         '''Proximal policy optimization
@@ -288,14 +287,12 @@ class PPO(ub.base.OnPolicyModel):
             n_subepochs (int, optional): Number of subepochs per epoch. Defaults 
                 to 4.
             batch_size (int, optional): Training batch size. Defaults to 128.
-            verbose (int, optional): More logging. Defaults to 0.
         '''
         super().__init__(
             env         = env,
             n_steps     = n_steps,
             n_subepochs = n_subepochs,
             batch_size  = batch_size,
-            verbose     = verbose,
             **kwargs
         )
         self.learning_rate = learning_rate

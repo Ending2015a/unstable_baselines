@@ -9,6 +9,7 @@ import base64
 import random
 import datetime
 import itertools
+import contextlib
 
 from collections import OrderedDict
 
@@ -42,6 +43,7 @@ __all__ = [
     'set_optimizer_params',
     'get_tensor_ndims',
     'flatten_dims',
+    'run_eagerly',
     'safe_json_dumps',
     'safe_json_loads',
     'safe_json_dump',
@@ -508,6 +510,15 @@ def broadcast_shape(x_shape, y_shape):
         return tf.broadcast_dynamic_shape(x_shape, y_shape)
     return tf.broadcast_static_shape(
         tf.TensorShape(x_shape_static), tf.TensorShape(y_shape_static))
+
+@contextlib.contextmanager
+def run_eagerly(enabled=True):
+    orig_conf = tf.executing_eagerly()
+    tf.config.run_functions_eagerly(enabled)
+    try:
+        yield
+    finally:
+        tf.config.run_functions_eagerly(orig_conf)
 
 # === JSON utils ===
 

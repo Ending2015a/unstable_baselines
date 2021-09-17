@@ -11,6 +11,8 @@ import gym
 import numpy as np
 import tensorflow as tf
 tf.config.run_functions_eagerly(True)
+# we only test on cpu
+tf.config.set_visible_devices([], 'GPU')
 
 from parameterized import parameterized
 
@@ -629,18 +631,21 @@ class TestPPOModel(TestCase):
             batch_size=batch_size,
             n_steps=n_steps,
             n_subepochs=n_subepochs,
-            verbose=2
         )
         with tempfile.TemporaryDirectory() as tempdir:
             save_path = tempdir
             model.learn(
-                total_steps, 
-                eval_env=eval_env, 
+                total_steps,
+                log_interval=1,
+                eval_env=eval_env,
+                eval_interval=1,
                 eval_episodes=1,
                 eval_max_steps=10,
                 save_path=save_path,
+                save_interval=1,
                 tb_logdir=save_path,
-                reset_timesteps=True
+                reset_timesteps=True,
+                verbose=3
             )
             # test load weights
             ppo_model.PPO.load(save_path)
@@ -701,3 +706,26 @@ class TestPPOModel(TestCase):
         model.run(n_samples)
         gae = model.buffer.data['adv']
         self.assertAllClose(exp_gae, gae)
+
+    def test_ppo_cartpole(self):
+        with ub_utils.run_eagerly(False):
+            ub_utils.set_seed(1)
+            env = ub_vec.VecEnv([gym.make('CartPole-v0') for _ in range(10)])
+            env.seed(1)
+            eval_env = gym.make('CartPole-v0')
+            eval_env.seed(0)
+            model = ppo_model.PPO(
+                env,
+                learning_rate=1e-3,
+                gamma=0.8,
+                batch_size=128,
+                n_steps=500,
+            ).learn(
+                20000,
+                verbose=1
+            )
+            results = model.eval(eval_env, 20, 200)
+            metrics = model.get_eval_metrics(results)
+            self.assertAllClose(200.0, metrics['mean-reward'])
+            env.close()
+            eval_env.close()

@@ -9,6 +9,7 @@ import collections
 
 # --- 3rd party ---
 import gym
+import tqdm
 import numpy as np
 import tensorflow as tf
 
@@ -386,8 +387,8 @@ class CheckpointManager(tf.train.CheckpointManager):
             filename, timestamp = self._maybe_delete.popitem(last=False)
 
             if (self._keep_checkpoint_every_n_hours
-                and (timestamp - self._keep_checkpoint_every_n_hours * 3600.
-                     >= self._last_preserved_timestamp)):
+                    and (timestamp - self._keep_checkpoint_every_n_hours * 3600.
+                         >= self._last_preserved_timestamp)):
                 self._last_preserved_timestamp = timestamp
                 continue
             # skip best checkpoint
@@ -1250,7 +1251,6 @@ class BaseRLModel(TrainableModel):
         n_gradsteps: int,
         warmup_steps: int,
         batch_size: int,
-        verbose: int = 0,
         observation_space=None,
         action_space=None,
         **kwargs
@@ -1268,8 +1268,6 @@ class BaseRLModel(TrainableModel):
                 each subepochs.
             warmup_steps (int): number of steps before starting the training loop
             batch_size (int): size of minibatch
-            verbose (int, optional): more logging. 0=silent, 1=progress bar,
-                2=short, 3=full. Defaults to 0.
             observation_space (gym.Space, optional): observation space. This
                 argument is used when constructing from the checkpoint. So it
                 can be omitted. Defaults to None.
@@ -1284,7 +1282,6 @@ class BaseRLModel(TrainableModel):
         self.n_gradsteps = n_gradsteps
         self.warmup_steps = warmup_steps
         self.batch_size = batch_size
-        self.verbose = verbose
         # initialize states
         self.env = None
         self.n_envs = 0
@@ -1418,14 +1415,14 @@ class BaseRLModel(TrainableModel):
         steps = results['steps']
 
         metrics = {
-            'mean-reward': np.mean(rews),
-            'std-reward': np.std(rews),
-            'max-reward': np.max(rews),
-            'min-reward': np.min(rews),
-            'mean-steps': np.mean(steps),
-            'std-steps': np.std(steps),
-            'max-steps': np.max(steps),
-            'min-steps': np.min(steps)
+            'mean-reward': np.mean(rews).item(),
+            'std-reward': np.std(rews).item(),
+            'max-reward': np.max(rews).item(),
+            'min-reward': np.min(rews).item(),
+            'mean-steps': np.mean(steps).item(),
+            'std-steps': np.std(steps).item(),
+            'max-steps': np.max(steps).item(),
+            'min-steps': np.min(steps).item()
         }
         return metrics
 
@@ -1537,7 +1534,7 @@ class BaseRLModel(TrainableModel):
         time_start: float,
         last_time_spent: float,
         losses: dict,
-        verbose: int = None
+        verbose: int = 2
     ):
         """Print training log
 
@@ -1553,10 +1550,8 @@ class BaseRLModel(TrainableModel):
             time_start (float): timestamp when the learning started (sec)
             last_time_spent (float): time spent from the learning started
             losses (dict): loss dictionary
-            verbose (int, optional): verbosity. Defaults to self.verbose.
+            verbose (int, optional): verbosity. Defaults to 2.
         """
-        if verbose is None:
-            verbose = self.verbose
         # current time
         time_now = time.time()
         # total time spent
@@ -1601,29 +1596,24 @@ class BaseRLModel(TrainableModel):
             self.LOG.add_line()
             self.LOG.flush('INFO')
 
-    def log_eval(self, n_episodes, results, metrics, verbose=None):
+    def log_eval(self, results, metrics, verbose=2):
         """Print evaluation log
-
 
         Verbosity:
         0 = silent
         1 = silent
         2 = print evaluation metrics
         3 = print episode results and metrics
-        TODO remove n_episodes
 
         Args:
-            n_episodes (int): number of evaluation episodes.
             results (list): evaluaition results, returned from `eval`
             metrics (dict): evaluation metrics, returned from `get_eval_metrics`
             verbose (int, optional): verbosity. Defaults to None.
         """
-        if verbose is None:
-            verbose = self.verbose
-
         if verbose > 1:
             if verbose > 2 and results is not None:
                 self.LOG.set_header('Evaluation results')
+                n_episodes = len(results)
                 for ep in range(n_episodes):
                     self.LOG.subgroup(f'Episode {ep+1}')
                     labels = '\n'.join(results[ep].keys())
@@ -1644,7 +1634,7 @@ class BaseRLModel(TrainableModel):
                 self.LOG.add_line()
                 self.LOG.flush('INFO')
 
-    def log_save(self, save_path, saved_path, verbose=None):
+    def log_save(self, save_path, saved_path, verbose=2):
         """Print model checkpoint messages
 
         Verbosity:
@@ -1658,8 +1648,6 @@ class BaseRLModel(TrainableModel):
             saved_path (str): full path where the checkpoint actually saved
             verbose (int, optional): verbosity. Defaults to None.
         """
-        if verbose is None:
-            verbose = self.verbose
         if verbose > 1:
             # find the best model path
             best_path = self._preload(save_path, best=True)
@@ -1675,16 +1663,17 @@ class BaseRLModel(TrainableModel):
     def learn(
         self,
         total_timesteps: int,
-        log_interval: int = 1,
+        log_interval: int = 100,
         eval_env: gym.Env = None,
-        eval_interval: int = 1,
+        eval_interval: int = 100,
         eval_episodes: int = 5,
         eval_max_steps: int = 1000,
-        save_interval: int = 1,
+        save_interval: int = 100,
         save_path: str = None,
         target_update: int = 2,
         tb_logdir: str = None,
-        reset_timesteps: bool = False
+        reset_timesteps: bool = False,
+        verbose: int = 1
     ):
         """Start the training procedure
 
@@ -1697,16 +1686,16 @@ class BaseRLModel(TrainableModel):
         Args:
             total_timesteps (int): Total number of timesteps to train the model.
             log_interval (int, optional): log frequency (unit: epoch)
-                Defaults to 1.
+                Defaults to 100.
             eval_env (gym.Env, optional): gym environment for evaluation.
                 Defaults to None.
             eval_interval (int, optional): evaluation frequency (unit: epoch).
-                Defaults to 1.
+                Defaults to 100.
             eval_episodes (int, optional): evaluation episodes. Defaults to 5.
             eval_max_steps (int, optional): maximum number of steps of each
                 episode when evaluating. Defaults to 1000.
             save_interval (int, optional): checkpoint frequency (unit: epoch).
-                Defaults to 1.
+                Defaults to 100.
             save_path (str, optional): root path or directory to save checkpoints.
                 Defaults to None.
             target_update (int, optional): frequency of updating the target model.
@@ -1715,6 +1704,8 @@ class BaseRLModel(TrainableModel):
                 disable logging. Defaults to None.
             reset_timesteps (bool, optional): reset the training states.
                 Defaults to False.
+            verbose (int, optional): more logging. 0=silent, 1=progress bar,
+                2=short, 3=full. Defaults to 1.
 
         Raises:
             RuntimeError: if the training `env` is not set.
@@ -1742,6 +1733,8 @@ class BaseRLModel(TrainableModel):
             float(total_timesteps - self.num_timesteps)
             / float(timesteps_per_epoch)
         ) + self.num_epochs
+        progress_bar = tqdm.tqdm(total=total_epochs, disable=(verbose != 1))
+        progress_bar.update(self.num_epochs)
 
         while self.num_timesteps < total_timesteps:
             # collect rollouts
@@ -1750,6 +1743,7 @@ class BaseRLModel(TrainableModel):
             # update state
             self.num_epochs += 1
             self.progress = float(self.num_timesteps) / float(total_timesteps)
+            progress_bar.update()
             # train one epoch
             losses = {}
             if not self.is_warming_up():
@@ -1772,7 +1766,12 @@ class BaseRLModel(TrainableModel):
             if (log_interval is not None) and (self.num_epochs % log_interval == 0):
                 # print log
                 self.log_train(
-                    total_timesteps, total_epochs, time_start, time_spent, losses
+                    total_timesteps,
+                    total_epochs,
+                    time_start,
+                    time_spent,
+                    losses,
+                    verbose
                 )
                 # update time_spent
                 time_spent = time.time() - time_start
@@ -1796,7 +1795,7 @@ class BaseRLModel(TrainableModel):
                             )
                     self.tb_writer.flush()
 
-                self.log_eval(eval_episodes, eval_results, eval_metrics)
+                self.log_eval(eval_results, eval_metrics, verbose)
 
             # save model
             if ((save_path is not None) and (save_interval is not None)
@@ -1808,7 +1807,8 @@ class BaseRLModel(TrainableModel):
                     checkpoint_number=self.num_epochs,
                     checkpoint_metrics=checkpoint_metrics
                 )
-                self.log_save(save_path, saved_path)
+                self.log_save(save_path, saved_path, verbose)
+        progress_bar.close()
         return self
 
     def get_config(self):
@@ -1819,7 +1819,6 @@ class BaseRLModel(TrainableModel):
             'n_subepochs': self.n_subepochs,
             'n_gradsteps': self.n_gradsteps,
             'batch_size': self.batch_size,
-            'verbose': self.verbose,
             'observation_space': self.observation_space,
             'action_space': self.action_space
         })
@@ -1862,7 +1861,6 @@ class OffPolicyModel(BaseRLModel):
         n_gradsteps: int = 1,
         warmup_steps: int = 10000,
         batch_size: int = 128,
-        verbose: int = 0,
         observation_space=None,
         action_space=None,
         **kwargs
@@ -1874,7 +1872,6 @@ class OffPolicyModel(BaseRLModel):
             n_gradsteps=n_gradsteps,
             warmup_steps=warmup_steps,
             batch_size=batch_size,
-            verbose=verbose,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs
@@ -1896,7 +1893,6 @@ class OnPolicyModel(BaseRLModel):
         n_gradsteps: int = None,
         warmup_steps: int = None,
         batch_size: int = 128,
-        verbose: int = 0,
         observation_space=None,
         action_space=None,
         **kwargs
@@ -1908,7 +1904,6 @@ class OnPolicyModel(BaseRLModel):
             n_gradsteps=n_gradsteps,
             warmup_steps=warmup_steps,
             batch_size=batch_size,
-            verbose=verbose,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs

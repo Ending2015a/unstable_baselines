@@ -52,7 +52,8 @@ setup(
         'tensorflow>=2.3.0',
         'numpy',
         'cloudpickle',
-        'opencv-python'
+        'opencv-python',
+        'tqdm'
     ],
     extras_require={
         'dev': [

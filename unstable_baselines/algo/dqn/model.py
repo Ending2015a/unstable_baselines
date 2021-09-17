@@ -200,7 +200,6 @@ class DQN(ub.base.OffPolicyModel):
         n_gradsteps:     int = 1,
         warmup_steps:    int = int(1e4),
         batch_size:      int = 128,
-        verbose:         int = 0,
         **kwargs
     ):
         '''DQN
@@ -245,7 +244,6 @@ class DQN(ub.base.OffPolicyModel):
             n_gradsteps (int, optional): Number of gradients in each epoch. Defaults to 1.
             warmup_steps (int, optional): Number of steps in warming up stage. Defaults to int(1e4).
             batch_size (int, optional): Training batch size. Defaults to 128.
-            verbose (int, optional): More logging. Defaults to 0.
         '''        
         super().__init__(
             env          = env,
@@ -253,7 +251,6 @@ class DQN(ub.base.OffPolicyModel):
             n_gradsteps  = n_gradsteps,
             warmup_steps = warmup_steps,
             batch_size   = batch_size,
-            verbose      = verbose,
             **kwargs
         )
         self.learning_rate = learning_rate
@@ -442,6 +439,7 @@ class DQN(ub.base.OffPolicyModel):
         '''
         if w is None:
             w = tf.ones_like(td)
+        w = tf.cast(w, dtype=tf.float32)
         if self.huber:
             # huber loss
             delta = tf.convert_to_tensor(self.huber_rate)

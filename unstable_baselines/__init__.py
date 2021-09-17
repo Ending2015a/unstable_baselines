@@ -1,3 +1,4 @@
+import cloudpickle
 from .lib import base
 from .lib import data
 from .lib import envs

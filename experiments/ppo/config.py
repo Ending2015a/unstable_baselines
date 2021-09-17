@@ -35,13 +35,13 @@ def default_atari_config(env_id, root_path):
     a.MODEL.learning_rate   = 3e-4
     a.MODEL.gamma           = 0.99
     a.MODEL.gae_lambda      = 0.95
-    a.MODEL.policy_clip     = 0.1
-    a.MODEL.value_clip      = None
+    a.MODEL.policy_clip     = 0.05
+    a.MODEL.value_clip      = 0.4
     a.MODEL.dual_clip       = None
     a.MODEL.ent_coef        = 0.01
     a.MODEL.vf_coef         = 0.5
     a.MODEL.reg_coef        = 0.0
-    a.MODEL.clipnorm        = 0.5
+    a.MODEL.clipnorm        = None
     a.MODEL.target_kl       = None
     a.MODEL.share_net       = True
     a.MODEL.force_mlp       = False
@@ -49,7 +49,6 @@ def default_atari_config(env_id, root_path):
     a.MODEL.n_steps         = 125
     a.MODEL.n_subepochs     = 8
     a.MODEL.batch_size      = 256
-    a.MODEL.verbose         = 2
     # Training parameters
     a.LEARN.total_timesteps = a.ARGS.n_envs * a.MODEL.n_steps * 10000 # ~10M
     a.LEARN.log_interval    = 100  # epoch
@@ -59,6 +58,7 @@ def default_atari_config(env_id, root_path):
     a.LEARN.save_interval   = 1000 # epoch
     a.LEARN.save_path       = os.path.join(root_path, 'save')
     a.LEARN.tb_logdir       = root_path
+    a.LEARN.verbose         = 3
     # Performance evaluations
     a.EVAL.n_episodes       = 100
     a.EVAL.max_steps        = 10000

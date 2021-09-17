@@ -3,6 +3,7 @@ import os
 import time
 import argparse
 import functools
+from datetime import datetime
 # --- 3rd party ---
 import ray
 from ray import tune
@@ -52,13 +53,14 @@ def make_env(a, rank=0, eval=False):
         env = make_pybullet_env(a, eval=eval, **monitor_params)
     return env
 
-def evaluate_and_export_final_model(model, eval_env, a):
+def evaluate_and_export_final_model(a, model, eval_env, stats_path):
     results = model.eval(eval_env, a.n_episodes, a.max_steps)
     metrics = model.get_eval_metrics(results)
     model.log_eval(a.n_episodes, results, metrics)
     # export PPO agents (only inference mode)
     ckpt_metrics = model.get_save_metrics(metrics)
     model.agent.save(a.export_path, checkpoint_metrics=ckpt_metrics)
+    ub.utils.safe_json_dump(stats_path, metrics)
 
 def train(a):
     # =============== Reset logger ==============
@@ -71,7 +73,6 @@ def train(a):
     print_args(LOG, a.MODEL, 'MODEL')
     print_args(LOG, a.LEARN, 'LEARN')
     print_args(LOG, a.EVAL,  'EVAL')
-    print_args(LOG, a.FINAL, 'FINAL')
     LOG.flush('WARN')
     # ================ Make envs ================
     env = ub.envs.SubprocVecEnv([
@@ -95,12 +96,12 @@ def train(a):
         loaded_model = PPO.load(a.LEARN.save_path)
         # Evaluate model
         LOG.info('Evaluating the latest model ...')
-        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
+        evaluate_and_export_final_model(a.EVAL, loaded_model, eval_env, 'metrics.json')
         # --- Load model from the best checkpoint ---
         loaded_model = PPO.load(a.LEARN.save_path, best=True)
         # Evaluate model
         LOG.info('Evaluating the best model ...')
-        evaluate_and_export_final_model(loaded_model, eval_env, a.EVAL)
+        evaluate_and_export_final_model(a.EVAL, loaded_model, eval_env, 'metrics_best.json')
     except:
         LOG.exception('Exception occurred')
     env.close()
@@ -109,22 +110,22 @@ def train(a):
 # === ray ===
 class PPOExperiments(BaseExperiments):
     def __init__(self):
-        super().__init__(name='ppo')
+        super().__init__(name='ppo-clipnorm')
 
     def search_config(self):
         return {
-            'clipnorm': tune.grid_search([None, 0.5]),
-            'dual_clip': tune.grid_search([None, 2.0]),
-            'value_clip': tune.grid_search([None, 0.5]),
-            'reg_coef': tune.grid_search([0.0, 1e-6]),
+            'policy_clip': 0.05, #tune.grid_search([0.05, 1.0, 2.0, 4.0, 8.0]),
+            'clipnorm': None, #tune.grid_search([None, 0.5, 1.0, 5.0]),
+            'dual_clip': None, #tune.grid_search([None, 2.0, 3.0, 4.0]),
+            'value_clip': 0.4, #tune.grid_search([None, 0.2, 0.4, 0.6, 0.8]),
+            'reg_coef': 1e-6, #tune.grid_search([0.0, 1e-6]),
         }
 
     @staticmethod
     def run_experiment(config):
         # Create root logging path
         env_id = config['env_id']
-        rank = config['rank']
-        root_path = f'{rank}'
+        root_path = './'
         # Get default configuration
         a = default_config(
             env_id    = env_id,
@@ -132,10 +133,11 @@ class PPOExperiments(BaseExperiments):
         )
         # Overwrite configuration
         a.MODEL.update({
-            'clipnorm':   config['clipnorm'],
-            'dual_clip':  config['dual_clip'],
-            'value_clip': config['value_clip'],
-            'reg_coef':   config['reg_coef'],
+            'policy_clip': config['policy_clip'],
+            'clipnorm':    config['clipnorm'],
+            'dual_clip':   config['dual_clip'],
+            'value_clip':  config['value_clip'],
+            'reg_coef':    config['reg_coef'],
         })
         # Start experiment
         train(a)
