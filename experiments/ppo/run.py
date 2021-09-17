@@ -110,7 +110,7 @@ def train(a):
 # === ray ===
 class PPOExperiments(BaseExperiments):
     def __init__(self):
-        super().__init__(name='ppo-clipnorm')
+        super().__init__(name='ppo')
 
     def search_config(self):
         return {

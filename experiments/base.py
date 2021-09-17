@@ -16,7 +16,7 @@ def get_experiment(
 
 
 class BaseExperiments():
-    def __init__(self, name=None):
+    def __init__(self, name):
         self.args = self.parse_args()
         self.name = name
 
@@ -25,11 +25,12 @@ class BaseExperiments():
         if isinstance(self.args.env_ids, str):
             self.args.env_ids = [self.args.env_ids]
         
+        exp_name = self.get_exp_name()
         experiments = []
         for env_id in self.args.env_ids:
             root = os.path.join(self.args.root, env_id)
             experiments.append(tune.Experiment(
-                name = self.name,
+                name = exp_name,
                 run = self.run_experiment,
                 config = {
                     'root': root,
@@ -56,6 +57,7 @@ class BaseExperiments():
         parser.add_argument('--cpu',     type=int, default=4)
         parser.add_argument('--gpu',     type=int, default=1)
         parser.add_argument('--root',    type=str, default='~/dev/unstable_baselines/log/experiments/')
+        parser.add_argument('--exp_name',type=str, default=None)
         parser.add_argument('--trials',  type=int, default=1)
         parser.add_argument('--env_ids', nargs='+', default=['BeamRiderNoFrameskip-v4'])
         return parser.parse_args()
@@ -66,6 +68,14 @@ class BaseExperiments():
     @staticmethod
     def run_experiment(config):
         raise NotImplementedError
+
+    def get_exp_name(self):
+        exp_names = []
+        if self.name is not None:
+            exp_names.append(self.name)
+        if self.args.exp_name is not None:
+            exp_names.append(self.args.exp_name)
+        return '-'.join(exp_names)
 
     def get_trial_dirname_creator(self):
         def _wrap(trial):
