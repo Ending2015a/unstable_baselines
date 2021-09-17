@@ -31,4 +31,4 @@ __copyright__ = '''
  OR OTHER DEALINGS IN THE SOFTWARE.
 '''
 __license__ = 'MIT'
-__version__ = '0.1.0'
+__version__ = '0.1.0a0'
