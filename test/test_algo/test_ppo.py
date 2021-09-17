@@ -706,26 +706,3 @@ class TestPPOModel(TestCase):
         model.run(n_samples)
         gae = model.buffer.data['adv']
         self.assertAllClose(exp_gae, gae)
-
-    def test_ppo_cartpole(self):
-        with ub_utils.run_eagerly(False):
-            ub_utils.set_seed(1)
-            env = ub_vec.VecEnv([gym.make('CartPole-v0') for _ in range(10)])
-            env.seed(1)
-            eval_env = gym.make('CartPole-v0')
-            eval_env.seed(0)
-            model = ppo_model.PPO(
-                env,
-                learning_rate=1e-3,
-                gamma=0.8,
-                batch_size=128,
-                n_steps=500,
-            ).learn(
-                20000,
-                verbose=1
-            )
-            results = model.eval(eval_env, 20, 200)
-            metrics = model.get_eval_metrics(results)
-            self.assertTrue(metrics['mean-reward'] > 150.0, metrics['mean-reward'])
-            env.close()
-            eval_env.close()
