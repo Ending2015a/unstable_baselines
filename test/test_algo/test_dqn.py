@@ -422,12 +422,12 @@ class TestDQNModel(TestCase):
         (True,),
     ])
     def test_dqn_cartpole(self, prioritized):
+        env = ub_vec.VecEnv([gym.make('CartPole-v0') for _ in range(10)])
+        env.seed(1)
+        eval_env = gym.make('CartPole-v0')
+        eval_env.seed(0)
         with ub_utils.run_eagerly(False):
             ub_utils.set_seed(1)
-            env = ub_vec.VecEnv([gym.make('CartPole-v0') for _ in range(10)])
-            env.seed(1)
-            eval_env = gym.make('CartPole-v0')
-            eval_env.seed(0)
             model = dqn_model.DQN(
                 env,
                 buffer_size=20000,
@@ -445,6 +445,6 @@ class TestDQNModel(TestCase):
             # evaluate model
             results = model.eval(eval_env, 20, 200)
             metrics = model.get_eval_metrics(results)
-            self.assertTrue(metrics['mean-reward'] > 150.0, metrics['mean-reward'])
+            self.assertAllClose(200.0, metrics['mean-reward'])
             env.close()
             eval_env.close()
