@@ -101,7 +101,7 @@ def make_env(a, rank=0, eval=False):
 def evaluate_and_export_final_model(model, eval_env, a):
     results = model.eval(eval_env, a.n_episodes, a.max_steps)
     metrics = model.get_eval_metrics(results)
-    model.log_eval(a.n_episodes, results, metrics)
+    model.log_eval(results, metrics, verbose=3)
     # export PPO agents (only inference mode)
     ckpt_metrics = model.get_save_metrics(metrics)
     model.agent.save(a.export_path, checkpoint_metrics=ckpt_metrics)

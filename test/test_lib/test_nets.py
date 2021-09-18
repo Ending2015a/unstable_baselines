@@ -92,8 +92,10 @@ class TestNetsModule(TestCase):
         space_shape = (16,)
         sp = gym.spaces.Box(low=-1, high=1, shape=space_shape, dtype=np.float32)
         net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
-        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
-                        type(net._models[0]).__name__)
+        self.assertTrue(isinstance(net._models[0], tf.keras.layers.Flatten),
+                        type(net._models[0]))
+        self.assertTrue(isinstance(net._output_model, ub_nets.MlpNet),
+                        type(net._output_model))
         inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
         outputs = net(inputs)
         self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
@@ -105,8 +107,10 @@ class TestNetsModule(TestCase):
         sp = gym.spaces.Box(low=0, high=255, shape=space_shape,
                             dtype=np.uint8)
         net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp)
-        self.assertTrue(isinstance(net._models[0], ub_nets.NatureCnn), 
-                        type(net._models[0]).__name__)
+        self.assertTrue(isinstance(net._models[0], ub_nets.NatureCnn),
+                        type(net._models[0]))
+        self.assertTrue(isinstance(net._output_model, ub_nets.Identity),
+                        type(net._output_model))
         inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
         outputs = net(inputs)
         self.assertEqual((batch_size, 512), outputs.shape)
@@ -119,8 +123,10 @@ class TestNetsModule(TestCase):
         sp = gym.spaces.Box(low=0, high=255, shape=space_shape,
                             dtype=np.uint8)
         net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
-        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
-                        type(net._models[0]).__name__)
+        self.assertTrue(isinstance(net._models[0], tf.keras.layers.Flatten),
+                        type(net._models[0]))
+        self.assertTrue(isinstance(net._output_model, ub_nets.MlpNet),
+                        type(net._output_model))
         inputs = tf.zeros((batch_size,)+space_shape, dtype=np.float32)
         outputs = net(inputs)
         self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
@@ -139,15 +145,17 @@ class TestNetsModule(TestCase):
         sp = gym.spaces.Dict({'sp2': sp2, 'sp1': sp1})
         net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
         self.assertTrue(isinstance(net._models[0], ub_nets.NatureCnn),
-                        type(net._models[0]).__name__)
-        self.assertTrue(isinstance(net._models[1], ub_nets.MlpNet),
-                        type(net._models[1]).__name__)
+                        type(net._models[0]))
+        self.assertTrue(isinstance(net._models[1], tf.keras.layers.Flatten),
+                        type(net._models[1]))
+        self.assertTrue(isinstance(net._output_model, ub_nets.MlpNet),
+                        type(net._output_model))
         inputs = {
             'sp1': tf.zeros((batch_size,)+sp1_shape, dtype=np.float32),
             'sp2': tf.zeros((batch_size,)+sp2_shape, dtype=np.float32)
         }
         outputs = net(inputs)
-        self.assertEqual((batch_size, mlp_units[-1]+512), outputs.shape)
+        self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
     
     def test_awesome_net_dict_space_force_mlp(self):
         force_mlp = True
@@ -162,16 +170,18 @@ class TestNetsModule(TestCase):
         # gym default sorts spaces by keys
         sp = gym.spaces.Dict({'sp2': sp2, 'sp1': sp1})
         net = ub_nets.AwesomeNet(sp, force_mlp=force_mlp, mlp_units=mlp_units)
-        self.assertTrue(isinstance(net._models[0], ub_nets.MlpNet),
-                        type(net._models[0]).__name__)
-        self.assertTrue(isinstance(net._models[1], ub_nets.MlpNet),
-                        type(net._models[1]).__name__)
+        self.assertTrue(isinstance(net._models[0], tf.keras.layers.Flatten),
+                        type(net._models[0]))
+        self.assertTrue(isinstance(net._models[1], tf.keras.layers.Flatten),
+                        type(net._models[1]))
+        self.assertTrue(isinstance(net._output_model, ub_nets.MlpNet),
+                        type(net._output_model))
         inputs = {
             'sp1': tf.zeros((batch_size,)+sp1_shape, dtype=np.float32),
             'sp2': tf.zeros((batch_size,)+sp2_shape, dtype=np.float32)
         }
         outputs = net(inputs)
-        self.assertEqual((batch_size, mlp_units[-1]*2), outputs.shape)
+        self.assertEqual((batch_size, mlp_units[-1]), outputs.shape)
 
     def test_categorical_policy_net(self):
         batch_size = 5

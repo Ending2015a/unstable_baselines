@@ -659,18 +659,16 @@ def iter_nested_space(space, sortkey=False):
 
     Args:
         space (gym.Space): Nested or non-nested gym space
-        sortkey (bool): Whether to sort dict's key. Defaults
-            to False.
+        sortkey (bool): (deprecated) Whether to sort dict's key. 
+            Defaults to False.
     '''
     def _inner_iter_nested(space):
-        if isinstance(space, gym.spaces.Dict):
-            spaces = space.spaces
-            keys = sorted(spaces.keys()) if sortkey else spaces.keys()
-            for k in keys:
-                yield from _inner_iter_nested(spaces[k])
-        elif isinstance(space, gym.spaces.Tuple):
-            for v in space.spaces:
-                yield from _inner_iter_nested(v)
+        if isinstance(space, (gym.spaces.Dict, dict)):
+            for k in space:
+                yield from _inner_iter_nested(space[k])
+        elif isinstance(space, (gym.spaces.Tuple, tuple)):
+            for v in range(len(space)):
+                yield from _inner_iter_nested(space[v])
         else:
             yield space
     return _inner_iter_nested(space)
@@ -689,14 +687,12 @@ def map_nested_space(space, op, *args, sortkey=False, **kwargs):
         raise ValueError('`op` must be a callable')
 
     def _inner_map_nested(space):
-        if isinstance(space, gym.spaces.Dict):
-            spaces = space.spaces
-            keys = sorted(spaces.keys()) if sortkey else spaces.keys()
-            return {k: _inner_map_nested(spaces[k])
-                        for k in keys}
-        elif isinstance(space, gym.spaces.Tuple):
-            return tuple(_inner_map_nested(v)
-                            for v in space.spaces)
+        if isinstance(space, (gym.spaces.Dict, dict)):
+            return {k: _inner_map_nested(space[k])
+                        for k in space}
+        elif isinstance(space, (gym.spaces.Tuple, tuple)):
+            return tuple(_inner_map_nested(space[v])
+                        for v in range(len(space)))
         else:
             return op(space, *args, **kwargs)
     return _inner_map_nested(space)

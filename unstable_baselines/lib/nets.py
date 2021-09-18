@@ -83,11 +83,21 @@ class AwesomeNet(tf.keras.Model):
                        force_mlp:   bool = False, 
                        mlp_units:   list = [64, 64], 
                        **kwargs):
-        '''AwesomeNet automatically handles nested spaces and input 
-        tensors. AwesomeNet creates either NatureCnn or MlpNet for 
-        each observation space according to its type if `force_mlp`
-        is False. Otherwise, all observations forwards into a MlpNet.
-        '''
+        """AwesomeNet automatically handles nested spaces and input tensors.
+        If the input space is a image space, AwesomeNet creates a NatureCnn
+        for it, otherwise, it creates a MlpNet. If the input space is a nested
+        space, AwesomeNet first flatten the spaces and creates NatureCnns for
+        those image spaces and identity (flatten) layers for non image spaces
+        as the feature extractors for each type of space. It then creates a
+        single MlpNet as the final feature fusion layers.
+
+        Args:
+            input_space (gym.Space): input spaces that will forward into this net.
+            force_mlp (bool, optional): force to use MlpNet as the feature 
+                extractors. Defaults to False.
+            mlp_units (list, optional): a list of numbers of hidden units for 
+                each MlpNet layer. Defaults to [64, 64].
+        """
         super().__init__(**kwargs)
         self.force_mlp = force_mlp
         self.mlp_units = mlp_units
@@ -99,16 +109,25 @@ class AwesomeNet(tf.keras.Model):
             self.create_model(space)
             for space in self._flat_spaces
         ]
+        # if the first space is an image space
+        # use identity layer as the final output model
+        if (len(self._flat_spaces) == 1
+                and ub_utils.is_image_space(self._flat_spaces[0])
+                and not self.force_mlp):
+            self._output_model = Identity()
+        else:
+            self._output_model = self.create_mlp()
         
     def call(self, inputs, training=True):
         '''Forward networks'''
         flat_inputs = tf.nest.flatten(inputs)
         # assert len(flat_inputs) == len(self._models)
-        outputs = []
+        res = []
         for input, model in zip(flat_inputs, self._models):
             x = model(input, training=training)
-            outputs.append(x)
-        return tf.concat(outputs, axis=1)
+            res.append(x)
+        x = tf.concat(res, axis=-1)
+        return self._output_model(x, training=training)
 
     def create_model(self, space: gym.Space):
         '''Create model by space'''
@@ -117,7 +136,7 @@ class AwesomeNet(tf.keras.Model):
         if use_cnn:
             return self.create_cnn()
         else:
-            return self.create_mlp()
+            return tf.keras.layers.Flatten()
 
     def create_cnn(self):
         '''Create nature cnn'''
