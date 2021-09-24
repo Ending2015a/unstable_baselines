@@ -183,9 +183,9 @@ class DQN(ub.base.OffPolicyModel):
         multi_step:      int = 1,
         gamma:         float = 0.99,
         tau:           float = 1.0,
+        explore_rate:  float = 0.3,
         reg_coef:      float = 0.0,
         clipnorm:      float = 0.5,
-        explore_rate:  float = 0.3,
         huber:          bool = True,
         huber_rate:    float = 0.1,
         prioritized:    bool = False,
@@ -369,7 +369,7 @@ class DQN(ub.base.OffPolicyModel):
         '''(Override) Collect one sample
         
         Args:
-            obs (np.ndarray, optional): Current observations
+            obs (np.ndarray): Current observations
         
         Returns:
             np.ndarray: next observations
@@ -537,9 +537,9 @@ class DQN(ub.base.OffPolicyModel):
             'multi_step':    self.multi_step,
             'gamma':         self.gamma,
             'tau':           self.tau,
+            'explore_rate':  self.explore_rate,
             'reg_coef':      self.reg_coef,
             'clipnorm':      self.clipnorm,
-            'explore_rate':  self.explore_rate,
             'huber':         self.huber,
             'huber_rate':    self.huber_rate,
             'prioritized':   self.prioritized,
