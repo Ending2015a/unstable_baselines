@@ -64,16 +64,16 @@ python -m unstable_baselines.ppo.run --rank 0 --seed 1 --logdir='./log/{env_id}/
 
 For atari domains, we run 8 trials for each environment. In each trial we trained an agent on 8 environments with seeds 1~8, and tested on seed 0 for 100 episodes after learning from totally 10M of training samples. The final evaluation is limited to 10000 steps per episode. The following is the 95% confidence intervals of the maximum and the mean rewards of the final scores for each trial. 
 
-| `env_id`                  | Max rewards                           | Mean rewards                         | Train samples | Eval episodes |
-|---------------------------|--------------------------------------:|-------------------------------------:|--------------:|--------------:|
-| `AsteroidsNoFrameskip-v4` |   2088.750<br><small>±531.823</small> |   1092.788<br><small>±99.973</small> |           10M |           800 |
-| `BeamRiderNoFrameskip-v4` |   7436.000<br><small>±944.819</small> |  3891.302<br><small>±476.673</small> |           10M |           800 |
-| `BreakoutNoFrameskip-v4`  |    341.250<br><small>±110.693</small> |    198.714<br><small>±99.136</small> |           10M |           800 |
-| `EnduroNoFrameskip-v4`    |     471.125<br><small>±84.151</small> |    344.624<br><small>±87.094</small> |           10M |           800 |
-| `MsPacmanNoFrameskip-v4`  |   2536.250<br><small>±369.694</small> |  2434.113<br><small>±321.755</small> |           10M |           800 |
-| `PongNoFrameskip-v4`      |       21.000<br><small>±0.000</small> |      20.192<br><small>±2.136</small> |           10M |           800 |
-| `QbertNoFrameskip-v4`     | 17828.125<br><small>±1431.861</small> | 16485.531<br><small>±534.247</small> |           10M |           800 |
-| `SeaquestNoFrameskip-v4`  |  2835.000<br><small>±1362.672</small> | 2647.625<br><small>±1154.382</small> |           10M |           800 |
+| `env_id`                  | Max rewards                       | Mean rewards                     | Train samples | Eval episodes |
+|---------------------------|----------------------------------:|---------------------------------:|--------------:|--------------:|
+| `AsteroidsNoFrameskip-v4` |   2088.750<br><sup>±531.823</sup> |   1092.788<br><sup>±99.973</sup> |           10M |           800 |
+| `BeamRiderNoFrameskip-v4` |   7436.000<br><sup>±944.819</sup> |  3891.302<br><sup>±476.673</sup> |           10M |           800 |
+| `BreakoutNoFrameskip-v4`  |    341.250<br><sup>±110.693</sup> |    198.714<br><sup>±99.136</sup> |           10M |           800 |
+| `EnduroNoFrameskip-v4`    |     471.125<br><sup>±84.151</sup> |    344.624<br><sup>±87.094</sup> |           10M |           800 |
+| `MsPacmanNoFrameskip-v4`  |   2536.250<br><sup>±369.694</sup> |  2434.113<br><sup>±321.755</sup> |           10M |           800 |
+| `PongNoFrameskip-v4`      |       21.000<br><sup>±0.000</sup> |      20.192<br><sup>±2.136</sup> |           10M |           800 |
+| `QbertNoFrameskip-v4`     | 17828.125<br><sup>±1431.861</sup> | 16485.531<br><sup>±534.247</sup> |           10M |           800 |
+| `SeaquestNoFrameskip-v4`  |  2835.000<br><sup>±1362.672</sup> | 2647.625<br><sup>±1154.382</sup> |           10M |           800 |
 
 <sup>M = million (1e6)</sup><br>
 
