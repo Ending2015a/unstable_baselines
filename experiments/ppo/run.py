@@ -62,7 +62,7 @@ def evaluate_and_export_final_model(a, model, eval_env, stats_path):
     model.agent.save(a.export_path, checkpoint_metrics=ckpt_metrics)
     ub.utils.safe_json_dump(stats_path, metrics)
 
-def train(a):
+def main(a):
     # =============== Reset logger ==============
     ub.logger.Config.use(filename=a.ARGS.logging, level=a.ARGS.log_level,
                     colored=True, reset=False)
@@ -112,14 +112,50 @@ class PPOExperiments(BaseExperiments):
     def __init__(self):
         super().__init__(name='ppo')
 
+    def parse_args(self, parser=None):
+        if parser is None:
+            parser = self.add_args()
+        parser = super().add_args(parser)
+        return super().parse_args(parser)
+
+    def add_args(self, parser=None):
+        if parser is None:
+            parser = argparse.ArgumentParser('PPO experiments')
+        parser.add_argument('--seed', type=int, default=1)
+        parser.add_argument('--eval_seed', type=int, default=0)
+        parser.add_argument('--n_envs', type=int, default=8)
+        parser.add_argument('--video', action='store_true', default=False)
+        parser.add_argument('--train_steps', type=int, default=int(1e7)) #10M
+        return parser
+
     def search_config(self):
-        return {
-            'policy_clip': 0.05, #tune.grid_search([0.05, 1.0, 2.0, 4.0, 8.0]),
-            'clipnorm': None, #tune.grid_search([None, 0.5, 1.0, 5.0]),
-            'dual_clip': None, #tune.grid_search([None, 2.0, 3.0, 4.0]),
-            'value_clip': 0.4, #tune.grid_search([None, 0.2, 0.4, 0.6, 0.8]),
-            'reg_coef': 1e-6, #tune.grid_search([0.0, 1e-6]),
-        }
+        return dict(
+            ARGS = {
+                'seed': self.args.seed,
+                'eval_seed': self.args.eval_seed,
+                'n_envs': self.args.n_envs
+            },
+            ENV = {
+                'video': self.args.video
+            },
+            MODEL = {
+                'learning_rate': 3e-4,
+                'policy_clip': 0.05, #tune.grid_search([0.05, 0.1, 0.2, 0.4, 0.8]),
+                'value_clip': 0.4, #tune.grid_search([None, 0.2, 0.4, 0.6, 0.8]),
+                'dual_clip': None, #tune.grid_search([None, 2.0, 3.0, 4.0]),
+                'ent_coef': 0.01,
+                'vf_coef': 0.5,
+                'reg_coef': 0.0, #tune.grid_search([0.0, 1e-6]),
+                'clipnorm': None, #tune.grid_search([None, 0.5, 1.0, 5.0]),
+            },
+            LEARN = {
+                'total_timesteps': int(self.args.train_steps),
+            },
+            EVAL = {
+                'n_episodes': 100,
+                'max_steps': 10000
+            }
+        )
 
     @staticmethod
     def run_experiment(config):
@@ -132,15 +168,13 @@ class PPOExperiments(BaseExperiments):
             root_path = root_path,
         )
         # Overwrite configuration
-        a.MODEL.update({
-            'policy_clip': config['policy_clip'],
-            'clipnorm':    config['clipnorm'],
-            'dual_clip':   config['dual_clip'],
-            'value_clip':  config['value_clip'],
-            'reg_coef':    config['reg_coef'],
-        })
+        a.ARGS.update(config['ARGS'])
+        a.ENV.update(config['ENV'])
+        a.MODEL.update(config['MODEL'])
+        a.LEARN.update(config['LEARN'])
+        a.EVAL.update(config['EVAL'])
         # Start experiment
-        train(a)
+        main(a)
 
 if __name__ == '__main__':
     PPOExperiments().run()

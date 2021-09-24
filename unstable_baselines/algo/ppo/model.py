@@ -31,8 +31,8 @@ class PolicyNet(ub.nets.PolicyNet):
     '''Policy network'''
     def __init__(self, action_space,
                        net: tf.keras.Model = None,
-                       squash = False, # disabled
                        **kwargs):
+        kwargs.pop('squash', None)
         super().__init__(action_space, squash=False, net=net, **kwargs)
 
     def call(self, inputs, training=True):

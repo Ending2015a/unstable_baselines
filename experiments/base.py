@@ -6,14 +6,9 @@ import argparse
 import ray
 from ray import tune
 
-
-def get_experiment(
-
-):
-    return tune.Experiment(
-
-    )
-
+__all__ = [
+    'BaseExperiments'
+]
 
 class BaseExperiments():
     def __init__(self, name):
@@ -52,15 +47,20 @@ class BaseExperiments():
 
     def parse_args(self, parser=None):
         if parser is None:
+            parser = self.add_args()
+        return parser.parse_args()
+
+    def add_args(self, parser=None):
+        if parser is None:
             parser = argparse.ArgumentParser()
         parser.add_argument('--address', type=str, default='localhost:6379')
         parser.add_argument('--cpu',     type=int, default=4)
         parser.add_argument('--gpu',     type=int, default=1)
         parser.add_argument('--root',    type=str, default='~/dev/unstable_baselines/log/experiments/')
-        parser.add_argument('--exp_name',type=str, default=None)
+        parser.add_argument('--name',    type=str, default=None)
         parser.add_argument('--trials',  type=int, default=1)
         parser.add_argument('--env_ids', nargs='+', default=['BeamRiderNoFrameskip-v4'])
-        return parser.parse_args()
+        return parser
 
     def search_config(self):
         return {}
@@ -73,20 +73,20 @@ class BaseExperiments():
         exp_names = []
         if self.name is not None:
             exp_names.append(self.name)
-        if self.args.exp_name is not None:
-            exp_names.append(self.args.exp_name)
+        if self.args.name is not None:
+            exp_names.append(self.args.name)
         return '-'.join(exp_names)
 
     def get_trial_dirname_creator(self):
         def _wrap(trial):
             res = ','.join([
-                f'{key}={value}'
+                f"{key.rsplit('/')[-1]}={value}"
                 for key, value in sorted(trial.evaluated_params.items())
             ])
             if not res:
                 res = trial.trial_id
             else:
-                expnum = trial.trial_id.split('_')[1]
+                expnum = trial.trial_id.split('_')[-1]
                 if expnum:
                     res = res + '_' + expnum
             return res
